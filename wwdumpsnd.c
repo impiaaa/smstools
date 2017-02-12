@@ -686,7 +686,7 @@ int doNewInst(FILE *infile) {
 		
 		if (fread(buf,1,4,infile)!=4) return 1;
 		int sz = read32(buf);
-		printf("|%d:",sz);
+		if (verbose) printf("|%d:",sz);
 		if (sz == 1) {
 			// TODO
 			if (fseek(infile,0x08,SEEK_CUR)<0) return 1;
