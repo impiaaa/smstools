@@ -386,7 +386,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 			if (type == 0) {
 				printf("\ttype_id=%x", type_id);
 			}
-			if (type_unk0 != 0xFF) {
+			if (type_unk0 != 0xFF && type_unk0 != 0x70) {
 				printf("\ttype_unk0=%x", type_unk0);
 			}
 			if (type_unk3 != 0) {
