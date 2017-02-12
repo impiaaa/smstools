@@ -330,7 +330,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 		type_id=buf[1];
 		root_key = buf[2];
 		type_unk3 = buf[3];
-		switch (buf[1]) {
+		switch (type_id) {
 		case 0:
 			type=SRC_AFC_HQ_FROM_ARAM;
 			break;
@@ -382,22 +382,23 @@ int doaw(FILE *infile, const int offset, int dump) {
 		unk2=read32(buf);
 
 		if (verbose) {
-			printf("%x\t%x\t%x\t%d\t%x\t%d\t%d\t%d\t%d\t%08x\n",i, afcoffset, afcsize, srate, type_id, root_key, loop_start_sample, loop_end_sample, num_samples, unk0);
+			printf("%x\t%x\t%x\t%d\t%x\t%d\t%d\t%d\t%d\t%08x",i, afcoffset, afcsize, srate, type_id, root_key, loop_start_sample, loop_end_sample, num_samples, unk0);
 			if (type == 0) {
-				printf("Unknown type!\n");
+				printf("\ttype_id=%x", type_id);
 			}
 			if (type_unk0 != 0xFF) {
-				printf("type_unk0 != 0xFF!\n");
+				printf("\ttype_unk0=%x", type_unk0);
 			}
 			if (type_unk3 != 0) {
-				printf("type_unk3 != 0!\n");
+				printf("\ttype_unk3=%x", type_unk3);
 			}
 			if (unk1 != 0) {
-				printf("unk1 != 0!\n");
+				printf("\tunk1=%x", unk1);
 			}
 			if (unk2 != 0x01D8) {
-				printf("unk2 != 0x01D8!\n");
+				printf("\tunk2=%x", unk2);
 			}
+			printf("\n");
 		}
 		
 		if (dump && type != 0) {
