@@ -395,7 +395,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 			if (unk1 != 0) {
 				printf("\tunk1=%x", unk1);
 			}
-			if (unk2 != 0x01D8) {
+			if (unk2 != 0x01D8 && unk2 != 0x0018) {
 				printf("\tunk2=%x", unk2);
 			}
 			printf("\n");
