@@ -306,7 +306,9 @@ int doaw(FILE *infile, const int offset, int dump) {
 	char *extptr = strrchr(fname, '.');
 	if (extptr != NULL) *extptr = '\0';
 
-	printf("n\toffset\tsize\tsrate\ttype\troot\tstart\tend\tcount\n");
+	if (verbose)
+		printf("n\toffset\tsize\tsrate\ttype\troot\tstart\tend\tcount\n");
+	
 	for (i=0;i<wav_count;i++) {
 		int wav_entry_offset;
 		int afcoffset,afcsize,srate;
