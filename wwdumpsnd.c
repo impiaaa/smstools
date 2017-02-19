@@ -248,10 +248,10 @@ unsigned char smplhead[] = {
 };
 
 int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_sample, int loop_end_sample) {
-	write32le(1000000000/srate,  smplhead+0x10);
-	write32le(root_key,          smplhead+0x14);
-	write32le(loop_start_sample, smplhead+0x2C+0x08);
-	write32le(loop_end_sample,   smplhead+0x2C+0x0C);
+	write32le(1000000000/srate,    smplhead+0x10);
+	write32le(root_key,            smplhead+0x14);
+	write32le(loop_start_sample-1, smplhead+0x2C+0x08);
+	write32le(loop_end_sample-1,   smplhead+0x2C+0x0C);
 	if (fwrite(smplhead,1,sizeof(smplhead),outfile)!=sizeof(smplhead)) return 1;
 	return 0;
 }
