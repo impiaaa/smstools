@@ -248,7 +248,7 @@ unsigned char smplloop[] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	// fraction play count
 	0, 0, 0, 0, 0, 0, 0, 0
-}
+};
 
 int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_sample, int loop_end_sample) {
 	write32le(1000000000/srate, smplhead+0x10);
