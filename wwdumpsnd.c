@@ -456,7 +456,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 	return 0;
 }
 
-int doOsc(FILE *infile) {
+int doOsc(FILE *infile, int ibnk_offset) {
 	unsigned char buf[4];
 
 	// 80287204 convert to Osc pointer (+IBNK)
@@ -480,24 +480,9 @@ int doOsc(FILE *infile) {
 	if (fread(buf,1,4,infile)!=4) return 1;
 	int osc_s_offset1 = read32(buf);
 
-	// TODO envelope data
-	// 80287288 convert to s pointer (+IBNK)
-	// 80287294 call getOscTableEndPtr
-	//   80287aec load half (0000,0000,000e) at s pointer
-	//   80287af4 add 6 to pointer
-	//   80287af8 if half < 10, loop
-	// 80287298 get pointer difference (0x12)
-	// 802872a0 shift right 1
-	// 802872a4 shift left 1
-
 	// 80287318 read word (00000560) at IBNK+offset+0xC
 	if (fread(buf,1,4,infile)!=4) return 1;
 	int osc_s_offset2 = read32(buf);
-
-	// 8028731c convert to s pointer
-	// 80287328 call getOscTableEndPtr
-	// 8028732c get pointer difference (0xC)
-	// 80287330 shift, shift
 
 	// 802873a8 load float (1.0) at IBNK+offset+0x10
 	if (fread(buf,1,4,infile)!=4) return 1;
@@ -512,6 +497,19 @@ int doOsc(FILE *infile) {
 		printf("%x,%f,%x,%x,%f,%f", osc_1, osc_f1, osc_s_offset1, osc_s_offset2, osc_f2, osc_f3);
 	}
 	
+	// TODO envelope data
+	// 80287288 convert to s pointer (+IBNK)
+	// 80287294 call getOscTableEndPtr
+	//   80287aec load half (0000,0000,000e) at s pointer
+	//   80287af4 add 6 to pointer
+	//   80287af8 if half < 10, loop
+	// 80287298 get pointer difference (0x12)
+	// 802872a0 shift right 1
+	// 802872a4 shift left 1
+
+	if (fseek(infile, osc_s_offset1+ibnk_offset, SEEK_SET)<0) return 1;
+	if (doOscTable(infile)) return 1;
+
 	return 0;
 }
 
