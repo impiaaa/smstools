@@ -595,7 +595,7 @@ int doInst(FILE * infile, const int offset) {
 				printf("Osc@0x%x:", osc_offset+offset);
 			}
 			if (fseek(infile, osc_offset+offset, SEEK_SET)<0) return 1;
-			if (doOsc(infile)) return 1;
+			if (doOsc(infile, offset)) return 1;
 			if (fseek(infile, next_osc_offset, SEEK_SET)<0) return 1;
 			if (verbose) {
 				printf("|");
@@ -823,7 +823,7 @@ int doIBNK(FILE * infile, const int offset, int size) {
 						if (verbose) {
 							printf("Osci@0x%lx:", ftell(infile)-4);
 						}
-						if (doOsc(infile)) return 1;
+						if (doOsc(infile, offset)) return 1;
 						if (verbose) {
 							printf("\n");
 						}
