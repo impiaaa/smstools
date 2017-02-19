@@ -266,6 +266,7 @@ int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_
 	if (fwrite(smplhead,1,sizeof(smplhead),outfile)!=sizeof(smplhead)) return 1;
 	if (loop_start_sample > 0)
 	{
+		// TODO: Sometimes the start is still off by one!?
 		write32le(loop_start_sample-1, smplloop+0x08);
 		write32le(loop_end_sample-1,   smplloop+0x0C);
 		if (fwrite(smplloop,1,sizeof(smplloop),outfile)!=sizeof(smplloop)) return 1;
