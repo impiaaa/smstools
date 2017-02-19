@@ -456,18 +456,6 @@ int doaw(FILE *infile, const int offset, int dump) {
 	return 0;
 }
 
-static inline const int roundUp(const int numToRound, const int multiple) {  
-	if (multiple == 0) {
-		return numToRound;
-	}
-
-	const int remainder = numToRound % multiple;
-	if (remainder == 0) {
-		return numToRound;
-	}
-	return numToRound + multiple - remainder;
-}
-
 int doOsc(FILE *infile) {
 	unsigned char buf[4];
 
@@ -741,6 +729,18 @@ int doPerc(FILE *infile, const int offset) {
 		if (fseek(infile, nextOffset, SEEK_SET)<0) return 1;
 	}
 	return 0;
+}
+
+static inline const int roundUp(const int numToRound, const int multiple) {  
+	if (multiple == 0) {
+		return numToRound;
+	}
+
+	const int remainder = numToRound % multiple;
+	if (remainder == 0) {
+		return numToRound;
+	}
+	return numToRound + multiple - remainder;
 }
 
 int doIBNK(FILE * infile, const int offset, int size) {
