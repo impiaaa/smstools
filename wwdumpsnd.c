@@ -585,7 +585,7 @@ int doKeymap(FILE *infile, const int offset) {
 	// that's a pointer to a vmap (814a9f30 in mem, A530 in file)
 
 	if (fread(buf,1,4,infile)!=4) return 1;
-	char keymap1 = buf[0];
+	int keymap1 = buf[0];
 	if (fread(buf,1,4,infile)!=4) return 1;
 	int keymap2 = read32(buf);
 	if (verbose) {
