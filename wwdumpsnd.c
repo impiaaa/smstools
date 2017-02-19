@@ -462,7 +462,7 @@ int doOscTable(FILE *infile) {
 	//   80287af4 add 6 to pointer
 	//   80287af8 if half < 10, loop
 	if (verbose) {
-		printf("OscTable@0x%x", ftell(infile));
+		printf("OscTable@0x%x,", ftell(infile));
 	}
 	return 0;
 }
