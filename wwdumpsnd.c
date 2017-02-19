@@ -507,8 +507,10 @@ int doOsc(FILE *infile, int ibnk_offset) {
 	// 802872a0 shift right 1
 	// 802872a4 shift left 1
 
+	int endOffset = ftell(infile);
 	if (fseek(infile, osc_s_offset1+ibnk_offset, SEEK_SET)<0) return 1;
 	if (doOscTable(infile)) return 1;
+	if (fseek(infile, endOffset, SEEK_SET)<0) return 1;
 
 	return 0;
 }
