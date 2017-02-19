@@ -458,9 +458,6 @@ int doaw(FILE *infile, const int offset, int dump) {
 
 int doOscTable(FILE *infile) {
 	unsigned char buf[4];
-	//   80287aec load half (0000,0000,000e) at s pointer
-	//   80287af4 add 6 to pointer
-	//   80287af8 if half < 10, loop
 	if (verbose) {
 		printf("OscTable@0x%x,", ftell(infile));
 	}
@@ -508,6 +505,15 @@ int doOsc(FILE *infile, int ibnk_offset) {
 		printf("%x,%f,", osc_1, osc_f1);
 	}
 	
+	// TODO envelope data
+	// 80287288 convert to s pointer (+IBNK)
+	// 80287294 call getOscTableEndPtr
+	//   80287aec load half (0000,0000,000e) at s pointer
+	//   80287af4 add 6 to pointer
+	//   80287af8 if half < 10, loop
+	// 80287298 get pointer difference (0x12)
+	// 802872a0 shift right 1
+	// 802872a4 shift left 1
 	int endOffset = ftell(infile);
 	if (fseek(infile, osc_s_offset1+ibnk_offset, SEEK_SET)<0) return 1;
 	if (doOscTable(infile)) return 1;
