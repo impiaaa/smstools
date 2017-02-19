@@ -515,11 +515,14 @@ int doOsc(FILE *infile, int ibnk_offset) {
 	// 802872a0 shift right 1
 	// 802872a4 shift left 1
 	int endOffset = ftell(infile);
-	if (fseek(infile, osc_s_offset1+ibnk_offset, SEEK_SET)<0) return 1;
+	if (verbose) {
+		printf("0x%x,0x%x,", osc_s_offset1, osc_s_offset2);
+	}
+	/*if (fseek(infile, osc_s_offset1+ibnk_offset, SEEK_SET)<0) return 1;
 	if (doOscTable(infile)) return 1;
 	if (fseek(infile, osc_s_offset2+ibnk_offset, SEEK_SET)<0) return 1;
 	if (doOscTable(infile)) return 1;
-	if (fseek(infile, endOffset, SEEK_SET)<0) return 1;
+	if (fseek(infile, endOffset, SEEK_SET)<0) return 1;*/
 
 	if (verbose) {
 		printf("%f,%f", osc_f2, osc_f3);
