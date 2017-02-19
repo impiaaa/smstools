@@ -261,6 +261,7 @@ int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_
 	else
 	{
 		write32le(36,    smplhead+0x04);
+		write32le(0,     smplhead+0x24);
 	}
 	if (fwrite(smplhead,1,sizeof(smplhead),outfile)!=sizeof(smplhead)) return 1;
 	if (loop_start_sample > 0)
