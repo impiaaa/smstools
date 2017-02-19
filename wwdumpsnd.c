@@ -494,7 +494,7 @@ int doOsc(FILE *infile, int ibnk_offset) {
 
 	// 802873c4 call setOsc
 	if (verbose) {
-		printf("%x,%f,%x,%x,%f,%f", osc_1, osc_f1, osc_s_offset1, osc_s_offset2, osc_f2, osc_f3);
+		printf("%x,%f,..,%f,%f", osc_1, osc_f1, osc_f2, osc_f3);
 	}
 	
 	// TODO envelope data
