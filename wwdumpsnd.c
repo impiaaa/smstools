@@ -253,17 +253,21 @@ unsigned char smplloop[] = {
 int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_sample, int loop_end_sample) {
 	write32le(1000000000/srate, smplhead+0x10);
 	write32le(root_key,         smplhead+0x14);
-	if (loop_start_sample == 0)
+	if (loop_start_sample > 0)
 	{
-		write32le(36, smplhead+0x04);
+		write32le(36 + 24, smplhead+0x04);
 	}
 	else
 	{
-		write32le(36 + 24, smplhead+0x04);
-		write32le(loop_start_sample-1, smplhead+0x2C+0x08);
-		write32le(loop_end_sample-1,   smplhead+0x2C+0x0C);
+		write32le(36, smplhead+0x04);
 	}
 	if (fwrite(smplhead,1,sizeof(smplhead),outfile)!=sizeof(smplhead)) return 1;
+	if (loop_start_sample > 0)
+	{
+		write32le(loop_start_sample-1, smplloop+0x08);
+		write32le(loop_end_sample-1,   smplloop+0x0C);
+		if (fwrite(smplloop,1,sizeof(smplloop),outfile)!=sizeof(smplloop)) return 1;
+	}
 	return 0;
 }
 
@@ -435,6 +439,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 			if (writeWAVHead(outfile, total_size, srate, outframesize)) return 22;
 			
 			total_size += sizeof(smplhead);
+			if (loop_start_sample > 0) total_size += sizeof(smplloop);
 			writeSMPL(outfile, srate, root_key, loop_start_sample, loop_end_sample);
 
 			long oldpos = ftell(awfile);
