@@ -457,7 +457,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 }
 
 static inline const int roundUp(const int numToRound, const int multiple) {  
-	if (multiple == 0) {  
+	if (multiple == 0) {
 		return numToRound;
 	}
 
@@ -466,7 +466,7 @@ static inline const int roundUp(const int numToRound, const int multiple) {
 		return numToRound;
 	}
 	return numToRound + multiple - remainder;
-}  
+}
 
 int doOsc(FILE *infile) {
 	unsigned char buf[4];
