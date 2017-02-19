@@ -230,7 +230,7 @@ int dumpPCM(FILE * const infile, const int size, enum SamplesSourceType type, FI
 }
 
 unsigned char smplhead[] = {
-	's', 'm', 'p', 'l', 60, 0, 0, 0,
+	's', 'm', 'p', 'l', 0, 0, 0, 0,
 	// manfctr     product
 	0, 0, 0, 0, 0, 0, 0, 0,
 	// smplper  unity note      tuning
@@ -238,20 +238,31 @@ unsigned char smplhead[] = {
 	// smptefmt smpteoffset
 	0, 0, 0, 0, 0, 0, 0, 0,
 	// numloops   smpldata
-	1, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0
+};
+
+unsigned char smplloop[] = {
 	// cueptid        type
 	0, 0, 0, 0, 1, 0, 0, 0,
 	//   start         end
 	0, 0, 0, 0, 0, 0, 0, 0,
 	// fraction play count
 	0, 0, 0, 0, 0, 0, 0, 0
-};
+}
 
 int writeSMPL(FILE * outfile, int srate, unsigned char root_key, int loop_start_sample, int loop_end_sample) {
-	write32le(1000000000/srate,    smplhead+0x10);
-	write32le(root_key,            smplhead+0x14);
-	write32le(loop_start_sample-1, smplhead+0x2C+0x08);
-	write32le(loop_end_sample-1,   smplhead+0x2C+0x0C);
+	write32le(1000000000/srate, smplhead+0x10);
+	write32le(root_key,         smplhead+0x14);
+	if (loop_start_sample == 0)
+	{
+		write32le(36, smplhead+0x04);
+	}
+	else
+	{
+		write32le(36 + 24, smplhead+0x04);
+		write32le(loop_start_sample-1, smplhead+0x2C+0x08);
+		write32le(loop_end_sample-1,   smplhead+0x2C+0x0C);
+	}
 	if (fwrite(smplhead,1,sizeof(smplhead),outfile)!=sizeof(smplhead)) return 1;
 	return 0;
 }
