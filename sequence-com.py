@@ -519,7 +519,7 @@ import os
 if len(sys.argv) > 1: files = sys.argv[1:]
 else: files = os.listdir('.')
 for fname in files:
-  if fname.endswith(".com") or fname.endswith(".bms"):
+  if fname.endswith(".com") or fname.endswith(".bms") or fname.endswith(".szs"):
     print fname
     fin = open(fname, 'rb')
     pattern = midi.Pattern()
