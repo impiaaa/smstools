@@ -6,7 +6,8 @@ import sys
 def getString(pos, f):
     t = f.tell()
     f.seek(pos)
-    ret = ''
+    if sys.version_info[0] >= 3: ret = bytes()
+    else: ret = ''
 
     c = f.read(1)
     while c != '\0':
