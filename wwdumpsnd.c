@@ -1482,13 +1482,13 @@ int main(int argc, char ** argv) {
 			strncpy(infilename, argv[i], 256);
 		}
 		else {
-			printf("usage: %s [-v][-d][-o <dir>] <filename>\n",argv[0]);
+			printf("usage: %s [-v][-d][-o <dir>] <.aaf>\n",argv[0]);
 			return 1;
 		}
 	}
 
 	if (infilename[0] == 0) {
-		printf("usage: %s [-v][-d][-o <dir>] <filename>\n",argv[0]);
+		printf("usage: %s [-v][-d][-o <dir>] <.aaf>\n",argv[0]);
 		return 1;
 	}
 	
