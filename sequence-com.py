@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 # broken in Windows Media Player: k_manma, t_casino_fanf, t_chuboss, t_delfino, t_event, t_mechakuppa_, t_pinnapaco, t_select, t_shilena
 # broken in MuseScore: t_delfino, t_event, t_shilena
 
