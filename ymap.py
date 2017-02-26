@@ -5,7 +5,8 @@ import sys, os
 from PIL import Image
 
 if len(sys.argv) != 2:
-	print "Usage: {} [ymap.ymp]".format(sys.argv[0])
+	sys.stderr.write("Usage: %s [ymap.ymp]"%sys.argv[0])
+	exit(1)
 
 fin = open(sys.argv[1], 'rb')
 
