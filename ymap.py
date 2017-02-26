@@ -1,6 +1,11 @@
+#!/usr/bin/env python
+
 from struct import unpack
 import sys, os
 from PIL import Image
+
+if len(sys.argv) != 2:
+	print "Usage: {} [ymap.ymp]".format(sys.argv[0])
 
 fin = open(sys.argv[1], 'rb')
 
