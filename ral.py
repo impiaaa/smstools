@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from struct import unpack
 import sys
 
@@ -14,6 +16,10 @@ def getString(pos, f):
     f.seek(t)
 
     return ret.decode('shift-jis')
+
+if len(sys.argv) != 2:
+	sys.stderr.write("Usage: %s scene.ral\n"%sys.argv[0])
+	exit(1)
 
 fin = open(sys.argv[1], 'rb')
 while True:
