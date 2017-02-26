@@ -1,9 +1,8 @@
 /*
  * wwdumpsnd 0.4 by hcs
  * dump audio from Wind Waker or Super Mario Sunshine
- * needs JaiInit.aaf and *.aw in current directory
- * (if Sunshine, the file is 'msound.aaf', from 'nintendo.szs',
- *  but you'll need to rename it :))
+ * needs JaiInit.aaf or msound.aaf, and *.aw in current directory, Banks/, or
+ * Waves/
  */
 
 #include <stdio.h>
