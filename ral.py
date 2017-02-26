@@ -21,5 +21,5 @@ while True:
     if sectionCount == 0: break
     sectionSize = sectionCount * 68
     name = getString(strOffset, fin)
-    print u"%s @ 0x%X+0x%X"%(name, sectionOffset, sectionSize)
+    print(u"%s @ 0x%X+0x%X"%(name, sectionOffset, sectionSize))
 fin.close()
