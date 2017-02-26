@@ -16,7 +16,10 @@ fin = open(sys.argv[1], 'rb')
 
 nRegions, zero1, eight = unpack('>HHI', fin.read(8))
 
-assert eight == 8, "Not a YMP (8=%d)"%eight
+if eight != 8:
+	sys.stderr.write("Not a YMP (8=%d)\n"%eight)
+	exit(1)
+
 assert zero1 == 0, hex(fin.tell())
 
 print nRegions, "regions"
