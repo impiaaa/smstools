@@ -524,6 +524,9 @@ for fname in files:
     maxpos = fin.tell()-2
     fin.seek(0,0)
     try: readTrack(fin, pattern, maxpos=maxpos)
+    except Exception, e:
+      print e
+      continue
     finally: print hex(fin.tell())
     #print pattern
     if pattern is not None: midi.write_midifile(os.path.splitext(fname)[0]+".mid", pattern)
