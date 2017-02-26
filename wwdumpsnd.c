@@ -1469,7 +1469,7 @@ int main(int argc, char ** argv) {
 	int i;
 	int dump=0;
 	
-	printf("wwdumpsnd 0.4 by hcs\ndump audio from Wind Waker or Super Mario Sunshine\nneeds JaiInit.aaf and *.aw in current directory\n(if Sunshine, the file is 'msound.aaf', from 'nintendo.szs',\nbut you'll need to rename it :))\n\n");
+	printf("wwdumpsnd 0.4 by hcs\ndump audio from Wind Waker or Super Mario Sunshine\nneeds JaiInit.aaf or msound.aaf, and *.aw in current directory, Banks/, or Waves/\n\n");
 
 	for (i=1;i<argc;i++) {
 		if (!strcmp("-v",argv[i])) verbose=1;
