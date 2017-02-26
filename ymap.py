@@ -24,7 +24,7 @@ assert zero1 == 0, hex(fin.tell())
 
 print("%d regions"%nRegions)
 
-for i in xrange(nRegions):
+for i in range(nRegions):
     sz, zero2 = unpack('>II', fin.read(8))
 
     #assert sz == 0x20000, hex(fin.tell())
