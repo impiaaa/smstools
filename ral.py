@@ -10,7 +10,7 @@ def getString(pos, f):
     else: ret = str()
 
     c = f.read(1)
-    while ord(c) != 0:
+    while ord(c) != 0 and len(c) != 0:
         ret += c
         c = f.read(1)
 
