@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 from struct import unpack, pack, Struct
 from warnings import warn
