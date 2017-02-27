@@ -6,7 +6,7 @@ import os.path
 import math
 import bpy, bmesh
 from mathutils import *
-from structures import *
+from common import *
 
 bbStruct = Struct('>fff')
 
