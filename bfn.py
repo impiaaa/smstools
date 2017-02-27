@@ -9,6 +9,7 @@ if sys.version_info[0] <= 2:
 
 class Gly1(Section):
 	header = struct.Struct('>H4xHH')
+	
 	def read(self, fin, start, size):
         fin.seek(0xC, 1)
         self.format, self.w, self.h = self.header.unpack(fin.read(0xa))
@@ -16,6 +17,7 @@ class Gly1(Section):
         #if format == 0: self.h *= 2
         fin.seek(2, 1)
         self.data = fin.read(size-0x18)
+	
 	def export(self, name):
 		dataidx = 0
 		sliceno = 0
