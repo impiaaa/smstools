@@ -21,7 +21,7 @@ class Gly1(Section):
     def export(self, name):
         dataidx = 0
         sliceno = 0
-        while i < len(self.data):
+        while dataidx < len(self.data):
             if self.format == 0:
                 im = Image.new('L', (w, h))
                 for y in range(0, h, 8):
