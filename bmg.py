@@ -17,19 +17,7 @@ def frameToHMSMS(frame):
 class Inf1(Section):
     header = Struct('>HH4x')
     def read(self, fin, start, chunksize):
-        
-
-fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
-assert signature == "MESGbmg1", signature
-for i in xrange(chunkCount):
-    chunkstart = fin.tell()
-    try: chunk, chunksize = unpack('>4sL', fin.read(8))
-    except StructError:
-        warn("File too small for chunk count of "+str(chunkCount))
-        continue
-    if chunk == "INF1":
-        count, size = unpack(, fin.read(8))
+        count, size = self.header.unpack(fin.read(8))
         assert chunksize-16 >= size*count, (chunksize, size, count)
         inf = [None]*count
         for j in xrange(count):
@@ -43,6 +31,18 @@ for i in xrange(chunkCount):
             else:
                 raise Exception("Unknown size", size)
         inf.sort(key=lambda a: a[0])
+
+fin = open(sys.argv[1], 'rb')
+signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
+assert signature == "MESGbmg1", signature
+for i in xrange(chunkCount):
+    chunkstart = fin.tell()
+    try: chunk, chunksize = unpack('>4sL', fin.read(8))
+    except StructError:
+        warn("File too small for chunk count of "+str(chunkCount))
+        continue
+    if chunk == "INF1":
+        
     elif chunk == "DAT1":
         if size >= 12:
             # subtitle format
