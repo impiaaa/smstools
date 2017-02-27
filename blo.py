@@ -54,7 +54,6 @@ indent = 0
 htmlout = open(os.path.splitext(sys.argv[1])[0]+".html", 'w')
 htmlout.write("<html><head><title></title></head><body>\n")
 toWrite = '<div>\n'
-chunks = []
 grayimages = ["coin_back", "error_window", "juice_liquid", "juice_mask", "juice_surface", "sc_mask", "standard_window", "telop_window_1", "telop_window_2", "telop_window_3", "telop_window_4", "water_back", "water_icon_1", "water_icon_2", "water_icon_3"]
 
 def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
@@ -64,27 +63,29 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
     while i < len(chunklist):
         chunk = chunklist[i]
         print ' '*indent+chunk.__class__.__name__
-        if chunk == "":
+        if isinstance(chunk, Bgn1):
             htmlout.write(toWrite)
             i = parsechunks(chunklist, i+1, indent+1, newx+parentx, newy+parenty)
             htmlout.write("</div>\n")
-        elif chunk == "":
+        elif isinstance(chunk, End1):
             return i
-        elif chunk == "":
+        elif isinstance(chunk, Pic1):
             if u[0] == 0x06:
                 # relative to parent
+                pass
             elif u[0] == 0x07:
                 # relative to last
-                x += lastX
-                y += lastY
+                chunk.x += lastX
+                chunk.y += lastY
             elif u[0] == 0x08:
                 # relative to parent, but different order, and set last
-                lastX = x
-                lastY = y
+                lastX = chunk.x
+                lastY = chunk.y
             elif u[0] == 0x09:
                 # ???
+                pass
             else:
-                raise Exception("Unknown rel type 0x%02X"%u[0])
+                raise Exception("Unknown rel type 0x%02X"%chunk.rel)
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(x,y,width,height,name,id))
         elif chunk == "":
             toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(x, y, width, height)
