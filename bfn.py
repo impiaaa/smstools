@@ -12,8 +12,8 @@ class Gly1(Section):
 	def read(self, fin, start, size):
         fin.seek(0xC, 1)
         self.format, self.w, self.h = self.header.unpack(fin.read(0xa))
-        self.h = (size-0x18)/w
-        if format == 0: self.h *= 2
+        #self.h = (size-0x18)/w
+        #if format == 0: self.h *= 2
         fin.seek(2, 1)
         self.data = fin.read(size-0x18)
 	def export(self, name):
