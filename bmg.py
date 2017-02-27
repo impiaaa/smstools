@@ -56,13 +56,13 @@ fin.close()
 if bmg.inf1.size >= 12:
     # subtitle format
     srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
-    for j, (offset, start, end, unknown) in enumerate(inf):
+    for j, (offset, start, end, unknown) in enumerate(bmg.inf1.inf):
         srtout.write(u"%d\n"%(j+1))
         srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
         srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
         fin.seek(chunkstart+8+offset)
-        if j+1 < len(inf):
-            nextOffset = inf[j+1][0]
+        if j+1 < len(bmg.inf1.inf):
+            nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = chunkstart+chunksize
         srtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
@@ -70,11 +70,11 @@ if bmg.inf1.size >= 12:
     srtout.close()
 else:
     txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'w')
-    for j, indices in enumerate(inf):
+    for j, indices in enumerate(bmg.inf1.inf):
         offset = indices[0]
         fin.seek(chunkstart+8+offset)
-        if j+1 < len(inf):
-            nextOffset = inf[j+1][0]
+        if j+1 < len(bmg.inf1.inf):
+            nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = chunkstart+chunksize
         txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
