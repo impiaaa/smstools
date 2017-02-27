@@ -53,7 +53,7 @@ class Gly1(Section):
 
 class BFont(BFile):
     def __init__(self, *args, **kwargs):
-        super(BFont, self).__init__(self, *args, **kwargs)
+        super(BFont, self).__init__(*args, **kwargs)
         # TODO: INF1, WID1, MAP1
         self.sectionHandlers = {b"GLY1": Gly1}
 
