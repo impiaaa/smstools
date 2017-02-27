@@ -42,7 +42,7 @@ class BMessages(BFile):
     sectionHandlers = {b'INF1': Inf1, b'DAT1': Dat1}
     def readHeader(self, fin):
         super(BMessages, self).readHeader(fin)
-        assert self.signature == "MESGbmg1", self.signature
+        assert self.signature == b'MESGbmg1', self.signature
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
