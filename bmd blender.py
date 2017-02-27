@@ -768,7 +768,9 @@ class BModel(BFile):
 		self.sectionHandlers = {}
 		
     def read(self, fin):
-        super().read(fin)
+        super().readHeader(fin)
+        if signature[:4] == 'bres': fin.seek(0xa0, 1)
+        super().readChunks(fin)
 
         for chunkno in range(chunkCount):
             start = fin.tell()
