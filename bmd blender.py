@@ -807,7 +807,7 @@ class BModel(BFile):
             self.scenegraph.type = self.scenegraph.index = -1
             warn("buildSceneGraph(): Unexpected size %d", len(self.scenegraph.children))
 
-        buildMatrices(self.scenegraph, self)    
+        buildMatrices(self.scenegraph, self)
 
 def localMatrix(i, bm):
     s = Matrix()
