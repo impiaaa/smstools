@@ -31,7 +31,7 @@ class BFile(Readable):
     def readChunks(self, fin):
         for chunkno in range(self.chunkCount):
             start = fin.tell()
-            try: chunkId, size = unpack('>4sL', fin.read(8))
+            try: chunkId, size = struct.unpack('>4sL', fin.read(8))
             except struct.error:
                 warn("File too small for chunk count of "+str(chunkCount))
                 continue
