@@ -31,7 +31,7 @@ def getString(pos, f):
 class BFile(Readable):
     header = struct.Struct('>8sLL4s12x')
     def readHeader(self, fin):
-        self.signature, self.fileLength, self.chunkCount, svr = self.header.unpack(fin.read(0x20))
+        self.signature, self.fileLength, self.chunkCount, self.svr = self.header.unpack(fin.read(0x20))
     
     def readChunks(self, fin):
         self.chunks = []
@@ -53,3 +53,10 @@ class BFile(Readable):
     def read(self, fin):
         self.readHeader(fin)
         self.readChunks(fin)
+
+    def writeHeader(self, fout):
+        fout.write(self.header.pack(self.signature, self.fileLength, self.chunkCount, self.svr))
+    
+    def writeChunks(self, fout):
+        for chunk in self.chunks:
+            chunk.write(fout)
