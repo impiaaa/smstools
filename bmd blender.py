@@ -413,7 +413,7 @@ class Mat3(Section):
 class Index(Readable):
     sizeStructs = {1: Struct('>B'), 3: Struct('>H')}
     def __init__(self):
-        super().__init__()
+        super(Index, self).__init__()
         self.colorIndex = [-1]*2
         self.texCoordIndex = [-1]*8
     def read(self, fin, attribs):
