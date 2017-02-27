@@ -1,5 +1,6 @@
 import sys
 import struct
+import warnings
 
 class Readable(object):
     def __init__(self, fin=None):
@@ -40,7 +41,7 @@ class BFile(Readable):
                 chunk.read(fin, start, size)
                 setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
             else:
-                warn("Unsupported section %r" % chunk)
+                warnings.warn("Unsupported section %r" % chunk)
             fin.seek(start+size)
     
     def read(self, fin):
