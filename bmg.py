@@ -1,5 +1,5 @@
 import sys
-from struct import unpack, pack, Struct, error as StructError
+from struct import unpack, pack, Struct
 from warnings import warn
 from array import array
 import os.path
