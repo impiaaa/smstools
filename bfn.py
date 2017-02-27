@@ -4,6 +4,10 @@ import sys, struct
 from PIL import Image
 from common import BFile, Section
 
+if sys.version_info[0] <= 2:
+	range = xrange
+	bytes = str
+
 class Gly1(Section):
 	header = struct.Struct('>H4xHH')
 	def read(self, fin, start, size):
@@ -12,6 +16,11 @@ class Gly1(Section):
         h = (chunksize-0x18)/w
         if format == 0: h *= 2
         fin.seek(2, 1)
+
+class Bfn(BFile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.sectionHandlers = {"GLY1": Gly1}
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
