@@ -1,8 +1,9 @@
-import sys, struct
-from struct import unpack, pack
+import sys
+from struct import unpack, pack, Struct, error as StructError
 from warnings import warn
 from array import array
 import os.path
+from common import Section, BFile
 
 fpms = 0.02997
 def frameToHMSMS(frame):
@@ -12,17 +13,23 @@ def frameToHMSMS(frame):
     minutes = (totalms/60000)%60
     hours = totalms/3600000
     return (hours,minutes,seconds,ms)
+
+class Inf1(Section):
+    header = Struct('>HH4x')
+    def read(self, fin, start, chunksize):
+        
+
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
 assert signature == "MESGbmg1", signature
 for i in xrange(chunkCount):
     chunkstart = fin.tell()
     try: chunk, chunksize = unpack('>4sL', fin.read(8))
-    except struct.error:
+    except StructError:
         warn("File too small for chunk count of "+str(chunkCount))
         continue
     if chunk == "INF1":
-        count, size = unpack('>HH4x', fin.read(8))
+        count, size = unpack(, fin.read(8))
         assert chunksize-16 >= size*count, (chunksize, size, count)
         inf = [None]*count
         for j in xrange(count):
