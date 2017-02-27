@@ -92,11 +92,8 @@ blo = BLayout()
 blo.read(fin)
 fin.close()
 
-indent = 0
 htmlout = open(os.path.splitext(sys.argv[1])[0]+".html", 'w')
 htmlout.write("<html><head><title></title></head><body>\n")
-toWrite = '<div>\n'
-
 parsechunks(blo.chunks)
 htmlout.write("</body></html>")
 htmlout.close()
