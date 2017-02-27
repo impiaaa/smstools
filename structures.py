@@ -77,3 +77,23 @@ class Ank1(object):
             anim.translationsZ = readComp(translations, joint.z.t)
             
             self.anims[i] = anim
+
+class AnimatedJoint(Readable):
+    def read(self, f):
+        self.x = AnimComponent(f)
+        self.y = AnimComponent(f)
+        self.z = AnimComponent(f)
+
+class AnimComponent(Readable):
+    def read(self, f):
+        self.s = AnimIndex(f)
+        self.r = AnimIndex(f)
+        self.t = AnimIndex(f)
+
+class AnimIndex(Readable):
+    header = Struct('>HHH')
+    def read(self, f):
+        self.count, self.index, self.zero = self.header.unpack(f.read(6))
+
+class Key(object): pass
+class Animation(object): pass
