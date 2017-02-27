@@ -17,20 +17,20 @@ def frameToHMSMS(frame):
 class Inf1(Section):
     header = Struct('>HH4x')
     def read(self, fin, start, chunksize):
-        count, size = self.header.unpack(fin.read(8))
+        count, self.size = self.header.unpack(fin.read(8))
         assert chunksize-16 >= size*count, (chunksize, size, count)
-        inf = [None]*count
+        self.inf = [None]*count
         for j in xrange(count):
             if size == 12:
-                inf[j] = unpack('>LHHL', fin.read(size))
+                self.inf[j] = unpack('>LHHL', fin.read(size))
             elif size == 4:
-                inf[j] = unpack('>L', fin.read(size))
+                self.inf[j] = unpack('>L', fin.read(size))
             elif size == 8:
                 warn("Unknown format")
-                inf[j] = unpack('>LL', fin.read(size))
+                self.inf[j] = unpack('>LL', fin.read(size))
             else:
                 raise Exception("Unknown size", size)
-        inf.sort(key=lambda a: a[0])
+        self.inf.sort(key=lambda a: a[0])
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
