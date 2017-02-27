@@ -17,34 +17,26 @@ class Pic1(Section):
     def read(self, fin, start, size):
         u = [None]*9
         self.rel, u[0], u[1], u[2], self.id = self.header.unpack(fin.read(8))
-        c = 8
         if self.rel == 0x06:
             # relative to parent
             self.x, self.y, self.width, self.height = unpack(">hhhh", fin.read(8))
-            c = 16
         elif self.rel == 0x07:
             # relative to last
             x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">xbxbhhBBBB", fin.read(12))
-            c = 20
             x += lastX
             y += lastY
         elif self.rel == 0x08:
             # relative to parent, but different order, and set last
             x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
-            c = 20
             lastX = x
             lastY = y
         elif self.rel == 0x09:
             # ???
             x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
-            c = 20
         else:
             raise Exception("Unknown rel type 0x%02X"%self.rel)
         u[7], u[8], namelen = unpack(">BBB", fin.read(3))
-        c += 3
-        name = os.path.splitext(data[c:c+namelen])[0]
-        c += namelen
-        c += 4-(c%4)
+        name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
         u += map(ord, data[c:])
 
 fin = open(sys.argv[1], 'rb')
