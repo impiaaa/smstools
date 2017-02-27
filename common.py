@@ -1,4 +1,5 @@
 import sys
+import struct
 
 class Readable(object):
     def __init__(self, fin=None):
@@ -23,7 +24,7 @@ def getString(pos, f):
     return ret.decode('shift-jis')
 
 class BFile(Readable):
-    header = Struct('>8sLL4s12x')
+    header = struct.Struct('>8sLL4s12x')
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount, svr = self.header.unpack(fin.read(0x20))
     
