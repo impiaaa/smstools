@@ -24,10 +24,10 @@ def getString(pos, f):
 
 class BFile(Readable):
     header = Struct('>8sLL4s12x')
-    def read(self, fin):
+    def readHeader(self, fin):
         signature, fileLength, chunkCount, svr = self.header.unpack(fin.read(0x20))
-        if signature[:4] == "bres": fin.seek(0xa0, 1)
-
+    
+    def readChunks(self, fin):
         for chunkno in range(chunkCount):
             start = fin.tell()
             try: chunkId, size = unpack('>4sL', fin.read(8))
@@ -41,3 +41,7 @@ class BFile(Readable):
             else:
                 warn("Unsupported section %r" % chunk)
             fin.seek(start+size)
+    
+    def read(self, fin):
+        self.readHeader(fin)
+        self.readChunks(fin)
