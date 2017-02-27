@@ -1,5 +1,11 @@
+#!/usr/bin/env python
+
 import sys, struct
 from PIL import Image
+
+if len(sys.argv) != 2:
+	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
+	exit(1)
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = struct.unpack('>8sLL4s12x', fin.read(0x20))
