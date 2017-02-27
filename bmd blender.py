@@ -8,11 +8,6 @@ import bpy, bmesh
 from mathutils import *
 from structures import *
 
-class Readable(object):
-    def __init__(self, fin=None):
-        super()
-        if fin is not None: self.read(fin)
-
 bbStruct = Struct('>fff')
 
 def getString(pos, f):
