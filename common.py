@@ -29,7 +29,7 @@ class BFile(Readable):
         self.signature, self.fileLength, self.chunkCount, svr = self.header.unpack(fin.read(0x20))
     
     def readChunks(self, fin):
-        for chunkno in range(chunkCount):
+        for chunkno in range(self.chunkCount):
             start = fin.tell()
             try: chunkId, size = unpack('>4sL', fin.read(8))
             except StructError:
