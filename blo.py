@@ -85,12 +85,12 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
                 # ???
                 pass
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(chunk.x,chunk.y,chunk.width,chunk.height,chunk.name,chunk.id))
-        elif chunk == "":
-            toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(x, y, width, height)
-            lastX = x
-            lastY = y
-            newx = x
-            newy = y
+        elif isinstance(chunk, Pan1):
+            toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(chunk.x, chunk.y, chunk.width, chunk.height)
+            lastX = chunk.x
+            lastY = chunk.y
+            newx = chunk.x
+            newy = chunk.y
         i += 1
     return i
 
