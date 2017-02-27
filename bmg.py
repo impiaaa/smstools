@@ -20,7 +20,7 @@ class Inf1(Section):
     header = Struct('>HH4x')
     def read(self, fin, start, chunksize):
         count, self.size = self.header.unpack(fin.read(8))
-        assert chunksize-16 >= size*count, (chunksize, size, count)
+        assert chunksize-16 >= self.size*count, (chunksize, self.size, count)
         self.inf = [None]*count
         for j in xrange(count):
             if size == 12:
