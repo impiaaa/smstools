@@ -97,4 +97,3 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
 parsechunks(blo.chunks)
 htmlout.write("</body></html>")
 htmlout.close()
-fin.close()
