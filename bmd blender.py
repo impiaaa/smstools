@@ -777,9 +777,6 @@ class BModel(BFile):
             b"MDL3": Mdl3Dummy
         }
     
-    def readHeader(self, fin):
-        super().readHeader(fin)
-    
     def readChunks(self, fin):
         if self.signature[:4] == b'bres': fin.seek(0xa0, 1)
         super().readChunks(fin)
