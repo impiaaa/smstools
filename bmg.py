@@ -64,18 +64,17 @@ if bmg.inf1.size >= 12:
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = len(bmg.dat1.data)
-        srtout.write(bmg.dat1.data[offset:nextOffset-1].strip('\0').decode('shift-jis').encode('utf-8'))
+        srtout.write(bmg.dat1.data[offset:nextOffset-1].strip('\0').decode('shift-jis'))
         srtout.write(u"\n\n")
     srtout.close()
 else:
     txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'w')
     for j, indices in enumerate(bmg.inf1.inf):
         offset = indices[0]
-        fin.seek(chunkstart+8+offset)
         if j+1 < len(bmg.inf1.inf):
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
-            nextOffset = chunkstart+chunksize
-        txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
+            nextOffset = len(bmg.dat1.data)
+        txtout.write(bmg.dat1.data[offset:nextOffset-1].strip('\0').decode('shift-jis'))
         txtout.write(u"\n")
     txtout.close()
