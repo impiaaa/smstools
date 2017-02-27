@@ -764,7 +764,7 @@ class Mdl3Dummy(Section):
 
 class BModel(BFile):
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.sectionHandlers = {
             b"INF1": Inf1,
             b"VTX1": Vtx1,
