@@ -10,20 +10,6 @@ from common import *
 
 bbStruct = Struct('>fff')
 
-def getString(pos, f):
-    t = f.tell()
-    f.seek(pos)
-    ret = b''
-
-    c = f.read(1)
-    while c != b'\0':
-        ret += c
-        c = f.read(1)
-
-    f.seek(t)
-
-    return ret.decode('shift-jis')
-
 stringTableCountStruct = Struct('>H2x')
 stringTableOffsetStruct = Struct('>HH')
 def readstringtable(pos, f):
