@@ -33,12 +33,12 @@ class Inf1(Section):
         self.inf.sort(key=lambda a: a[0])
 
 class BMessages(BFile):
+    sectionHandlers = {b'INF1': Inf1}
     def readHeader(self, fin):
         super(BMessages, self).readHeader(fin)
         assert self.signature == "MESGbmg1", self.signature
 
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
 for i in xrange(chunkCount):
     chunkstart = fin.tell()
     try: chunk, chunksize = unpack('>4sL', fin.read(8))
