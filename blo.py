@@ -84,8 +84,6 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
             elif u[0] == 0x09:
                 # ???
                 pass
-            else:
-                raise Exception("Unknown rel type 0x%02X"%chunk.rel)
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(chunk.x,chunk.y,chunk.width,chunk.height,chunk.name,chunk.id))
         elif chunk == "":
             toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(x, y, width, height)
