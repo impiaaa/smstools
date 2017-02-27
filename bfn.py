@@ -15,10 +15,12 @@ class Gly1(Section):
         h = (size-0x18)/w
         if format == 0: h *= 2
         fin.seek(2, 1)
+        self.data = 
 
 class Bfont(BFile):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
+		# TODO: INF1, WID1, MAP1
         self.sectionHandlers = {b"GLY1": Gly1}
 
 if len(sys.argv) != 2:
@@ -55,6 +57,5 @@ fin.close()
                                 a = c&0x0F
                                 im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3+((a << 4) | a,))
         im.save(sys.argv[1]+'.png')
-    # TODO: INF1, WID1, MAP1
     fin.seek(chunkstart+chunksize)
 
