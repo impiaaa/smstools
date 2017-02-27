@@ -1,8 +1,4 @@
-from struct import unpack, pack, Struct, error as StructError
-from warnings import warn
-from array import array
 import sys
-import math
 
 class Readable(object):
     def __init__(self, fin=None):
