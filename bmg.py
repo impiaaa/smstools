@@ -45,7 +45,7 @@ class BMessages(BFile):
         assert self.signature == "MESGbmg1", self.signature
 
 if len(sys.argv) != 2:
-    sys.stderr.write("Usage: %s <b lo>\n"%sys.argv[0])
+    sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
     exit(1)
 
 fin = open(sys.argv[1], 'rb')
