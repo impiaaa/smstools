@@ -23,15 +23,15 @@ class Inf1(Section):
         assert chunksize-16 >= self.size*count, (chunksize, self.size, count)
         self.inf = [None]*count
         for j in xrange(count):
-            if size == 12:
-                self.inf[j] = unpack('>LHHL', fin.read(size))
-            elif size == 4:
-                self.inf[j] = unpack('>L', fin.read(size))
-            elif size == 8:
+            if self.size == 12:
+                self.inf[j] = unpack('>LHHL', fin.read(self.size))
+            elif self.size == 4:
+                self.inf[j] = unpack('>L', fin.read(self.size))
+            elif sself.ize == 8:
                 warn("Unknown format")
-                self.inf[j] = unpack('>LL', fin.read(size))
+                self.inf[j] = unpack('>LL', fin.read(self.size))
             else:
-                raise Exception("Unknown size", size)
+                raise Exception("Unknown size", self.size)
         self.inf.sort(key=lambda a: a[0])
 
 class Dat1(Section):
