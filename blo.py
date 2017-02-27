@@ -31,6 +31,12 @@ class Pic1(Section):
         self.name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
         u += map(ord, fin.read(fin.tell()+size-start))
 
+class Pan1(Section):
+    def read(self, fin, start, size):
+        unknown1, id, x, y, width, height = unpack(">H2x4shhhh", data[:16])
+        if unknown1 == 0x00000801:
+            unknown2, = unpack(">L", data[16:])
+
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
 
@@ -79,9 +85,6 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
                 raise Exception("Unknown rel type 0x%02X"%u[0])
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(x,y,width,height,name,id))
         elif chunk == "PAN1":
-            unknown1, id, x, y, width, height = unpack(">H2x4shhhh", data[:16])
-            if unknown1 == 0x00000801:
-                unknown2, = unpack(">L", data[16:])
             toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(x, y, width, height)
             lastX = x
             lastY = y
