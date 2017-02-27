@@ -20,7 +20,7 @@ class Gly1(Section):
 class Bfn(BFile):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
-        self.sectionHandlers = {"GLY1": Gly1}
+        self.sectionHandlers = {bytes("GLY1"): Gly1}
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
@@ -28,7 +28,7 @@ if len(sys.argv) != 2:
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = struct.unpack('>8sLL4s12x', fin.read(0x20))
-for i in xrange(chunkCount):
+for i in range(chunkCount):
     chunkstart = fin.tell()
     try: chunk, chunksize = struct.unpack('>4sL', fin.read(8))
     except struct.error:
