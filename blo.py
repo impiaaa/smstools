@@ -37,6 +37,16 @@ class Pan1(Section):
         if unknown1 == 0x00000801:
             unknown2, = unpack(">L", fin.read(4))
 
+class BLayout(BFile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sectionHandlers = {
+            b'BGN1': Bgn1,
+            b'END1': End1,
+            b'PIC1': Pic1,
+            b'PAN1': Pan1
+        }
+
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
 
@@ -61,14 +71,13 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
     while i < len(chunklist):
         chunk, data = chunklist[i]
         print ' '*indent+chunk
-        if chunk == "BGN1":
+        if chunk == "":
             htmlout.write(toWrite)
             i = parsechunks(chunklist, i+1, indent+1, newx+parentx, newy+parenty)
             htmlout.write("</div>\n")
-        elif chunk == "END1":
+        elif chunk == "":
             return i
-        elif chunk == "INF1":
-        elif chunk == "PIC1":
+        elif chunk == "":
             if u[0] == 0x06:
                 # relative to parent
             elif u[0] == 0x07:
@@ -84,7 +93,7 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
             else:
                 raise Exception("Unknown rel type 0x%02X"%u[0])
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(x,y,width,height,name,id))
-        elif chunk == "PAN1":
+        elif chunk == "":
             toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(x, y, width, height)
             lastX = x
             lastY = y
