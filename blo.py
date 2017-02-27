@@ -70,18 +70,18 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
         elif isinstance(chunk, End1):
             return i
         elif isinstance(chunk, Pic1):
-            if u[0] == 0x06:
+            if chunk.rel == 0x06:
                 # relative to parent
                 pass
-            elif u[0] == 0x07:
+            elif chunk.rel == 0x07:
                 # relative to last
                 chunk.x += lastX
                 chunk.y += lastY
-            elif u[0] == 0x08:
+            elif chunk.rel == 0x08:
                 # relative to parent, but different order, and set last
                 lastX = chunk.x
                 lastY = chunk.y
-            elif u[0] == 0x09:
+            elif chunk.rel == 0x09:
                 # ???
                 pass
             htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(chunk.x,chunk.y,chunk.width,chunk.height,chunk.name,chunk.id))
