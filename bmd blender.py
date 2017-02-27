@@ -6,13 +6,12 @@ import os.path
 import math
 import bpy, bmesh
 from mathutils import *
+from structures import *
 
 class Readable(object):
     def __init__(self, fin=None):
         super()
         if fin is not None: self.read(fin)
-
-class Section(object): pass
 
 bbStruct = Struct('>fff')
 
