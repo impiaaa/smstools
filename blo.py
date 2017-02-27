@@ -15,32 +15,32 @@ class Inf1(Section):
 class Pic1(Section):
     header = Struct('>BBBB4s')
     def read(self, fin, start, size):
-        u = [None]*10
-        u[0], u[1], u[2], u[4], id = self.header.unpack(fin.read(8))
+        u = [None]*9
+        self.rel, u[0], u[1], u[2], self.id = self.header.unpack(fin.read(8))
         c = 8
-        if u[0] == 0x06:
+        if self.rel == 0x06:
             # relative to parent
-            x, y, width, height = unpack(">hhhh", data[8:16])
+            self.x, self.y, self.width, self.height = unpack(">hhhh", fin.read(8))
             c = 16
-        elif u[0] == 0x07:
+        elif self.rel == 0x07:
             # relative to last
-            x, y, width, height, u[4], u[5], u[6], u[7] = unpack(">xbxbhhBBBB", data[8:20])
+            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">xbxbhhBBBB", fin.read(12))
             c = 20
             x += lastX
             y += lastY
-        elif u[0] == 0x08:
+        elif self.rel == 0x08:
             # relative to parent, but different order, and set last
-            x, y, width, height, u[4], u[5], u[6], u[7] = unpack(">hhhhBBBB", data[8:20])
+            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
             c = 20
             lastX = x
             lastY = y
-        elif u[0] == 0x09:
+        elif self.rel == 0x09:
             # ???
-            x, y, width, height, u[4], u[5], u[6], u[7] = unpack(">hhhhBBBB", data[8:20])
+            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
             c = 20
         else:
-            raise Exception("Unknown rel type 0x%02X"%u[0])
-        u[8], u[9], namelen = unpack(">BBB", data[c:c+3])
+            raise Exception("Unknown rel type 0x%02X"%self.rel)
+        u[7], u[8], namelen = unpack(">BBB", fin.read(3))
         c += 3
         name = os.path.splitext(data[c:c+namelen])[0]
         c += namelen
