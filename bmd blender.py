@@ -757,32 +757,34 @@ def computeSectionLengths(offsets, sizeOfSection):
     return lengths
 
 class Mdl3Dummy(Section):
-	def read(self, fin, start, size):
-		fout = open("mld3.cdata", 'wb')
-		fout.write(fin.read(size-8))
-		fout.close()
+    def read(self, fin, start, size):
+        fout = open("mld3.cdata", 'wb')
+        fout.write(fin.read(size-8))
+        fout.close()
 
 class BModel(BFile):
-	def __init__(self, *args, **kwargs):
-		super().__init__(self, *args, **kwargs)
-		self.sectionHandlers = {
-			b"INF1": Inf1,
-			b"VTX1": Vtx1,
-			b"JNT1": Jnt1,
-			b"SHP1": Shp1,
-			b"MAT3": Mat3,
-			b"TEX1": Tex1,
-			b"EVP1": Evp1,
-			b"DRW1": Drw1,
-			b"MDL3": Mdl3Dummy
-		}
-		
-    def read(self, fin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.sectionHandlers = {
+            b"INF1": Inf1,
+            b"VTX1": Vtx1,
+            b"JNT1": Jnt1,
+            b"SHP1": Shp1,
+            b"MAT3": Mat3,
+            b"TEX1": Tex1,
+            b"EVP1": Evp1,
+            b"DRW1": Drw1,
+            b"MDL3": Mdl3Dummy
+        }
+    
+    def readHeader(self, fin):
         super().readHeader(fin)
-        if signature[:4] == b'bres': fin.seek(0xa0, 1)
+    
+    def readChunks(self, fin):
+        if self.signature[:4] == b'bres': fin.seek(0xa0, 1)
         super().readChunks(fin)
 
-		self.scenegraph = SceneGraph()
+        self.scenegraph = SceneGraph()
         buildSceneGraph(self.inf1, self.scenegraph)
         # remove dummy node at root
         if len(self.scenegraph.children) == 1:
