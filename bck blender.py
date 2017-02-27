@@ -1,6 +1,10 @@
 from warnings import warn
 import sys
 from common import *
+from struct import unpack, pack, Struct, error as StructError
+from warnings import warn
+from array import array
+import math
 assert sys.version_info[0] >= 3
 
 class Bck(Section):
