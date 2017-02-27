@@ -38,14 +38,12 @@ class Pan1(Section):
             unknown2, = unpack(">L", fin.read(4))
 
 class BLayout(BFile):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sectionHandlers = {
-            b'BGN1': Bgn1,
-            b'END1': End1,
-            b'PIC1': Pic1,
-            b'PAN1': Pan1
-        }
+    sectionHandlers = {
+        b'BGN1': Bgn1,
+        b'END1': End1,
+        b'PIC1': Pic1,
+        b'PAN1': Pan1
+    }
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
