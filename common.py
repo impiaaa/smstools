@@ -3,7 +3,7 @@ import struct
 
 class Readable(object):
     def __init__(self, fin=None):
-        super()
+        super(Readable, self)
         if fin is not None: self.read(fin)
 
 class Section(object): pass
