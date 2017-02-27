@@ -2,6 +2,7 @@
 
 import sys, struct
 from PIL import Image
+from common import BFile, Section
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
