@@ -756,7 +756,17 @@ def computeSectionLengths(offsets, sizeOfSection):
         lengths[i] = length
     return lengths
 
+class Mdl3(Section):
+	def read(self, fin, start, size):
+		fout = open("mld3.cdata", 'wb')
+		fout.write(fin.read(size-8))
+		fout.close()
+
 class BModel(BFile):
+	def __init__(self, *args, **kwargs):
+		super().__init__(self, *args, **kwargs)
+		self.sectionHandlers = {}
+		
     def read(self, fin):
         super().read(fin)
 
@@ -791,9 +801,7 @@ class BModel(BFile):
                 self.drw1 = Drw1()
                 self.drw1.read(fin, start, size)
             elif chunk == b"MDL3":
-                fout = open("mld3.cdata", 'wb')
-                fout.write(fin.read(size-8))
-                fout.close()
+                
             else:
                 warn("Unsupported section %r" % chunk)
             fin.seek(start+size)
