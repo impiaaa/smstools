@@ -53,40 +53,30 @@ bmg = BMessages()
 bmg.read(fin)
 fin.close()
 
-for i in xrange(chunkCount):
-    chunkstart = fin.tell()
-    try: chunk, chunksize = unpack('>4sL', fin.read(8))
-    except StructError:
-        warn("File too small for chunk count of "+str(chunkCount))
-        continue
-    if chunk == "INF1":
-        
-    elif chunk == "":
-        if size >= 12:
-            # subtitle format
-            srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
-            for j, (offset, start, end, unknown) in enumerate(inf):
-                srtout.write(u"%d\n"%(j+1))
-                srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
-                srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
-                fin.seek(chunkstart+8+offset)
-                if j+1 < len(inf):
-                    nextOffset = inf[j+1][0]
-                else:
-                    nextOffset = chunkstart+chunksize
-                srtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
-                srtout.write(u"\n\n")
-            srtout.close()
+if bmg.inf1.size >= 12:
+    # subtitle format
+    srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
+    for j, (offset, start, end, unknown) in enumerate(inf):
+        srtout.write(u"%d\n"%(j+1))
+        srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
+        srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
+        fin.seek(chunkstart+8+offset)
+        if j+1 < len(inf):
+            nextOffset = inf[j+1][0]
         else:
-            txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'w')
-            for j, indices in enumerate(inf):
-                offset = indices[0]
-                fin.seek(chunkstart+8+offset)
-                if j+1 < len(inf):
-                    nextOffset = inf[j+1][0]
-                else:
-                    nextOffset = chunkstart+chunksize
-                txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
-                txtout.write(u"\n")
-            txtout.close()
-    fin.seek(chunkstart+chunksize)
+            nextOffset = chunkstart+chunksize
+        srtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
+        srtout.write(u"\n\n")
+    srtout.close()
+else:
+    txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'w')
+    for j, indices in enumerate(inf):
+        offset = indices[0]
+        fin.seek(chunkstart+8+offset)
+        if j+1 < len(inf):
+            nextOffset = inf[j+1][0]
+        else:
+            nextOffset = chunkstart+chunksize
+        txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
+        txtout.write(u"\n")
+    txtout.close()
