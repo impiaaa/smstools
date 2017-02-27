@@ -9,7 +9,7 @@ assert sys.version_info[0] >= 3
 
 class Bck(BFile):
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super(Bck, self).__init__(self, *args, **kwargs)
         self.sectionHandlers = {b"ANK1": Ank1}
 
 def convRotation(rots, scale):
