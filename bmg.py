@@ -34,6 +34,10 @@ class Inf1(Section):
                 raise Exception("Unknown size", size)
         self.inf.sort(key=lambda a: a[0])
 
+class Dat1(Section):
+    def read(self, fin, start, size):
+        self.data = fin.read(size-8)
+
 class BMessages(BFile):
     sectionHandlers = {b'INF1': Inf1}
     def readHeader(self, fin):
@@ -41,13 +45,23 @@ class BMessages(BFile):
         assert self.signature == "MESGbmg1", self.signature
 
 if len(sys.argv) != 2:
-    sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
+    sys.stderr.write("Usage: %s <b lo>\n"%sys.argv[0])
     exit(1)
 
 fin = open(sys.argv[1], 'rb')
 bmg = BMessages()
 bmg.read(fin)
 fin.close()
+
+for i in xrange(chunkCount):
+    chunkstart = fin.tell()
+    try: chunk, chunksize = unpack('>4sL', fin.read(8))
+    except StructError:
+        warn("File too small for chunk count of "+str(chunkCount))
+        continue
+    if chunk == "INF1":
+        
+    elif chunk == "DAT1":
         if size >= 12:
             # subtitle format
             srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
@@ -75,3 +89,4 @@ fin.close()
                 txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
                 txtout.write(u"\n")
             txtout.close()
+    fin.seek(chunkstart+chunksize)
