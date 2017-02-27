@@ -13,6 +13,95 @@ from bisect import bisect
 import mathutils.geometry
 assert sys.version_info[0] >= 3
 
+class Bck(Section):
+    def read(self, fin):
+        signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
+        for chunkno in range(chunkCount):
+            start = fin.tell()
+            try: chunk, size = unpack('>4sL', fin.read(8))
+            except StructError:
+                warn("File too small for chunk count of "+str(chunkCount))
+                continue
+            if chunk == b"ANK1":
+                self.ank1 = Ank1()
+                self.ank1.read(fin, start, size)
+            else:
+                warn("Unsupported section %r" % chunk)
+            fin.seek(start+size)
+
+def convRotation(rots, scale):
+    for r in rots:
+        r.value *= scale
+        r.tangent *= scale
+
+class Ank1(Section):
+    header = Struct('>BBHHHHHIIII')
+    def read(self, fin, start, size):
+        self.loopFlags, angleMultiplier, self.animationLength, \
+        numJoints, scaleCount, rotCount, transCount, \
+        offsetToJoints, offsetToScales, offsetToRots, offsetToTrans = self.header.unpack(fin.read(28))
+        
+        scales = array('f')
+        fin.seek(start+offsetToScales)
+        scales.fromfile(fin, scaleCount)
+        if sys.byteorder == 'little': scales.byteswap()
+        
+        rotations = array('h')
+        fin.seek(start+offsetToRots)
+        rotations.fromfile(fin, rotCount)
+        if sys.byteorder == 'little': rotations.byteswap()
+
+        translations = array('f')
+        fin.seek(start+offsetToTrans)
+        translations.fromfile(fin, transCount)
+        if sys.byteorder == 'little': translations.byteswap()
+        
+        rotScale = float(1<<angleMultiplier)*math.pi/32768.0
+        fin.seek(start+offsetToJoints)
+        self.anims = [None]*numJoints
+        for i in range(numJoints):
+            joint = AnimatedJoint()
+            joint.read(fin)
+            
+            anim = Animation()
+            
+            anim.scalesX = readComp(scales, joint.x.s)
+            anim.scalesY = readComp(scales, joint.y.s)
+            anim.scalesZ = readComp(scales, joint.z.s)
+
+            anim.rotationsX = readComp(rotations, joint.x.r)
+            convRotation(anim.rotationsX, rotScale)
+            anim.rotationsY = readComp(rotations, joint.y.r)
+            convRotation(anim.rotationsY, rotScale)
+            anim.rotationsZ = readComp(rotations, joint.z.r)
+            convRotation(anim.rotationsZ, rotScale)
+
+            anim.translationsX = readComp(translations, joint.x.t)
+            anim.translationsY = readComp(translations, joint.y.t)
+            anim.translationsZ = readComp(translations, joint.z.t)
+            
+            self.anims[i] = anim
+
+class AnimatedJoint(Readable):
+    def read(self, f):
+        self.x = AnimComponent(f)
+        self.y = AnimComponent(f)
+        self.z = AnimComponent(f)
+
+class AnimComponent(Readable):
+    def read(self, f):
+        self.s = AnimIndex(f)
+        self.r = AnimIndex(f)
+        self.t = AnimIndex(f)
+
+class AnimIndex(Readable):
+    header = Struct('>HHH')
+    def read(self, f):
+        self.count, self.index, self.zero = self.header.unpack(f.read(6))
+
+class Key(object): pass
+class Animation(object): pass
+
 def readComp(src, index):
     dst = [None]*index.count
     #violated by biawatermill01.bck
