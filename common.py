@@ -30,7 +30,14 @@ class BFile(Readable):
 
         for chunkno in range(chunkCount):
             start = fin.tell()
-            try: chunk, size = unpack('>4sL', fin.read(8))
+            try: chunkId, size = unpack('>4sL', fin.read(8))
             except StructError:
                 warn("File too small for chunk count of "+str(chunkCount))
                 continue
+            if chunkId in self.sectionHandlers:
+                chunk = self.sectionHandlers[chunkId]
+                chunk.read(fin, start, size)
+                setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
+            else:
+                warn("Unsupported section %r" % chunk)
+            fin.seek(start+size)
