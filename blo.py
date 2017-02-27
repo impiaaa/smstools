@@ -37,7 +37,7 @@ class Pic1(Section):
             raise Exception("Unknown rel type 0x%02X"%self.rel)
         u[7], u[8], namelen = unpack(">BBB", fin.read(3))
         name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
-        u += map(ord, data[c:])
+        u += map(ord, fin.read(fin.tell()+size-start))
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
