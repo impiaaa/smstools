@@ -11,12 +11,12 @@ class Gly1(Section):
 	header = struct.Struct('>H4xHH')
 	def read(self, fin, start, size):
         fin.seek(0xC, 1)
-        format, w, h = header.unpack(fin.read(0xa))
-        h = (chunksize-0x18)/w
+        format, w, h = self.header.unpack(fin.read(0xa))
+        h = (size-0x18)/w
         if format == 0: h *= 2
         fin.seek(2, 1)
 
-class Bfn(BFile):
+class Bfont(BFile):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
         self.sectionHandlers = {b"GLY1": Gly1}
@@ -26,14 +26,10 @@ if len(sys.argv) != 2:
 	exit(1)
 
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount, svr = struct.unpack('>8sLL4s12x', fin.read(0x20))
-for i in range(chunkCount):
-    chunkstart = fin.tell()
-    try: chunk, chunksize = struct.unpack('>4sL', fin.read(8))
-    except struct.error:
-        warn("File too small for chunk count of "+str(chunkCount))
-        continue
-    if chunk == "GLY1":
+bfn = Bfont()
+bfn.read(fin)
+fin.close()
+
         if format == 0:
             im = Image.new('L', (w, h))
             for y in xrange(0, h, 8):
