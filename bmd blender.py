@@ -756,7 +756,7 @@ def computeSectionLengths(offsets, sizeOfSection):
         lengths[i] = length
     return lengths
 
-class Mdl3(Section):
+class Mdl3Dummy(Section):
 	def read(self, fin, start, size):
 		fout = open("mld3.cdata", 'wb')
 		fout.write(fin.read(size-8))
@@ -765,50 +765,24 @@ class Mdl3(Section):
 class BModel(BFile):
 	def __init__(self, *args, **kwargs):
 		super().__init__(self, *args, **kwargs)
-		self.sectionHandlers = {}
+		self.sectionHandlers = {
+			b"INF1": Inf1,
+			b"VTX1": Vtx1,
+			b"JNT1": Jnt1,
+			b"SHP1": Shp1,
+			b"MAT3": Mat3,
+			b"TEX1": Tex1,
+			b"EVP1": Evp1,
+			b"DRW1": Drw1,
+			b"MDL3": Mdl3Dummy
+		}
 		
     def read(self, fin):
         super().readHeader(fin)
         if signature[:4] == b'bres': fin.seek(0xa0, 1)
         super().readChunks(fin)
 
-        for chunkno in range(chunkCount):
-            start = fin.tell()
-            try: chunk, size = unpack('>4sL', fin.read(8))
-            except StructError:
-                warn("File too small for chunk count of "+str(chunkCount))
-                continue
-            if chunk == b"INF1":
-                self.inf1 = Inf1()
-                self.inf1.read(fin, start, size)
-            elif chunk == b"VTX1":
-                self.vtx1 = Vtx1()
-                self.vtx1.read(fin, start, size)
-            elif chunk == b"JNT1":
-                self.jnt1 = Jnt1()
-                self.jnt1.read(fin, start, size)
-            elif chunk == b"SHP1":
-                self.shp1 = Shp1()
-                self.shp1.read(fin, start, size)
-            elif chunk == b"MAT3":
-                self.mat3 = Mat3()
-                self.mat3.read(fin, start, size)
-            elif chunk == b"TEX1":
-                self.tex1 = Tex1()
-                self.tex1.read(fin, start, size)
-            elif chunk == b"EVP1":
-                self.evp1 = Evp1()
-                self.evp1.read(fin, start, size)
-            elif chunk == b"DRW1":
-                self.drw1 = Drw1()
-                self.drw1.read(fin, start, size)
-            elif chunk == b"MDL3":
-                
-            else:
-                warn("Unsupported section %r" % chunk)
-            fin.seek(start+size)
-        
-        self.scenegraph = SceneGraph()
+		self.scenegraph = SceneGraph()
         buildSceneGraph(self.inf1, self.scenegraph)
         # remove dummy node at root
         if len(self.scenegraph.children) == 1:
