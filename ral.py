@@ -2,21 +2,7 @@
 
 from struct import unpack
 import sys
-
-def getString(pos, f):
-    t = f.tell()
-    f.seek(pos)
-    if sys.version_info[0] >= 3: ret = bytes()
-    else: ret = str()
-
-    c = f.read(1)
-    while ord(c) != 0 and len(c) != 0:
-        ret += c
-        c = f.read(1)
-
-    f.seek(t)
-
-    return ret.decode('shift-jis')
+from common import getString
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s scene.ral\n"%sys.argv[0])
