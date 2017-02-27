@@ -64,7 +64,7 @@ if bmg.inf1.size >= 12:
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = len(bmg.dat1.data)
-        srtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
+        srtout.write(bmg.dat1.data[offset:nextOffset-1].strip('\0').decode('shift-jis').encode('utf-8'))
         srtout.write(u"\n\n")
     srtout.close()
 else:
