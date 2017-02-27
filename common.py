@@ -39,9 +39,9 @@ class BFile(Readable):
             if chunkId in self.sectionHandlers:
                 chunk = self.sectionHandlers[chunkId]
                 chunk.read(fin, start, size)
-                setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunkId)
+                setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
             else:
-                warnings.warn("Unsupported section %r" % chunk)
+                warnings.warn("Unsupported section %r" % chunkId)
             fin.seek(start+size)
     
     def read(self, fin):
