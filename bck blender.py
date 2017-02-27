@@ -7,9 +7,6 @@ from array import array
 import math
 assert sys.version_info[0] >= 3
 
-class Bck(BFile):
-    sectionHandlers = {b"ANK1": Ank1}
-
 def convRotation(rots, scale):
     for r in rots:
         r.value *= scale
@@ -62,6 +59,9 @@ class Ank1(Section):
             anim.translationsZ = readComp(translations, joint.z.t)
             
             self.anims[i] = anim
+
+class Bck(BFile):
+    sectionHandlers = {b"ANK1": Ank1}
 
 class AnimatedJoint(Readable):
     def read(self, f):
