@@ -756,11 +756,9 @@ def computeSectionLengths(offsets, sizeOfSection):
         lengths[i] = length
     return lengths
 
-class BModel(Readable):
-    header = Struct('>8sLL4s12x')
+class BModel(BFile):
     def read(self, fin):
-        signature, fileLength, chunkCount, svr = self.header.unpack(fin.read(0x20))
-        if signature[:4] == "bres": fin.seek(0xa0, 1)
+        super().read(fin)
 
         for chunkno in range(chunkCount):
             start = fin.tell()
