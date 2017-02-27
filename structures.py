@@ -9,6 +9,8 @@ class Readable(object):
         super()
         if fin is not None: self.read(fin)
 
+class Section(object): pass
+
 class Bck(object):
     def read(self, fin):
         signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
