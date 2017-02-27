@@ -7,7 +7,11 @@ class Readable(object):
         super(Readable, self)
         if fin is not None: self.read(fin)
 
-class Section(object): pass
+class Section(object):
+    def read(self, fin, start, size):
+        pass
+    def write(self, fout):
+        pass
 
 def getString(pos, f):
     t = f.tell()
