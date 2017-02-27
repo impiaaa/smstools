@@ -22,21 +22,17 @@ class Pic1(Section):
             self.x, self.y, self.width, self.height = unpack(">hhhh", fin.read(8))
         elif self.rel == 0x07:
             # relative to last
-            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">xbxbhhBBBB", fin.read(12))
-            x += lastX
-            y += lastY
+            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack(">xbxbhhBBBB", fin.read(12))
         elif self.rel == 0x08:
             # relative to parent, but different order, and set last
-            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
-            lastX = x
-            lastY = y
+            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
         elif self.rel == 0x09:
             # ???
-            x, y, width, height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
+            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack(">hhhhBBBB", fin.read(12))
         else:
             raise Exception("Unknown rel type 0x%02X"%self.rel)
         u[7], u[8], namelen = unpack(">BBB", fin.read(3))
-        name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
+        self.name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
         u += map(ord, fin.read(fin.tell()+size-start))
 
 fin = open(sys.argv[1], 'rb')
