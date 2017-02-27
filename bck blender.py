@@ -1,16 +1,6 @@
 from warnings import warn
 import sys
 from common import *
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
-from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
-from bpy.types import Operator
-import bpy
-import os
-from mathutils import *
-from bisect import bisect
-import mathutils.geometry
 assert sys.version_info[0] >= 3
 
 class Bck(Section):
@@ -101,6 +91,17 @@ class AnimIndex(Readable):
 
 class Key(object): pass
 class Animation(object): pass
+
+# ImportHelper is a helper class, defines filename and
+# invoke() function which calls the file selector.
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.types import Operator
+import bpy
+import os
+from mathutils import *
+from bisect import bisect
+import mathutils.geometry
 
 def readComp(src, index):
     dst = [None]*index.count
