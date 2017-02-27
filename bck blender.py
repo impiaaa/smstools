@@ -1,9 +1,16 @@
-from struct import unpack, pack, Struct, error as StructError
 from warnings import warn
-from array import array
 import sys
-import math
 from structures import *
+# ImportHelper is a helper class, defines filename and
+# invoke() function which calls the file selector.
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.types import Operator
+import bpy
+import os
+from mathutils import *
+from bisect import bisect
+import mathutils.geometry
 assert sys.version_info[0] >= 3
 
 def readComp(src, index):
@@ -33,17 +40,6 @@ def readComp(src, index):
         dst.sort(key=lambda a: a.time)
     
     return dst
-
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
-from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
-from bpy.types import Operator
-import bpy
-import os
-from mathutils import *
-from bisect import bisect
-import mathutils.geometry
 
 def doCurve(action, data_path, loopFlags, data):
     for i, subData in enumerate(data):
