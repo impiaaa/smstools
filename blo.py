@@ -33,9 +33,9 @@ class Pic1(Section):
 
 class Pan1(Section):
     def read(self, fin, start, size):
-        unknown1, id, x, y, width, height = unpack(">H2x4shhhh", data[:16])
+        unknown1, self.id, self.x, self.y, self.width, self.height = unpack(">H2x4shhhh", fin.read(16))
         if unknown1 == 0x00000801:
-            unknown2, = unpack(">L", data[16:])
+            unknown2, = unpack(">L", fin.read(4))
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
