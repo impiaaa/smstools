@@ -7,21 +7,10 @@ from array import array
 import math
 assert sys.version_info[0] >= 3
 
-class Bck(Section):
-    def read(self, fin):
-        signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
-        for chunkno in range(chunkCount):
-            start = fin.tell()
-            try: chunk, size = unpack('>4sL', fin.read(8))
-            except StructError:
-                warn("File too small for chunk count of "+str(chunkCount))
-                continue
-            if chunk == b"ANK1":
-                self.ank1 = Ank1()
-                self.ank1.read(fin, start, size)
-            else:
-                warn("Unsupported section %r" % chunk)
-            fin.seek(start+size)
+class Bck(BFile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.sectionHandlers = {b"ANK1": Ank1}
 
 def convRotation(rots, scale):
     for r in rots:
