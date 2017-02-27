@@ -769,7 +769,7 @@ class BModel(BFile):
 		
     def read(self, fin):
         super().readHeader(fin)
-        if signature[:4] == 'bres': fin.seek(0xa0, 1)
+        if signature[:4] == b'bres': fin.seek(0xa0, 1)
         super().readChunks(fin)
 
         for chunkno in range(chunkCount):
