@@ -22,7 +22,7 @@ class Inf1(Section):
         count, self.size = self.header.unpack(fin.read(8))
         assert chunksize-16 >= self.size*count, (chunksize, self.size, count)
         self.inf = [None]*count
-        for j in xrange(count):
+        for j in range(count):
             if self.size == 12:
                 self.inf[j] = unpack('>LHHL', fin.read(self.size))
             elif self.size == 4:
