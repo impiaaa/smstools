@@ -46,7 +46,9 @@ class BLayout(BFile):
     }
 
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount, svr = unpack('>8sLL4s12x', fin.read(0x20))
+blo = BLayout()
+blo.read(fin)
+fin.close()
 
 indent = 0
 htmlout = open(os.path.splitext(sys.argv[1])[0]+".html", 'w')
@@ -54,20 +56,12 @@ htmlout.write("<html><head><title></title></head><body>\n")
 toWrite = '<div>\n'
 chunks = []
 grayimages = ["coin_back", "error_window", "juice_liquid", "juice_mask", "juice_surface", "sc_mask", "standard_window", "telop_window_1", "telop_window_2", "telop_window_3", "telop_window_4", "water_back", "water_icon_1", "water_icon_2", "water_icon_3"]
-for chunkno in xrange(chunkCount):
-    start = fin.tell()
-    try: chunk, size = unpack('>4sL', fin.read(8))
-    except StructError:
-        warn("File too small for chunk count of "+str(chunkCount))
-        continue
-    chunks.append((chunk, fin.read(size-8)))
 
 def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
     toWrite = '<div>\n'
     lastX = lastY = 0
     newx = newy = 0
     while i < len(chunklist):
-        chunk, data = chunklist[i]
         print ' '*indent+chunk
         if chunk == "":
             htmlout.write(toWrite)
