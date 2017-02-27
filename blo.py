@@ -47,15 +47,6 @@ class BLayout(BFile):
         b'PAN1': Pan1
     }
 
-fin = open(sys.argv[1], 'rb')
-blo = BLayout()
-blo.read(fin)
-fin.close()
-
-indent = 0
-htmlout = open(os.path.splitext(sys.argv[1])[0]+".html", 'w')
-htmlout.write("<html><head><title></title></head><body>\n")
-toWrite = '<div>\n'
 grayimages = ["coin_back", "error_window", "juice_liquid", "juice_mask", "juice_surface", "sc_mask", "standard_window", "telop_window_1", "telop_window_2", "telop_window_3", "telop_window_4", "water_back", "water_icon_1", "water_icon_2", "water_icon_3"]
 
 def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
@@ -95,6 +86,16 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
             newy = chunk.y
         i += 1
     return i
+
+fin = open(sys.argv[1], 'rb')
+blo = BLayout()
+blo.read(fin)
+fin.close()
+
+indent = 0
+htmlout = open(os.path.splitext(sys.argv[1])[0]+".html", 'w')
+htmlout.write("<html><head><title></title></head><body>\n")
+toWrite = '<div>\n'
 
 parsechunks(blo.chunks)
 htmlout.write("</body></html>")
