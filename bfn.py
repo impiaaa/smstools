@@ -17,7 +17,7 @@ class Gly1(Section):
         fin.seek(2, 1)
         self.data = fin.read(size-0x18)
 	def export(self, name):
-		i = 0
+		dataidx = 0
 		while i < len(self.data):
 			if self.format == 0:
 				im = Image.new('L', (w, h))
@@ -25,8 +25,8 @@ class Gly1(Section):
 					for x in range(0, w, 8):
 						for dy in range(8):
 							for dx in range(0, 8, 2):
-								c = ord(self.data[i])
-								i += 1
+								c = ord(self.data[dataidx])
+								dataidx += 1
 								if x + dx < w and y + dy < h:
 									t = c&0xF0
 									im.putpixel((x+dx, y+dy), t | (t >> 4))
@@ -38,8 +38,8 @@ class Gly1(Section):
 					for x in xrange(0, w, 8):
 						for dy in xrange(4):
 							for dx in xrange(0, 8):
-								c = ord(self.data[i])
-								i += 1
+								c = ord(self.data[dataidx])
+								dataidx += 1
 								if x + dx < w and y + dy < h:
 									t = c&0xF0
 									#im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3)
