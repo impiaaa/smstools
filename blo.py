@@ -88,7 +88,7 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
     return i
 
 if len(sys.argv) != 2:
-    sys.stderr.write("Usage: %s <b lo>\n"%sys.argv[0])
+    sys.stderr.write("Usage: %s <blo>\n"%sys.argv[0])
     exit(1)
 
 fin = open(sys.argv[1], 'rb')
