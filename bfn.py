@@ -19,7 +19,7 @@ class Gly1(Section):
 class Bfn(BFile):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
-        self.sectionHandlers = {"GLY1": Gly1}
+        self.sectionHandlers = {b"GLY1": Gly1}
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
