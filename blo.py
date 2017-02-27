@@ -62,7 +62,8 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
     lastX = lastY = 0
     newx = newy = 0
     while i < len(chunklist):
-        print ' '*indent+chunk
+        chunk = chunklist[i]
+        print ' '*indent+chunk.__class__.__name__
         if chunk == "":
             htmlout.write(toWrite)
             i = parsechunks(chunklist, i+1, indent+1, newx+parentx, newy+parenty)
