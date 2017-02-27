@@ -4,9 +4,6 @@ import sys, struct
 from PIL import Image
 from common import BFile, Section
 
-if sys.version_info[0] <= 2:
-    range = xrange
-
 class Gly1(Section):
     header = struct.Struct('>H4xHH')
     
