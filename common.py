@@ -37,7 +37,7 @@ class BFile(Readable):
                 warn("File too small for chunk count of "+str(self.chunkCount))
                 continue
             if chunkId in self.sectionHandlers:
-                chunk = self.sectionHandlers[chunkId]
+                chunk = self.sectionHandlers[chunkId]()
                 chunk.read(fin, start, size)
                 setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
             else:
