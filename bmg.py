@@ -40,16 +40,14 @@ class BMessages(BFile):
         super(BMessages, self).readHeader(fin)
         assert self.signature == "MESGbmg1", self.signature
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
+    exit(1)
+
 fin = open(sys.argv[1], 'rb')
-for i in xrange(chunkCount):
-    chunkstart = fin.tell()
-    try: chunk, chunksize = unpack('>4sL', fin.read(8))
-    except StructError:
-        warn("File too small for chunk count of "+str(chunkCount))
-        continue
-    if chunk == "INF1":
-        
-    elif chunk == "DAT1":
+bmg = BMessages()
+bmg.read(fin)
+fin.close()
         if size >= 12:
             # subtitle format
             srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
@@ -77,4 +75,3 @@ for i in xrange(chunkCount):
                 txtout.write(fin.read(nextOffset-offset-1).strip('\0').decode('shift-jis').encode('utf-8'))
                 txtout.write(u"\n")
             txtout.close()
-    fin.seek(chunkstart+chunksize)
