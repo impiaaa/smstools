@@ -1,4 +1,5 @@
-import sys, struct, Image
+import sys, struct
+from PIL import Image
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, svr = struct.unpack('>8sLL4s12x', fin.read(0x20))
