@@ -18,6 +18,7 @@ class Gly1(Section):
         self.data = fin.read(size-0x18)
 	def export(self, name):
 		dataidx = 0
+		sliceno = 0
 		while i < len(self.data):
 			if self.format == 0:
 				im = Image.new('L', (w, h))
@@ -45,7 +46,8 @@ class Gly1(Section):
 									#im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3)
 									a = c&0x0F
 									im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3+((a << 4) | a,))
-			im.save(name+'.png')
+			im.save(name+str(sliceno)+'.png')
+			sliceno += 1
 
 class BFont(BFile):
     def __init__(self, *args, **kwargs):
