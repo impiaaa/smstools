@@ -30,6 +30,7 @@ class BFile(Readable):
         self.signature, self.fileLength, self.chunkCount, svr = self.header.unpack(fin.read(0x20))
     
     def readChunks(self, fin):
+        self.chunks = []
         for chunkno in range(self.chunkCount):
             start = fin.tell()
             try: chunkId, size = struct.unpack('>4sL', fin.read(8))
@@ -40,6 +41,7 @@ class BFile(Readable):
                 chunk = self.sectionHandlers[chunkId]()
                 chunk.read(fin, start, size)
                 setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
+                self.chunks.append(chunk)
             else:
                 warnings.warn("Unsupported section %r" % chunkId)
             fin.seek(start+size)
