@@ -21,3 +21,16 @@ def getString(pos, f):
     f.seek(t)
 
     return ret.decode('shift-jis')
+
+class BFile(Readable):
+    header = Struct('>8sLL4s12x')
+    def read(self, fin):
+        signature, fileLength, chunkCount, svr = self.header.unpack(fin.read(0x20))
+        if signature[:4] == "bres": fin.seek(0xa0, 1)
+
+        for chunkno in range(chunkCount):
+            start = fin.tell()
+            try: chunk, size = unpack('>4sL', fin.read(8))
+            except StructError:
+                warn("File too small for chunk count of "+str(chunkCount))
+                continue
