@@ -4,6 +4,15 @@ import sys, struct
 from PIL import Image
 from common import BFile, Section
 
+class Gly1(Section):
+	header = struct.Struct('>H4xHH')
+	def read(self, fin, start, size):
+        fin.seek(0xC, 1)
+        format, w, h = header.unpack(fin.read(0xa))
+        h = (chunksize-0x18)/w
+        if format == 0: h *= 2
+        fin.seek(2, 1)
+
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
 	exit(1)
@@ -17,11 +26,6 @@ for i in xrange(chunkCount):
         warn("File too small for chunk count of "+str(chunkCount))
         continue
     if chunk == "GLY1":
-        fin.seek(0xC, 1)
-        format, w, h = struct.unpack('>H4xHH', fin.read(0xa))
-        h = (chunksize-0x18)/w
-        if format == 0: h *= 2
-        fin.seek(2, 1)
         if format == 0:
             im = Image.new('L', (w, h))
             for y in xrange(0, h, 8):
