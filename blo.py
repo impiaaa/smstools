@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys, os
 from struct import pack, unpack, Struct, error as StructError
 from warnings import warn
