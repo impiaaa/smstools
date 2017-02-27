@@ -26,6 +26,7 @@ def getString(pos, f):
 class BFile(Readable):
     header = struct.Struct('>8sLL4s12x')
     def readHeader(self, fin):
+        print(repr(fin))
         self.signature, self.fileLength, self.chunkCount, svr = self.header.unpack(fin.read(0x20))
     
     def readChunks(self, fin):
