@@ -6,7 +6,6 @@ from common import BFile, Section
 
 if sys.version_info[0] <= 2:
 	range = xrange
-	bytes = str
 
 class Gly1(Section):
 	header = struct.Struct('>H4xHH')
