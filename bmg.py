@@ -39,7 +39,7 @@ class Dat1(Section):
         self.data = fin.read(size-8)
 
 class BMessages(BFile):
-    sectionHandlers = {b'INF1': Inf1}
+    sectionHandlers = {b'INF1': Inf1, b'DAT1': Dat1}
     def readHeader(self, fin):
         super(BMessages, self).readHeader(fin)
         assert self.signature == "MESGbmg1", self.signature
@@ -61,7 +61,7 @@ for i in xrange(chunkCount):
         continue
     if chunk == "INF1":
         
-    elif chunk == "DAT1":
+    elif chunk == "":
         if size >= 12:
             # subtitle format
             srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
