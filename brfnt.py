@@ -53,10 +53,10 @@ class Tglp(Section):
             if self.format == 0:
                 # I4
                 im = Image.new('L', (self.width, self.height))
-                for y in xrange(0, self.height, 8):
-                    for x in xrange(0, self.width, 8):
-                        for dy in xrange(8):
-                            for dx in xrange(0, 8, 2):
+                for y in range(0, self.height, 8):
+                    for x in range(0, self.width, 8):
+                        for dy in range(8):
+                            for dx in range(0, 8, 2):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
@@ -67,10 +67,10 @@ class Tglp(Section):
             elif self.format == 1:
                 # I8
                 im = Image.new('L', (self.width, self.height))
-                for y in xrange(0, self.height, 4):
-                    for x in xrange(0, self.width, 8):
-                        for dy in xrange(4):
-                            for dx in xrange(8):
+                for y in range(0, self.height, 4):
+                    for x in range(0, self.width, 8):
+                        for dy in range(4):
+                            for dx in range(8):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
@@ -78,10 +78,10 @@ class Tglp(Section):
             elif self.format == 2:
                 # IA4
                 im = Image.new('LA', (self.width, self.height))
-                for y in xrange(0, self.height, 4):
-                    for x in xrange(0, self.width, 8):
-                        for dy in xrange(4):
-                            for dx in xrange(8):
+                for y in range(0, self.height, 4):
+                    for x in range(0, self.width, 8):
+                        for dy in range(4):
+                            for dx in range(8):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
@@ -91,10 +91,10 @@ class Tglp(Section):
             elif self.format == 3:
                 # IA8
                 im = Image.new('LA', (self.width, self.height))
-                for y in xrange(0, self.height, 4):
-                    for x in xrange(0, self.width, 4):
-                        for dy in xrange(4):
-                            for dx in xrange(4):
+                for y in range(0, self.height, 4):
+                    for x in range(0, self.width, 4):
+                        for dy in range(4):
+                            for dx in range(4):
                                 c1, c2 = ord(self.data[dataIdx]), ord(self.data[dataIdx+1])
                                 dataIdx += 2
                                 if x + dx < self.width and y + dy < self.height:
@@ -102,10 +102,10 @@ class Tglp(Section):
             elif self.format == 5:
                 # RGB5A3
                 im = Image.new('RGBA', (self.width, self.height))
-                for y in xrange(0, self.height, 4):
-                    for x in xrange(0, self.width, 4):
-                        for dy in xrange(4):
-                            for dx in xrange(4):
+                for y in range(0, self.height, 4):
+                    for x in range(0, self.width, 4):
+                        for dy in range(4):
+                            for dx in range(4):
                                 c, = unpack('>H', self.data[dataIdx:dataIdx+2])
                                 dataIdx += 2
                                 if x + dx < self.width and y + dy < self.height:
