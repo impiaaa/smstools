@@ -48,7 +48,7 @@ class Tglp(Section):
     def export(self):
         dataIdx = 0
         for i in range(self.count):
-            if format == 0:
+            if self.format == 0:
                 # I4
                 im = Image.new('L', (self.width, self.height))
                 for y in xrange(0, self.height, 8):
@@ -62,7 +62,7 @@ class Tglp(Section):
                                     im.putpixel((x+dx, y+dy), t | (t >> 4))
                                     t = c&0x0F
                                     im.putpixel((x+dx+1, y+dy), (t << 4) | t)
-            elif format == 1:
+            elif self.format == 1:
                 # I8
                 im = Image.new('L', (self.width, self.height))
                 for y in xrange(0, self.height, 4):
@@ -73,7 +73,7 @@ class Tglp(Section):
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), c)
-            elif format == 2:
+            elif self.format == 2:
                 # IA4
                 im = Image.new('LA', (self.width, self.height))
                 for y in xrange(0, self.height, 4):
@@ -86,7 +86,7 @@ class Tglp(Section):
                                     t = c&0xF0
                                     a = c&0x0F
                                     im.putpixel((x+dx, y+dy), (t | (t >> 4),(a << 4) | a))
-            elif format == 3:
+            elif self.format == 3:
                 # IA8
                 im = Image.new('LA', (self.width, self.height))
                 for y in xrange(0, self.height, 4):
@@ -97,7 +97,7 @@ class Tglp(Section):
                                 dataIdx += 2
                                 if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), (c1,c2))
-            elif format == 5:
+            elif self.format == 5:
                 # RGB5A3
                 im = Image.new('RGBA', (self.width, self.height))
                 for y in xrange(0, self.height, 4):
