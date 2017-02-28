@@ -47,66 +47,66 @@ class Tglp(Section):
     
     def export(self):
         dataIdx = 0
-        for i in range(count):
+        for i in range(self.count):
             if format == 0:
                 # I4
-                im = Image.new('L', (width, height))
-                for y in xrange(0, height, 8):
-                    for x in xrange(0, width, 8):
+                im = Image.new('L', (self.width, self.height))
+                for y in xrange(0, self.height, 8):
+                    for x in xrange(0, self.width, 8):
                         for dy in xrange(8):
                             for dx in xrange(0, 8, 2):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
-                                if x + dx < width and y + dy < height:
+                                if x + dx < self.width and y + dy < self.height:
                                     t = c&0xF0
                                     im.putpixel((x+dx, y+dy), t | (t >> 4))
                                     t = c&0x0F
                                     im.putpixel((x+dx+1, y+dy), (t << 4) | t)
             elif format == 1:
                 # I8
-                im = Image.new('L', (width, height))
-                for y in xrange(0, height, 4):
-                    for x in xrange(0, width, 8):
+                im = Image.new('L', (self.width, self.height))
+                for y in xrange(0, self.height, 4):
+                    for x in xrange(0, self.width, 8):
                         for dy in xrange(4):
                             for dx in xrange(8):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
-                                if x + dx < width and y + dy < height:
+                                if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), c)
             elif format == 2:
                 # IA4
-                im = Image.new('LA', (width, height))
-                for y in xrange(0, height, 4):
-                    for x in xrange(0, width, 8):
+                im = Image.new('LA', (self.width, self.height))
+                for y in xrange(0, self.height, 4):
+                    for x in xrange(0, self.width, 8):
                         for dy in xrange(4):
                             for dx in xrange(8):
                                 c = ord(self.data[dataIdx])
                                 dataIdx += 1
-                                if x + dx < width and y + dy < height:
+                                if x + dx < self.width and y + dy < self.height:
                                     t = c&0xF0
                                     a = c&0x0F
                                     im.putpixel((x+dx, y+dy), (t | (t >> 4),(a << 4) | a))
             elif format == 3:
                 # IA8
-                im = Image.new('LA', (width, height))
-                for y in xrange(0, height, 4):
-                    for x in xrange(0, width, 4):
+                im = Image.new('LA', (self.width, self.height))
+                for y in xrange(0, self.height, 4):
+                    for x in xrange(0, self.width, 4):
                         for dy in xrange(4):
                             for dx in xrange(4):
                                 c1, c2 = ord(self.data[dataIdx]), ord(self.data[dataIdx+1])
                                 dataIdx += 2
-                                if x + dx < width and y + dy < height:
+                                if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), (c1,c2))
             elif format == 5:
                 # RGB5A3
-                im = Image.new('RGBA', (width, height))
-                for y in xrange(0, height, 4):
-                    for x in xrange(0, width, 4):
+                im = Image.new('RGBA', (self.width, self.height))
+                for y in xrange(0, self.height, 4):
+                    for x in xrange(0, self.width, 4):
                         for dy in xrange(4):
                             for dx in xrange(4):
                                 c, = unpack('>H', self.data[dataIdx:dataIdx+2])
                                 dataIdx += 2
-                                if x + dx < width and y + dy < height:
+                                if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), unpackRGB5A3(c))
             im.save(sys.argv[1]+str(i)+'.png')
 
