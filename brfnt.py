@@ -111,8 +111,9 @@ class Tglp(Section):
             im.save(sys.argv[1]+str(i)+'.png')
 
 class Cwdh(Section):
+    header = Struct('>I4x3x')
     def read(self, fin, start, size):
-        count, = unpack('>I4x3x', fin.read(11))
+        count, = self.header.unpack(fin.read(11))
 
 class BRFont(BFile):
     header = Struct('>8sL2xH')
