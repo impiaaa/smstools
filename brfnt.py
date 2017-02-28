@@ -1,6 +1,7 @@
 import sys
 from PIL import Image
-from struct import unpack
+from struct import Struct
+from common import Section, BFile
 
 def unpackRGB5A3(c):
     if (c & 0x8000) == 0x8000:
@@ -22,6 +23,12 @@ def unpackRGB5A3(c):
         b = (b << (8-4)) | b
     return r, g, b, a
 
+class Tglp(Section):
+    header = Struct('>4x2x2xHH2x2xHHI')
+    def read(self, fin, start, size):
+        self.count, self.format, self.width, self.height, offset = self.header.unpack(fin.read(0x18))
+        print self.format, self.width, self.height
+        fin.seek(offset)
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount = unpack('>8sL2xH', fin.read(0x10))
 
@@ -33,9 +40,7 @@ for chunkNumber in xrange(chunkCount):
         continue
     print hex(fin.tell()), chunk, hex(chunksize)
     if chunk == "TGLP":
-        count, format, width, height, offset = unpack('>4x2x2xHH2x2xHHI', fin.read(0x18))
-        print format, width, height
-        fin.seek(offset)
+        
         for i in range(count):
             if format == 0:
                 # I4
