@@ -47,7 +47,7 @@ class Tglp(Section):
         fin.seek(offset)
         self.data = fin.read(int(self.width*self.height*self.count*formatWidths[self.format]))
     
-    def export(self):
+    def export(self, fname):
         dataIdx = 0
         for i in range(self.count):
             if self.format == 0:
@@ -110,7 +110,7 @@ class Tglp(Section):
                                 dataIdx += 2
                                 if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), unpackRGB5A3(c))
-            im.save(sys.argv[1]+str(i)+'.png')
+            im.save(fname+str(i)+'.png')
 
 class Cwdh(Section):
     header = Struct('>I4x3x')
@@ -123,8 +123,12 @@ class BRFont(BFile):
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount = self.header.unpack(fin.read(0x10))
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
+    exit(1)
+
 fin = open(sys.argv[1], 'rb')
 brfnt = BRFont()
 brfnt.read(fin)
 fin.close()
-brfnt.tglp.export()
+brfnt.tglp.export(sys.argv[1])
