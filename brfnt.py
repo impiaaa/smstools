@@ -29,6 +29,7 @@ class Tglp(Section):
         self.count, self.format, self.width, self.height, offset = self.header.unpack(fin.read(0x18))
         print self.format, self.width, self.height
         fin.seek(offset)
+        self.data = fin.read(int(self.width*self.height*self.count*formatWidths[format]))
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount = unpack('>8sL2xH', fin.read(0x10))
 
