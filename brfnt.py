@@ -46,7 +46,7 @@ class Tglp(Section):
         print(self.format, self.width, self.height)
         fin.seek(offset)
         self.data = fin.read(int(self.width*self.height*self.count*formatWidths[self.format]))
-        print(self.data)
+        print(repr(self.data))
     
     def export(self, fname):
         dataIdx = 0
