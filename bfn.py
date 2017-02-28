@@ -34,10 +34,10 @@ class Gly1(Section):
                                     im.putpixel((x+dx+1, y+dy), (t << 4) | t)
             elif self.format == 2:
                 im = Image.new('RGBA', (self.w, self.h))
-                for y in xrange(0, self.h, 4):
-                    for x in xrange(0, self.w, 8):
-                        for dy in xrange(4):
-                            for dx in xrange(0, 8):
+                for y in range(0, self.h, 4):
+                    for x in range(0, self.w, 8):
+                        for dy in range(4):
+                            for dx in range(0, 8):
                                 c = ord(self.data[dataidx])
                                 dataidx += 1
                                 if x + dx < self.w and y + dy < self.h:
