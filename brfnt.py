@@ -57,7 +57,7 @@ class Tglp(Section):
                     for x in range(0, self.width, 8):
                         for dy in range(8):
                             for dx in range(0, 8, 2):
-                                c = ord(self.data[dataIdx:dataIdx])
+                                c = ord(self.data[dataIdx:dataIdx+1])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
                                     t = c&0xF0
@@ -71,7 +71,7 @@ class Tglp(Section):
                     for x in range(0, self.width, 8):
                         for dy in range(4):
                             for dx in range(8):
-                                c = ord(self.data[dataIdx:dataIdx])
+                                c = ord(self.data[dataIdx:dataIdx+1])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), c)
@@ -82,7 +82,7 @@ class Tglp(Section):
                     for x in range(0, self.width, 8):
                         for dy in range(4):
                             for dx in range(8):
-                                c = ord(self.data[dataIdx:dataIdx])
+                                c = ord(self.data[dataIdx:dataIdx+1])
                                 dataIdx += 1
                                 if x + dx < self.width and y + dy < self.height:
                                     t = c&0xF0
@@ -95,7 +95,7 @@ class Tglp(Section):
                     for x in range(0, self.width, 4):
                         for dy in range(4):
                             for dx in range(4):
-                                c1, c2 = ord(self.data[dataIdx:dataIdx]), ord(self.data[dataIdx+1:dataIdx+1])
+                                c1, c2 = ord(self.data[dataIdx:dataIdx+1]), ord(self.data[dataIdx+1:dataIdx+2])
                                 dataIdx += 2
                                 if x + dx < self.width and y + dy < self.height:
                                     im.putpixel((x+dx, y+dy), (c1,c2))
