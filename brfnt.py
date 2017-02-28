@@ -110,8 +110,17 @@ class Tglp(Section):
                                     im.putpixel((x+dx, y+dy), unpackRGB5A3(c))
             im.save(sys.argv[1]+str(i)+'.png')
 
+class Cwdh(Section):
+    def read(self, fin, start, size):
+        count, = unpack('>I4x3x', fin.read(11))
+
+class BRFont(BFile):
+    header = Struct('>8sL2xH')
+    def readHeader(self, fin):
+        self.signature, self.fileLength, self.chunkCount = self.header.unpack(fin.read(0x10))
+
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount = unpack('>8sL2xH', fin.read(0x10))
+signature, fileLength, chunkCount = unpack(, fin.read(0x10))
 
 for chunkNumber in xrange(chunkCount):
     chunkstart = fin.tell()
@@ -122,7 +131,6 @@ for chunkNumber in xrange(chunkCount):
     print hex(fin.tell()), chunk, hex(chunksize)
     if chunk == "TGLP":
         
-        
     elif chunk == "CWDH":
-        count, = unpack('>I4x3x', fin.read(11))
+        
     fin.seek(((chunkstart+chunksize+3)/4)*4)
