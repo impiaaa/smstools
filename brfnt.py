@@ -1,6 +1,6 @@
 import sys
 from PIL import Image
-from struct import Struct
+from struct import Struct, unpack
 from common import Section, BFile
 
 formatWidths = {
