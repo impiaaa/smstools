@@ -30,6 +30,11 @@ def getString(pos, f):
 
 class BFile(Readable):
     header = struct.Struct('>8sLL4s12x')
+    
+    def __init__(self, *args, **kwargs):
+        super(BFile, self).__init__(*args, **kwargs)
+        self.aligned = False
+    
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount, self.svr = self.header.unpack(fin.read(0x20))
     
@@ -48,7 +53,8 @@ class BFile(Readable):
                 self.chunks.append(chunk)
             else:
                 warnings.warn("Unsupported section %r" % chunkId)
-            fin.seek(start+size)
+            if self.aligned: fin.seek(((start+size+3)/4)*4)
+            else: fin.seek(start+size)
     
     def read(self, fin):
         self.readHeader(fin)
