@@ -116,21 +116,12 @@ class Cwdh(Section):
 
 class BRFont(BFile):
     header = Struct('>8sL2xH')
+    sectionHandlers = {b'TGLP': Tglp, b'CWDH': Cwdh}
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount = self.header.unpack(fin.read(0x10))
 
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount = unpack(, fin.read(0x10))
-
-for chunkNumber in xrange(chunkCount):
-    chunkstart = fin.tell()
-    try: chunk, chunksize = unpack('>4sL', fin.read(8))
-    except struct.error:
-        warn("File too small for chunk")
-        continue
-    print hex(fin.tell()), chunk, hex(chunksize)
-    if chunk == "TGLP":
-        
-    elif chunk == "CWDH":
-        
-    fin.seek(((chunkstart+chunksize+3)/4)*4)
+brfnt = BRFont()
+brfnt.read(fin)
+fin.close()
+brfnt.tglp.export()
