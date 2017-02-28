@@ -43,7 +43,7 @@ class Tglp(Section):
     header = Struct('>4x2x2xHH2x2xHHI')
     def read(self, fin, start, size):
         self.count, self.format, self.width, self.height, offset = self.header.unpack(fin.read(0x18))
-        print self.format, self.width, self.height
+        print(self.format, self.width, self.height)
         fin.seek(offset)
         self.data = fin.read(int(self.width*self.height*self.count*formatWidths[self.format]))
     
