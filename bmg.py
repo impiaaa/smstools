@@ -33,7 +33,7 @@ class Inf1(Section):
                 self.inf[j] = unpack('>LL', fin.read(self.size))
             else:
                 raise Exception("Unknown size %d" % self.size)
-        self.inf.sort(key=lambda a: a[0])
+        #self.inf.sort(key=lambda a: a[0])
 
 class Dat1(Section):
     def read(self, fin, start, size):
