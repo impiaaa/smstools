@@ -27,7 +27,7 @@ class Inf1(Section):
                 self.inf[j] = unpack('>LHHL', fin.read(self.size))
             elif self.size == 4:
                 self.inf[j] = unpack('>L', fin.read(self.size))
-            elif sself.ize == 8:
+            elif self.ize == 8:
                 warn("Unknown format")
                 self.inf[j] = unpack('>LL', fin.read(self.size))
             else:
