@@ -78,7 +78,6 @@ else:
             nextOffset = len(bmg.dat1.data)
         end = bmg.dat1.data.find(b'\0', offset)
         data = bmg.dat1.data[offset:end]
-        print offset, end, repr(data)
         txtout.write(data)#.decode('shift-jis'))
         txtout.write(b"\n\n")
     txtout.close()
