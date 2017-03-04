@@ -31,7 +31,7 @@ class Inf1(Section):
                 warn("Unknown format")
                 self.inf[j] = unpack('>LL', fin.read(self.size))
             else:
-                raise Exception("Unknown size", self.size)
+                raise Exception("Unknown size %d" % self.size)
         self.inf.sort(key=lambda a: a[0])
 
 class Dat1(Section):
