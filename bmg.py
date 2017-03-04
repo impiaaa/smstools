@@ -23,12 +23,13 @@ class Inf1(Section):
         assert chunksize-16 >= self.size*count, (chunksize, self.size, count)
         self.inf = [None]*count
         for j in range(count):
-            if self.size == 12:
+            if self.size == 24:
+                self.inf[j] = unpack('>LHHLLLL', fin.read(self.size))
+            elif self.size == 12:
                 self.inf[j] = unpack('>LHHL', fin.read(self.size))
             elif self.size == 4:
                 self.inf[j] = unpack('>L', fin.read(self.size))
             elif self.size == 8:
-                warn("Unknown format")
                 self.inf[j] = unpack('>LL', fin.read(self.size))
             else:
                 raise Exception("Unknown size %d" % self.size)
