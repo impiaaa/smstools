@@ -80,5 +80,5 @@ else:
         data = bmg.dat1.data[offset:end]
         print offset, end, repr(data)
         txtout.write(data.decode('shift-jis'))
-        txtout.write(u"\n")
+        txtout.write(u"\n\n")
     txtout.close()
