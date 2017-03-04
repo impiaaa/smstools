@@ -53,7 +53,7 @@ bmg = BMessages()
 bmg.read(fin)
 fin.close()
 
-if bmg.inf1.size >= 12:
+if bmg.inf1.size == 12:
     # subtitle format
     srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
     for j, (offset, start, end, unknown) in enumerate(bmg.inf1.inf):
