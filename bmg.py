@@ -64,7 +64,7 @@ if bmg.inf1.size == 12:
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = len(bmg.dat1.data)
-        srtout.write(bmg.dat1.data[offset:nextOffset-1].strip(b'\0').decode('shift-jis'))
+        srtout.write(bmg.dat1.data[offset:bmg.dat1.data.find(b'\0', offset)].decode('shift-jis'))
         srtout.write(u"\n\n")
     srtout.close()
 else:
@@ -75,6 +75,6 @@ else:
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
             nextOffset = len(bmg.dat1.data)
-        txtout.write(bmg.dat1.data[offset:nextOffset-1].strip(b'\0').decode('shift-jis'))
+        txtout.write(bmg.dat1.data[offset:bmg.dat1.data.find(b'\0', offset)].decode('shift-jis'))
         txtout.write(u"\n")
     txtout.close()
