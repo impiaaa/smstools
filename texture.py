@@ -37,3 +37,17 @@ GX_TF_C8:     8,
 GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
+
+formatBlockHeight = {
+GX_TF_I4:     8,
+GX_TF_I8:     4,
+GX_TF_IA4:    4,
+GX_TF_IA8:    4,
+GX_TF_RGB565: 4,
+GX_TF_RGB5A3: 4,
+GX_TF_RGBA8:  4,
+GX_TF_C4:     8,
+GX_TF_C8:     4,
+GX_TF_C14X2:  4,
+GX_TF_CMPR:   8
+}
