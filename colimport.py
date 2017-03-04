@@ -62,7 +62,7 @@ class ImportCOL(Operator, ImportHelper):
             )
 
     def execute(self, context):
-        importFile(self.filepath)        
+        importFile(self.filepath)
         return {'FINISHED'}
 
 # Only needed if you want to add into a dynamic menu
