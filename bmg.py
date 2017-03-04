@@ -69,7 +69,7 @@ if bmg.inf1.size == 12:
         srtout.write(u"\n\n")
     srtout.close()
 else:
-    txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'w')
+    txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'wb')
     for j, indices in enumerate(bmg.inf1.inf):
         offset = indices[0]
         if j+1 < len(bmg.inf1.inf):
@@ -79,6 +79,6 @@ else:
         end = bmg.dat1.data.find(b'\0', offset)
         data = bmg.dat1.data[offset:end]
         print offset, end, repr(data)
-        txtout.write(data.decode('shift-jis'))
-        txtout.write(u"\n\n")
+        txtout.write(data)#.decode('shift-jis'))
+        txtout.write(b"\n\n")
     txtout.close()
