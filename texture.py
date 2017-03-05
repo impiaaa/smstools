@@ -232,7 +232,7 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data.fromfile(fin, arrayCount*sliceSize/struct.calcsize(data.typecode))
     return data
 
-def decodeTexturePIL(data, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
+def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
     
     dataIdx = 0
