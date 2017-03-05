@@ -1,3 +1,5 @@
+import struct
+
 GX_TF_I4 = 0x0
 GX_TF_I8 = 0x1
 GX_TF_IA4 = 0x2
@@ -191,7 +193,7 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
                 if dataidx >= len(data): break
                 c = data[dataidx:dataidx+8]
                 dataidx += 8
-                color0, color1, pixels = unpack('HHI', bytes(fixS3TC1Block(c)))
+                color0, color1, pixels = struct.unpack('HHI', bytes(fixS3TC1Block(c)))
                 colors = [rgb565toColor(color0)+(255,),
                           rgb565toColor(color1)+(255,)]
                 if color0 > color1:
