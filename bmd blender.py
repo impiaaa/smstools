@@ -593,8 +593,7 @@ class Image(Readable):
         images = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
-                n = "/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(arrayIdx)+'.png'
-                im.save(n)
+                im.save("/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(arrayIdx)+'.png')
 
     def __repr__(self):
         return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
