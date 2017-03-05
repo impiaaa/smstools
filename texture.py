@@ -221,11 +221,14 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
         raise Exception("Unsupported format %d"%format)
     return dataidx
 
+def calcTextureSize(format, width, height):
+    return width*height*formatBytesPerPixel[format]
+
 def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data = array(formatArrayTypes[format])
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
-    mipSize = width*height*formatBytesPerPixel[self.format]
-    sliceSize = int(mipSize*(4-4**(-self.mipmapCount))/3)
+    mipSize = calcTextureSize(format, width, height)
+    sliceSize = int(mipSize*(4-4**(-mipmapCount))/3)
     data.fromfile(fin, arrayCount*sliceSize/struct.calcsize(data.typecode))
     return data
 
