@@ -4,40 +4,7 @@ import sys
 from PIL import Image
 from struct import Struct, unpack
 from common import Section, BFile
-
-formatWidths = {
- 0: .5,
- 1:  1,
- 2:  1,
- 3:  2,
- 4:  2,
- 5:  1,
- 6:  1,
- 8: .5,
- 9:  1,
-10:  2,
-14: .5
-}
-
-def unpackRGB5A3(c):
-    if (c & 0x8000) == 0x8000:
-        a = 0xff
-        r = (c & 0x7c00) >> 10
-        r = (r << (8-5)) | (r >> (10-8))
-        g = (c & 0x3e0) >> 5
-        g = (g << (8-5)) | (g >> (10-8))
-        b = c & 0x1f
-        b = (b << (8-5)) | (b >> (10-8))
-    else:
-        a = (c & 0x7000) >> 12
-        a = (a << (8-3)) | (a << (8-6)) | (a >> (9-8))
-        r = (c & 0xf00) >> 8
-        r = (r << (8-4)) | r
-        g = (c & 0xf0) >> 4
-        g = (g << (8-4)) | g
-        b = c & 0xf
-        b = (b << (8-4)) | b
-    return r, g, b, a
+from texture import readTextureData, decodeTexturePIL
 
 class Tglp(Section):
     header = Struct('>4x2x2xHH2x2xHHI')
@@ -45,7 +12,7 @@ class Tglp(Section):
         self.count, self.format, self.width, self.height, offset = self.header.unpack(fin.read(0x18))
         print(self.format, self.width, self.height)
         fin.seek(offset)
-        self.data = fin.read(int(self.width*self.height*self.count*formatWidths[self.format]))
+        self.data = readTextureData(fin, self.format, self.width, self.height, arrayCount=self.count)
     
     def export(self, fname):
         dataIdx = 0
