@@ -590,10 +590,6 @@ class Image(Readable):
     
     def export(self, im):
         decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
-        images = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
-        for arrayIdx, mips in enumerate(images):
-            for mipIdx, im in enumerate(mips):
-                im.save("/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(arrayIdx)+'.png')
 
     def __repr__(self):
         return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
