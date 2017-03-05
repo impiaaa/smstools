@@ -229,7 +229,8 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = calcTextureSize(format, width, height)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    data.frombytes(fin.read(arrayCount*sliceSize))
+    data.fromlist(fin.read(arrayCount*sliceSize))
+    data.byteswap()
     return data
 
 def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
