@@ -574,10 +574,15 @@ class Image(Readable):
         self.mipmapCount = max(self.mipmapCount, 1)
         if start is not None:
             nextHeader = fin.tell()
+            
             fin.seek(start+textureHeaderOffset+dataOffset+0x20*texIndex)
             # data length = sum from i=0 to mipCount of (w*h/(4^i))
             mipSize = self.width*self.height*formatBytesPerPixel[self.format]
             self.data = fin.read(int(mipSize*(4-4**(-self.mipmapCount))/3))
+            
+            fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
+            self.palette = fin.read()
+            
             fin.seek(nextHeader)
 
     def __repr__(self):
