@@ -785,6 +785,8 @@ class BModel(BFile):
 
         buildMatrices(self.scenegraph, self)
 
+
+
 def localMatrix(i, bm):
     s = Matrix()
     for j in range(3):
@@ -1165,6 +1167,18 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
 def importSkeleton(bmd, arm):
     drawSkeleton(bmd, bmd.scenegraph, arm)
     return arm
+
+bl_info = {
+    "name": "Import BMD/BDL",
+    "author": "Spencer Alves",
+    "version": (1,0,0),
+    "blender": (2, 6, 2),
+    "location": "Import",
+    "description": "Import BMD/BDL",
+    "warning": "",
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Import-Export"}
 
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
