@@ -188,6 +188,7 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
                 dataidx += 1
                 if x < im.width and y < im.height:
                     im.putpixel((x, y), unpackRGB5A3(c))
+    
     elif format == GX_TF_RGBA8:
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
