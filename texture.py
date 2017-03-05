@@ -174,7 +174,7 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
             dest[k+5] = s3tc1ReverseByte(dest[k+5])
             dest[k+6] = s3tc1ReverseByte(dest[k+6])
             dest[k+7] = s3tc1ReverseByte(dest[k+7])
-        color0, color1, pixels = struct.unpack(fmt, f.read(8))
+        color0, color1, pixels = struct.unpack('HHI', f.read(8))
         colors = [rgb565toColor(color0)+(255,),
                     rgb565toColor(color1)+(255,)]
         if color0 > color1:
