@@ -227,7 +227,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
     return dataidx
 
 def calcTextureSize(format, width, height):
-    return width*height*formatBytesPerPixel[format]
+    return int(width*height*formatBytesPerPixel[format])
 
 def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data = array(formatArrayTypes[format])
