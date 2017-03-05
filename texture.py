@@ -256,7 +256,7 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
     dataIdx = 0
     def putpixelbpy(dx, dy, c):
-        px = (dx+(height-dy)*width)*4
+        px = (dx+(height-dy-1)*width)*4
         if isinstance(c, int): c = (c,)
         if len(c) < 3:
             im.pixels[px  ] = c[0]/255.0
