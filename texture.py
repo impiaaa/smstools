@@ -222,10 +222,13 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
 
 def decodeTexturePIL(fin, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
+    from array import array
     dataIdx = 0
     imgs = [[None]*mipmapCount]*arrayCount
+    data = array(formatArrayTypes[format])
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
             for y in range(0, height>>mipIdx, formatBlockWidth[format]):
                 for x in range(0, width>>mipIdx, formatBlockHeight[format]):
+                    dataIdx = decodeBlock(format, data, dataIdx, im, x, y, palette)
