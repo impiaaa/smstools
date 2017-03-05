@@ -169,10 +169,9 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
                 if dataidx >= len(data): break
-                c = data[dataidx]
-                dataidx += 1
+                c1, c2 = data[dataidx], data[dataidx+1]
+                dataidx += 2
                 if x < width and y < height:
-                    c1, c2 = ord(fin.read(1)), ord(fin.read(1))
                     putpixel(x, y, (c1,c2))
     
     elif format == GX_TF_RGB565:
