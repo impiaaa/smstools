@@ -190,9 +190,9 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
         else:
             colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
             colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
-        for j in xrange(16):
+        for j in range(16):
             pixel = colors[bits(pixels, j*2, (j*2)+2)]
-            img.setPixelI(x+(j%4), height-(y+(j/4))-1, pixel)
+            im.putpixel(xoff+(j&3), yoff+(j>>2), pixel)
         x += 4
         if x >= width:
             y += 4
