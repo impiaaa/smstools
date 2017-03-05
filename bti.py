@@ -140,13 +140,13 @@ lowResImageSize = (lowResImageWidth*lowResImageHeight)/2
 
 if format in BMD_TO_VTF_FMT:
     vtfFormat = BMD_TO_VTF_FMT[format]
-elif format == 0:
-    vtfFormat = 5
-elif format == 2:
-    vtfFormat = 6
-elif format == 5:
-    vtfFormat = 0
-elif format in (8, 9, 10):
+elif format == GX_TF_I4:
+    vtfFormat = IMAGE_FORMAT_I8
+elif format == GX_TF_IA4:
+    vtfFormat = IMAGE_FORMAT_IA88
+elif format == GX_TF_RGB5A3:
+    vtfFormat = IMAGE_FORMAT_RGBA8888
+elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
     if paletteFormat == 0:
         # IA8
         vtfFormat = 6
