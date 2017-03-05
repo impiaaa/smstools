@@ -183,13 +183,13 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
         
         color0, color1, pixels = struct.unpack('HHI', f.read(8))
         colors = [rgb565toColor(color0)+(255,),
-                    rgb565toColor(color1)+(255,)]
+                  rgb565toColor(color1)+(255,)]
         if color0 > color1:
             colors += [tuple((2 * colors[0][j] + colors[1][j]) / 3 for j in range(3))+(255,)]
             colors += [tuple((2 * colors[1][j] + colors[0][j]) / 3 for j in range(3))+(255,)]
         else:
             colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
-            colors += [(0, 0, 0, 0)]
+            colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
         for j in xrange(16):
             pixel = colors[bits(pixels, j*2, (j*2)+2)]
             img.setPixelI(x+(j%4), height-(y+(j/4))-1, pixel)
