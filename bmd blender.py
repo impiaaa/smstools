@@ -1211,35 +1211,36 @@ def importFile(filepath):
     bm.from_object(meshObject, bpy.context.scene)
     importMesh(filepath, bmd, mesh, bm)
 
-    #mesh = bpy.data.meshes.new(bmd.name+"_debug")
-    #meshObject = bpy.data.objects.new(name=mesh.name, object_data=mesh)
-    #bm = bmesh.new()
-    #bm.from_mesh(mesh)
-    
-    for f in bmd.jnt1.frames:
-        meshObject.vertex_groups.new(f.name)
+    if 0:
+        mesh = bpy.data.meshes.new(bmd.name+"_debug")
+        meshObject = bpy.data.objects.new(name=mesh.name, object_data=mesh)
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        
+        for f in bmd.jnt1.frames:
+            meshObject.vertex_groups.new(f.name)
 
-    def drawSkeletonDebug(bmd, sg, bm, meshObject, p=None, indent=0):
-        if p is None: p = Matrix.Identity(4)
-        effP = p
-    
-        if sg.type == 0x10:
-            f = bmd.jnt1.frames[sg.index]
-            effP = updateMatrix(f, p)
-            size = Vector(f.bbMax)-Vector(f.bbMin)
-            if size.length > 0:
-                layer = bm.verts.layers.deform.verify()
-                center = (Vector(f.bbMin)+Vector(f.bbMax))*0.5
-                m = Matrix.Translation(center).to_4x4()
-                m[0][0] = size.x
-                m[1][1] = size.y
-                m[2][2] = size.z
-                for v in bmesh.ops.create_cube(bm, size=1.0, matrix=p*m, calc_uvs=False)["verts"]:
-                    v[layer][sg.index] = 1.0
+        def drawSkeletonDebug(bmd, sg, bm, meshObject, p=None, indent=0):
+            if p is None: p = Matrix.Identity(4)
+            effP = p
+        
+            if sg.type == 0x10:
+                f = bmd.jnt1.frames[sg.index]
+                effP = updateMatrix(f, p)
+                size = Vector(f.bbMax)-Vector(f.bbMin)
+                if size.length > 0:
+                    layer = bm.verts.layers.deform.verify()
+                    center = (Vector(f.bbMin)+Vector(f.bbMax))*0.5
+                    m = Matrix.Translation(center).to_4x4()
+                    m[0][0] = size.x
+                    m[1][1] = size.y
+                    m[2][2] = size.z
+                    for v in bmesh.ops.create_cube(bm, size=1.0, matrix=p*m, calc_uvs=False)["verts"]:
+                        v[layer][sg.index] = 1.0
 
-        for node in sg.children:
-            drawSkeletonDebug(bmd, node, bm, meshObject, effP, indent+1)
-    drawSkeletonDebug(bmd, bmd.scenegraph, bm, meshObject)
+            for node in sg.children:
+                drawSkeletonDebug(bmd, node, bm, meshObject, effP, indent+1)
+        drawSkeletonDebug(bmd, bmd.scenegraph, bm, meshObject)
     
     bm.verts.layers.deform.verify()
     meshObject.draw_type = 'WIRE'
