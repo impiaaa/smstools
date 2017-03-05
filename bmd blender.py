@@ -603,28 +603,6 @@ class Tex1(Section):
             im.read(fin, start, textureHeaderOffset, i)
             self.textures.append(im)
 
-formatWidths = {
- 0: .5,
- 1:  1,
- 2:  1,
- 3:  2,
- 4:  2,
- 5:  1,
- 6:  1,
- 8: .5,
- 9:  1,
-10:  2,
-14: .5
-}
-
-def s3tc1ReverseByte(b):
-    b1 = b & 0x3
-    b2 = b & 0xc
-    b3 = b & 0x30
-    b4 = b & 0xc0
-    return (b1 << 6) | (b2 << 2) | (b3 >> 2) | (b4 >> 6)
-
-
 
 class Vtx1(Section):
     def __init__(self):
