@@ -205,8 +205,8 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
     #GX_TF_C8
     #GX_TF_C14X2
     elif format == GX_TF_CMPR:
-        for x in range(xoff, xoff+8, 4):
-            for y in range(yoff, yoff+8, 4):
+        for y in range(yoff, yoff+8, 4):
+            for x in range(xoff, xoff+8, 4):
                 if dataidx >= len(data): break
                 c = data[dataidx:dataidx+8]
                 dataidx += 8
