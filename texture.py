@@ -221,7 +221,7 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
         raise Exception("Unsupported format %d"%format)
     return dataidx
 
-def readData(fin, format, width, height, mipmapCount=1, arrayCount=1):
+def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data = array(formatArrayTypes[format])
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = width*height*formatBytesPerPixel[self.format]
