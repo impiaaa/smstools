@@ -217,8 +217,8 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                     colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
                     colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
                 else:
-                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
-                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
+                    colors += [tuple((colors[0][j] + colors[1][j]) >> 1 for j in range(3))+(255,)]
+                    colors += [tuple((colors[0][j] + colors[1][j]) >> 1 for j in range(3))+(0,)]
                 for j in range(16):
                     pixel = colors[bits(pixels, j*2, (j*2)+2)]
                     im.putpixel((x+(j&3), y+(j>>2)), pixel)
