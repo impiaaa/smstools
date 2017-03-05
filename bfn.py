@@ -14,7 +14,7 @@ class Gly1(Section):
         #self.h = (size-0x18)/w
         #if format == 0: self.h *= 2
         fin.seek(2, 1)
-        self.data = readTextureData(fin, format, width, height, 
+        self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=self.arrayCount)
     
     def export(self, name):
         dataidx = 0
