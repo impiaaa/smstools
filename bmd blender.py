@@ -986,8 +986,11 @@ def importMesh(filePath, bmd, mesh, bm=None):
         else:
             try:
                 btex.image = bpy.data.images.load(imageName)
-                btex.image.name = texture.name
             except RuntimeError as e:
+                pass
+            if btex.image:
+                btex.image.name = texture.name
+            else:
                 btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, alpha=texture.hasAlpha)
                 texture.export(btex.image)
         btextures.append(btex)
