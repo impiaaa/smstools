@@ -601,8 +601,13 @@ class Tex1(Section):
         texCount, = self.headerCount.unpack(fin.read(self.headerCount.size))
         if texCount == 0:
             # JPA style
-            textureNames = [fin.read(0x14).decode('shift-jis').strip('\0')]
-            textureHeaderOffset = 0x20
+            name = fin.read(0x14)
+            if name[0] == 0:
+                textureNames = []
+                textureHeaderOffset = 0
+            else:
+                textureNames = [name.decode('shift-jis').strip('\0')]
+                textureHeaderOffset = 0x20
         else:
             textureHeaderOffset, stringTableOffset = self.headerOffsets.unpack(fin.read(self.headerOffsets.size))
             try: textureNames = readstringtable(start+stringTableOffset, fin)
