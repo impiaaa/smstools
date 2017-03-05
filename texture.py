@@ -220,10 +220,11 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
         raise Exception("Unsupported format %d"%format)
     return dataidx
 
-def decodeTexturePIL(fin, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
+from array import array
+
+
+def decodeTexturePIL(data, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
-    from array import array
-    from struct import calcsize
     
     dataIdx = 0
     imgs = [[None]*mipmapCount]*arrayCount
@@ -231,7 +232,7 @@ def decodeTexturePIL(fin, format, width, height, paletteFormat, palette=None, mi
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = width*height*formatBytesPerPixel[self.format]
     sliceSize = int(mipSize*(4-4**(-self.mipmapCount))/3)
-    data.fromfile(fin, arrayCount*sliceSize/calcsize(data.format))
+    data.fromfile(fin, arrayCount*sliceSize/struct.calcsize(data.format))
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
