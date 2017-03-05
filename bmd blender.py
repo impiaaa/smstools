@@ -576,7 +576,7 @@ class Image(Readable):
             nextHeader = fin.tell()
             fin.seek(start+textureHeaderOffset+dataOffset+0x20*texIndex)
             # data length = sum from i=0 to mipCount of (w*h/(4^i))
-            self.data = fin.read(int(self.width*self.height*(4-4**(-self.mipmapCount))/3))
+            self.data = fin.read(int(self.width*self.height*formatBytesPerPixel[self.format]*(4-4**(-self.mipmapCount))/3))
             fin.seek(nextHeader)
 
     def __repr__(self):
