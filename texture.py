@@ -221,6 +221,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                     colors += [tuple((colors[0][j] + colors[1][j]) >> 1 for j in range(3))+(0,)]
                 for j in range(16):
                     pixel = colors[(pixels>>(j*2))&3]
+                    pixel = colors[j/4]
                     putpixel(x+(j&3), y+(j>>2), pixel)
     else:
         raise Exception("Unsupported format %d"%format)
