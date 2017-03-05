@@ -174,19 +174,18 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     elif format == GX_TF_CMPR:
         for x in range(xoff, xoff+8, 4):
             for y in range(yoff, yoff+8, 4):
-                for i in range(4):
-                    color0, color1, pixels = struct.unpack('HHI', f.read(8))
-                    colors = [rgb565toColor(color0)+(255,),
-                            rgb565toColor(color1)+(255,)]
-                    if color0 > color1:
-                        colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
-                        colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
-                    else:
-                        colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
-                        colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
-                    for j in range(16):
-                        pixel = colors[bits(pixels, j*2, (j*2)+2)]
-                        im.putpixel(x+(j&3), y+(j>>2), pixel)
+                color0, color1, pixels = struct.unpack('HHI', f.read(8))
+                colors = [rgb565toColor(color0)+(255,),
+                        rgb565toColor(color1)+(255,)]
+                if color0 > color1:
+                    colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
+                    colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
+                else:
+                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
+                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
+                for j in range(16):
+                    pixel = colors[bits(pixels, j*2, (j*2)+2)]
+                    im.putpixel(x+(j&3), y+(j>>2), pixel)
     else:
         raise Exception("Unsupported format %d"%format)
     return dataidx
