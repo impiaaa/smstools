@@ -969,6 +969,7 @@ def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, in
         drawBatch(bmd, sg.index, effP, matIndex, bmverts, bm, indent)
 
 def importMesh(filePath, bmd, mesh, bm=None):
+    print("Importing textures")
     btextures = []
     for texture in bmd.tex1.textures:
         btex = bpy.data.textures.new(texture.name, 'IMAGE')
@@ -991,6 +992,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 texture.export(btex.image)
         btextures.append(btex)
 
+    print("Importing materials")
     mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
     for i, mat in enumerate(bmd.mat3.materials):
         bmat = None
@@ -1124,6 +1126,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
 
         mesh.materials.append(bmat)
 
+    print("Importing mesh")
     if bm is None: bm = bmesh.new()
 
     for i, colorLayer in enumerate(bmd.vtx1.colors):
