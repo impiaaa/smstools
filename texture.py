@@ -120,4 +120,6 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
                 dataidx += 4
                 if x + dx < mipwidth and y + dy < mipheight:
                     im.putpixel((x+dx, y+dy), c)
+    else:
+        raise Exception("Unsupported format")
     return dataidx
