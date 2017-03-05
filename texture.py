@@ -91,6 +91,7 @@ def rgb565toColor(rgb):
 
 def fixS3TC1Block(data, dataidx):
     dest = [0]*
+    destidx = 0
     for dy in range(2):
         for dx in range(2):
             for k in range(8):
@@ -99,16 +100,17 @@ def fixS3TC1Block(data, dataidx):
                 dataidx += 1
                 if dx < mipwidth and dy < mipheight:
                     dest[8*(dy*mipwidth/4 + dx) + k] = c
-            a = dest[k]
-            dest[k] = dest[k+1]
-            dest[k+1] = a
-            a = dest[k+2]
-            dest[k+2] = dest[k+3]
-            dest[k+3] = a
-            dest[k+4] = s3tc1ReverseByte(dest[k+4])
-            dest[k+5] = s3tc1ReverseByte(dest[k+5])
-            dest[k+6] = s3tc1ReverseByte(dest[k+6])
-            dest[k+7] = s3tc1ReverseByte(dest[k+7])
+            a = dest[destidx]
+            dest[destidx] = dest[destidx+1]
+            dest[destidx+1] = a
+            a = dest[destidx+2]
+            dest[destidx+2] = dest[destidx+3]
+            dest[destidx+3] = a
+            dest[destidx+4] = s3tc1ReverseByte(dest[destidx+4])
+            dest[destidx+5] = s3tc1ReverseByte(dest[destidx+5])
+            dest[destidx+6] = s3tc1ReverseByte(dest[destidx+6])
+            dest[destidx+7] = s3tc1ReverseByte(dest[destidx+7])
+            destidx += 8
 
 def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
