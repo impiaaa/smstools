@@ -978,6 +978,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 btex.image.name = texture.name
             except RuntimeError as e:
                 btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, alpha=texture.hasAlpha)
+                texture.export(btex.image)
         btextures.append(btex)
 
     mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
