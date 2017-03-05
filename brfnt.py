@@ -15,7 +15,7 @@ class Tglp(Section):
         self.data = readTextureData(fin, self.format, self.width, self.height, arrayCount=self.count)
     
     def export(self, fname):
-        images = decodeTexturePIL(self.data, self.format, self.width, self.height, arrayCount=self.arrayCount)
+        images = decodeTexturePIL(self.data, self.format, self.width, self.height, arrayCount=self.count)
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
                 im.save(fname+str(arrayIdx)+'.png')
