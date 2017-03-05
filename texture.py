@@ -52,6 +52,20 @@ GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
 
+arrayTypes = {
+GX_TF_I4:     'B',
+GX_TF_I8:     'B',
+GX_TF_IA4:    'B',
+GX_TF_IA8:    'B',
+GX_TF_RGB565: 'H',
+GX_TF_RGB5A3: 'H',
+GX_TF_RGBA8:  'B',
+GX_TF_C4:     'B',
+GX_TF_C8:     'B',
+GX_TF_C14X2:  'H',
+GX_TF_CMPR:   'B'
+}
+
 def s3tc1ReverseByte(b):
     b1 = b & 0x3
     b2 = b & 0xc
