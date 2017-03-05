@@ -52,11 +52,10 @@ GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
 
-def decodeBlock(format, data):
+def decodeBlock(format, data, im, xoff, yoff):
     if format == GX_TF_I4:
-        im = Image.new('L', (8, 8))
-        for y in range(8):
-            for x in range(0, 8, 2):
+        for y in range(yoff, yoff+8):
+            for x in range(xoff, xoff+8, 2):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
@@ -66,28 +65,26 @@ def decodeBlock(format, data):
                 im.putpixel((x+1, y), (t << 4) | t)
     
     elif format == GX_TF_I8:
-        im = Image.new('L', (8, 4))
-        for y in range(4):
-            for x in range(8):
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+8):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
                 im.putpixel((x, y), c)
     
     elif format == GX_TF_IA4:
-        im = Image.new('LA', (8, 4))
-        for y in range(4):
-            for x in range(8):
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+8):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
                 t = c&0xF0
                 a = c&0x0F
                 im.putpixel((x, y), (t | (t >> 4),(a << 4) | a))
+    
     elif format == GX_TF_IA8:
-        im = Image.new('LA', (4, 4))
-        for y in range(4):
-            for x in range(4):
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+4):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
