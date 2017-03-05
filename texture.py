@@ -52,7 +52,7 @@ GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
 
-def decodeBlock(format, data, im, xoff, yoff):
+def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
             for x in range(xoff, xoff+8, 2):
@@ -96,35 +96,27 @@ def decodeBlock(format, data, im, xoff, yoff):
                     im.putpixel((x, y), (c1,c2))
     
     elif format == GX_TF_RGB565:
-        im = Image.new('RGB', (width, height))
-        for y in xrange(0, height, 4):
-            for x in xrange(0, width, 4):
-                for dy in xrange(4):
-                    for dx in xrange(4):
-                        if fin.tell() >= endfile: break
-                        rgb, = unpack('>H', fin.read(2))
-                        if x + dx < width and y + dy < height:
-                            di = 2*(width*(y + dy) + x + dx)
-                            r = (rgb & 0xf100) >> 11
-                            g = (rgb & 0x7e0) >> 5
-                            b = (rgb & 0x1f)
-                            im.putpixel((x+dx, y+dy), (r<<3,g<<2,b<<3))
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+4):
+                rgb, = unpack('>H', fin.read(2))
+                if x < im.width and y < im.height:
+                    di = 2*(width*(y + dy) + x + dx)
+                    r = (rgb & 0xf100) >> 11
+                    g = (rgb & 0x7e0) >> 5
+                    b = (rgb & 0x1f)
+                    im.putpixel((x, y), (r<<3,g<<2,b<<3))
+    
     elif format == GX_TF_RGB5A3:
-        im = Image.new('RGBA', (width, height))
-        for y in xrange(0, height, 4):
-            for x in xrange(0, width, 4):
-                for dy in xrange(4):
-                    for dx in xrange(4):
-                        if fin.tell() >= endfile: break
-                        c, = unpack('>H', fin.read(2))
-                        if x + dx < width and y + dy < height:
-                            im.putpixel((x+dx, y+dy), unpackRGB5A3(c))
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+4):
+                c, = unpack('>H', fin.read(2))
+                if x < im.width and y < im.height:
+                    im.putpixel((x, y), unpackRGB5A3(c))
     elif format == GX_TF_RGBA8:
-        for y in xrange(0, mipheight, 4):
-            for x in xrange(0, mipwidth, 4):
-                for dy in xrange(4):
-                    for dx in xrange(4):
-                        if fin.tell() >= endfile: break
-                        c = map(ord, fin.read(4))
-                        if x + dx < mipwidth and y + dy < mipheight:
-                            im.putpixel((x+dx, y+dy), c)
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+4):
+                if dataidx >= len(data): break
+                c = data[dataidx:dataidx+4]
+                dataidx += 4
+                if x + dx < mipwidth and y + dy < mipheight:
+                    im.putpixel((x+dx, y+dy), c)
