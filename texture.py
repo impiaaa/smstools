@@ -142,9 +142,9 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 dataidx += 1
                 if x < width and y < height:
                     t = c&0xF0
-                    putpixel(x, y, (t | (t >> 4),))
+                    putpixel(x, y, t | (t >> 4),)
                     t = c&0x0F
-                    putpixel(x+1, y, ((t << 4) | t,))
+                    putpixel(x+1, y, (t << 4) | t,)
     
     elif format == GX_TF_I8:
         for y in range(yoff, yoff+4):
