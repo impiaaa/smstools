@@ -20,6 +20,7 @@ class Gly1(Section):
         images = decodeTexturePIL(self.data, self.format, self.w, self.h, arrayCount=self.arrayCount)
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
+                print arrayIdx, mipIdx
                 im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
