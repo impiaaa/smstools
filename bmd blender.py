@@ -1291,4 +1291,4 @@ if __name__ == "__main__":
 
     # test call
     #bpy.ops.import_scene.bmd('INVOKE_DEFAULT')
-    importFile('/media/spencer/ExtraData/sms/scene/bianco0/telesa/modoki.bmd')
+    importFile('/media/spencer/ExtraData/sms/scene/bianco0/telesa/telesa.bmd')
