@@ -59,10 +59,11 @@ def decodeBlock(format, data, im, xoff, yoff):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                t = c&0xF0
-                im.putpixel((x, y), t | (t >> 4))
-                t = c&0x0F
-                im.putpixel((x+1, y), (t << 4) | t)
+                if x < im.width and y < im.height:
+                    t = c&0xF0
+                    im.putpixel((x, y), t | (t >> 4))
+                    t = c&0x0F
+                    im.putpixel((x+1, y), (t << 4) | t)
     
     elif format == GX_TF_I8:
         for y in range(yoff, yoff+4):
@@ -70,7 +71,8 @@ def decodeBlock(format, data, im, xoff, yoff):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                im.putpixel((x, y), c)
+                if x < im.width and y < im.height:
+                    im.putpixel((x, y), c)
     
     elif format == GX_TF_IA4:
         for y in range(yoff, yoff+4):
@@ -78,9 +80,10 @@ def decodeBlock(format, data, im, xoff, yoff):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                t = c&0xF0
-                a = c&0x0F
-                im.putpixel((x, y), (t | (t >> 4),(a << 4) | a))
+                if x < im.width and y < im.height:
+                    t = c&0xF0
+                    a = c&0x0F
+                    im.putpixel((x, y), (t | (t >> 4),(a << 4) | a))
     
     elif format == GX_TF_IA8:
         for y in range(yoff, yoff+4):
@@ -88,8 +91,9 @@ def decodeBlock(format, data, im, xoff, yoff):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                c1, c2 = ord(fin.read(1)), ord(fin.read(1))
-                im.putpixel((x, y), (c1,c2))
+                if x < im.width and y < im.height:
+                    c1, c2 = ord(fin.read(1)), ord(fin.read(1))
+                    im.putpixel((x, y), (c1,c2))
     elif format == GX_TF_RGB565:
         im = Image.new('RGB', (width, height))
         for y in xrange(0, height, 4):
