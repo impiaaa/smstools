@@ -334,8 +334,6 @@ for mip in xrange(mipmapCount):
             dest[k+5] = s3tc1ReverseByte(dest[k+5])
             dest[k+6] = s3tc1ReverseByte(dest[k+6])
             dest[k+7] = s3tc1ReverseByte(dest[k+7])
-    else:
-        dest = map(ord, fin.read(imageSize))
     mipData[mip] = dest
     mipwidth /= 2
     mipheight /= 2
