@@ -1242,14 +1242,14 @@ def importFile(filepath):
                 drawSkeletonDebug(bmd, node, bm, meshObject, effP, indent+1)
         drawSkeletonDebug(bmd, bmd.scenegraph, bm, meshObject)
     
-    bm.verts.layers.deform.verify()
-    meshObject.draw_type = 'WIRE'
-    meshObject.parent = armObject
-    armMod = meshObject.modifiers.new("Armature", "ARMATURE")
-    armMod.object = armObject
-    bm.to_mesh(mesh)
-    bm.free()
-    bpy.context.scene.objects.link(meshObject)
+        bm.verts.layers.deform.verify()
+        meshObject.draw_type = 'WIRE'
+        meshObject.parent = armObject
+        armMod = meshObject.modifiers.new("Armature", "ARMATURE")
+        armMod.object = armObject
+        bm.to_mesh(mesh)
+        bm.free()
+        bpy.context.scene.objects.link(meshObject)
 
 class ImportBMD(Operator, ImportHelper):
     bl_idname = "import_scene.bmd"  # important since its how bpy.ops.import_test.some_data is constructed
