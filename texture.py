@@ -191,7 +191,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    putpixel(x, y, unpackRGB5A3(c))
+                    putpixel(x, y, (0,0,0,0))#unpackRGB5A3(c))
     
     elif format == GX_TF_RGBA8:
         for y in range(yoff, yoff+4):
