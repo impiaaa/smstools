@@ -241,16 +241,16 @@ def importFile(filepath, context):
                 #s[2][2] = scale[2]
                 #mat = t*r*s
                 if animDataIndex < 3:
-                    mat = Matrix()
-                    mat[axisIndex][axisIndex] = key.value
+                    #mat = Matrix()
+                    #mat[axisIndex][axisIndex] = key.value
                     #print("XYZ"[axisIndex], "scale =", key.value)
                     #print("Animated scale", tuple(animate(key.time, animList[0:3])))
-                    #scale = animate(key.time, animList[0:3])
-                    #mat = Matrix()
-                    #scale = tuple(scale)
-                    #mat[0][0] = scale[0]
-                    #mat[1][1] = scale[1]
-                    #mat[2][2] = scale[2]
+                    scale = animate(key.time, animList[0:3])
+                    mat = Matrix()
+                    scale = tuple(scale)
+                    mat[0][0] = scale[0]
+                    mat[1][1] = scale[1]
+                    mat[2][2] = scale[2]
                 elif animDataIndex < 6:
                     #e = Euler()
                     #e[axisIndex] = key.value
@@ -260,13 +260,13 @@ def importFile(filepath, context):
                     rotation = animate(key.time, animList[3:6])
                     mat = Euler(rotation).to_matrix().to_4x4()
                 else:
-                    v = Vector()
-                    v[axisIndex] = key.value
-                    mat = Matrix.Translation(v).to_4x4()
+                    #v = Vector()
+                    #v[axisIndex] = key.value
+                    #mat = Matrix.Translation(v).to_4x4()
                     #print("XYZ"[axisIndex], "translation =", key.value)
                     #print("Animated translation", tuple(animate(key.time, animList[6:9])))
-                    #translation = animate(key.time, animList[6:9])
-                    #mat = Matrix.Translation(translation).to_4x4()
+                    translation = animate(key.time, animList[6:9])
+                    mat = Matrix.Translation(translation).to_4x4()
                 
                 mat = rest.inverted()*mat
                 
