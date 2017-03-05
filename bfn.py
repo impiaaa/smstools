@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import sys, struct
-from PIL import Image
 from common import BFile, Section
+from texture import readTextureData, decodeTexturePIL
 
 class Gly1(Section):
     header = struct.Struct('>H4xHH')
