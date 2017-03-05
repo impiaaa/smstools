@@ -132,7 +132,7 @@ def fixS3TC1Block(data):
     dest[6] = s3tc1ReverseByte(data[6])
     dest[7] = s3tc1ReverseByte(data[7])
 
-def decodeBlock(format, data, dataidx, width, height, putpixel, palette=None):
+def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, palette=None):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
             for x in range(xoff, xoff+8, 2):
@@ -247,6 +247,6 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
             for y in range(0, im.height, formatBlockHeight[format]):
                 for x in range(0, im.width, formatBlockWidth[format]):
-                    dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, (lambda dx, dy, c: im.putpixel((x+dx, y+dy), c)), palette)
+                    dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, (lambda dx, dy, c: im.putpixel((dx, dy), c)), palette)
             imgs[arrayIdx][mipIdx] = im
     return imgs
