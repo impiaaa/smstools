@@ -122,16 +122,16 @@ def rgb565toColor(rgb):
     return r,g,b
 
 def fixS3TC1Block(data):
-    dest = [0]*8
-    dest[0] = data[1]
-    dest[1] = data[0]
-    dest[2] = data[3]
-    dest[3] = data[2]
-    dest[4] = s3tc1ReverseByte(data[4])
-    dest[5] = s3tc1ReverseByte(data[5])
-    dest[6] = s3tc1ReverseByte(data[6])
-    dest[7] = s3tc1ReverseByte(data[7])
-    return dest
+    return [
+        data[1],
+        data[0],
+        data[3],
+        data[2],
+        s3tc1ReverseByte(data[4]),
+        s3tc1ReverseByte(data[5]),
+        s3tc1ReverseByte(data[6]),
+        s3tc1ReverseByte(data[7])
+    ]
 
 def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, palette=None):
     if format == GX_TF_I4:
