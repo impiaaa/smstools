@@ -90,7 +90,7 @@ def rgb565toColor(rgb):
     return r,g,b
 
 def fixS3TC1Block(data, dataidx):
-    dest = [0]*
+    dest = [0]*(2*2*8)
     destidx = 0
     for dy in range(2):
         for dx in range(2):
