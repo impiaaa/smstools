@@ -132,18 +132,18 @@ def fixS3TC1Block(data):
     dest[6] = s3tc1ReverseByte(data[6])
     dest[7] = s3tc1ReverseByte(data[7])
 
-def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
+def decodeBlock(format, data, dataidx, width, height, putpixel, palette=None):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
             for x in range(xoff, xoff+8, 2):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                if x < im.width and y < im.height:
+                if x < width and y < height:
                     t = c&0xF0
-                    im.putpixel((x, y), t | (t >> 4))
+                    putpixel(x, y, t | (t >> 4))
                     t = c&0x0F
-                    im.putpixel((x+1, y), (t << 4) | t)
+                    putpixel(x+1, y, (t << 4) | t)
     
     elif format == GX_TF_I8:
         for y in range(yoff, yoff+4):
@@ -151,8 +151,8 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                if x < im.width and y < im.height:
-                    im.putpixel((x, y), c)
+                if x < width and y < height:
+                    putpixel(x, y, c)
     
     elif format == GX_TF_IA4:
         for y in range(yoff, yoff+4):
@@ -245,8 +245,8 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
-            for y in range(0, height>>mipIdx, formatBlockHeight[format]):
-                for x in range(0, width>>mipIdx, formatBlockWidth[format]):
-                    dataIdx = decodeBlock(format, data, dataIdx, im, x, y, palette)
+            for y in range(0, im.height, formatBlockHeight[format]):
+                for x in range(0, im.width, formatBlockWidth[format]):
+                    dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, palette)
             imgs[arrayIdx][mipIdx] = im
     return imgs
