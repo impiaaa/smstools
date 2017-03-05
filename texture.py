@@ -163,7 +163,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 if x < width and y < height:
                     t = c&0xF0
                     a = c&0x0F
-                    im.putpixel((x, y), (t | (t >> 4),(a << 4) | a))
+                    putpixel(x, y, (t | (t >> 4),(a << 4) | a))
     
     elif format == GX_TF_IA8:
         for y in range(yoff, yoff+4):
@@ -173,7 +173,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 dataidx += 1
                 if x < width and y < height:
                     c1, c2 = ord(fin.read(1)), ord(fin.read(1))
-                    im.putpixel((x, y), (c1,c2))
+                    putpixel(x, y, (c1,c2))
     
     elif format == GX_TF_RGB565:
         for y in range(yoff, yoff+4):
@@ -182,7 +182,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    im.putpixel((x, y), (rgb565toColor(c)))
+                    putpixel(x, y, (rgb565toColor(c)))
     
     elif format == GX_TF_RGB5A3:
         for y in range(yoff, yoff+4):
@@ -191,7 +191,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    im.putpixel((x, y), unpackRGB5A3(c))
+                    putpixel(x, y, unpackRGB5A3(c))
     
     elif format == GX_TF_RGBA8:
         for y in range(yoff, yoff+4):
@@ -200,7 +200,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx:dataidx+4]
                 dataidx += 4
                 if x < width and y < height:
-                    im.putpixel((x+dx, y+dy), c)
+                    putpixel(x, y, c)
     #GX_TF_C4
     #GX_TF_C8
     #GX_TF_C14X2
