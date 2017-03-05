@@ -94,6 +94,7 @@ def decodeBlock(format, data, im, xoff, yoff):
                 if x < im.width and y < im.height:
                     c1, c2 = ord(fin.read(1)), ord(fin.read(1))
                     im.putpixel((x, y), (c1,c2))
+    
     elif format == GX_TF_RGB565:
         im = Image.new('RGB', (width, height))
         for y in xrange(0, height, 4):
