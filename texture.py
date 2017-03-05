@@ -146,14 +146,18 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     elif format == GX_TF_RGB565:
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
-                rgb, = unpack('>H', fin.read(2))
+                if dataidx >= len(data): break
+                c = data[dataidx]
+                dataidx += 1
                 if x < im.width and y < im.height:
-                    im.putpixel((x, y), (rgb565toColor(rgb)))
+                    im.putpixel((x, y), (rgb565toColor(c)))
     
     elif format == GX_TF_RGB5A3:
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
-                c, = unpack('>H', fin.read(2))
+                if dataidx >= len(data): break
+                c = data[dataidx]
+                dataidx += 1
                 if x < im.width and y < im.height:
                     im.putpixel((x, y), unpackRGB5A3(c))
     elif format == GX_TF_RGBA8:
@@ -170,9 +174,9 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     elif format == GX_TF_CMPR:
         for x in range(xoff, xoff+8, 4):
             for y in range(yoff, yoff+8, 4):
-                color0, color1, pixels = struct.unpack('HHI', f.read(8))
+                color0, color1, pixels = unpack('HHI', f.read(8))
                 colors = [rgb565toColor(color0)+(255,),
-                        rgb565toColor(color1)+(255,)]
+                          rgb565toColor(color1)+(255,)]
                 if color0 > color1:
                     colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
                     colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
