@@ -1169,7 +1169,7 @@ def importSkeleton(bmd, arm):
     return arm
 
 bl_info = {
-    "name": "Import BMD/BDL",
+    "name": "Import J3D BMD/BDL",
     "author": "Spencer Alves",
     "version": (1,0,0),
     "blender": (2, 6, 2),
@@ -1283,7 +1283,7 @@ class ImportBMD(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
-    self.layout.operator(ImportBMD.bl_idname, text="Import BMD")
+    self.layout.operator(ImportBMD.bl_idname, text="Import J3D BMD/BDL (*.bmd,*.bdl)")
 
 
 def register():
