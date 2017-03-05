@@ -139,7 +139,6 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
                 c, = unpack('>H', fin.read(2))
                 if x < im.width and y < im.height:
                     im.putpixel((x, y), unpackRGB5A3(c))
-    
     elif format == GX_TF_RGBA8:
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
@@ -148,6 +147,10 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
                 dataidx += 4
                 if x + dx < mipwidth and y + dy < mipheight:
                     im.putpixel((x+dx, y+dy), c)
+    #GX_TF_C4
+    #GX_TF_C8
+    #GX_TF_C14X2
+    #GX_TF_CMPR
     else:
         raise Exception("Unsupported format %d"%format)
     return dataidx
