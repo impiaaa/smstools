@@ -89,6 +89,27 @@ def rgb565toColor(rgb):
     b = (b << 3) | (b >> 2)
     return r,g,b
 
+def fixS3TC1Block(data, dataidx):
+    dest = [0]*
+    for dy in range(2):
+        for dx in range(2):
+            for k in range(8):
+                if dataidx >= len(data): break
+                c = data[dataidx]
+                dataidx += 1
+                if dx < mipwidth and dy < mipheight:
+                    dest[8*(dy*mipwidth/4 + dx) + k] = c
+            a = dest[k]
+            dest[k] = dest[k+1]
+            dest[k+1] = a
+            a = dest[k+2]
+            dest[k+2] = dest[k+3]
+            dest[k+3] = a
+            dest[k+4] = s3tc1ReverseByte(dest[k+4])
+            dest[k+5] = s3tc1ReverseByte(dest[k+5])
+            dest[k+6] = s3tc1ReverseByte(dest[k+6])
+            dest[k+7] = s3tc1ReverseByte(dest[k+7])
+
 def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
@@ -157,23 +178,7 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     #GX_TF_C8
     #GX_TF_C14X2
     elif format == GX_TF_CMPR:
-        for dy in xrange(2):
-            for dx in xrange(2):
-                for k in xrange(8):
-                    c = ord(fin.read(1))
-                    if x + dx < mipwidth and y + dy < mipheight:
-                        dest[8*((y + dy)*mipwidth/4 + x + dx) + k] = c
-        for k in xrange(0, mipwidth*mipheight/2, 8):
-            a = dest[k]
-            dest[k] = dest[k+1]
-            dest[k+1] = a
-            a = dest[k+2]
-            dest[k+2] = dest[k+3]
-            dest[k+3] = a
-            dest[k+4] = s3tc1ReverseByte(dest[k+4])
-            dest[k+5] = s3tc1ReverseByte(dest[k+5])
-            dest[k+6] = s3tc1ReverseByte(dest[k+6])
-            dest[k+7] = s3tc1ReverseByte(dest[k+7])
+        
         color0, color1, pixels = struct.unpack('HHI', f.read(8))
         colors = [rgb565toColor(color0)+(255,),
                     rgb565toColor(color1)+(255,)]
