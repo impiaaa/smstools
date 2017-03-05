@@ -52,6 +52,33 @@ GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
 
+def s3tc1ReverseByte(b):
+    b1 = b & 0x3
+    b2 = b & 0xc
+    b3 = b & 0x30
+    b4 = b & 0xc0
+    return (b1 << 6) | (b2 << 2) | (b3 >> 2) | (b4 >> 6)
+
+def unpackRGB5A3(c):
+    if (c & 0x8000) == 0x8000:
+        a = 0xff
+        r = (c & 0x7c00) >> 10
+        r = (r << (8-5)) | (r >> (10-8))
+        g = (c & 0x3e0) >> 5
+        g = (g << (8-5)) | (g >> (10-8))
+        b = c & 0x1f
+        b = (b << (8-5)) | (b >> (10-8))
+    else:
+        a = (c & 0x7000) >> 12
+        a = (a << (8-3)) | (a << (8-6)) | (a >> (9-8))
+        r = (c & 0xf00) >> 8
+        r = (r << (8-4)) | r
+        g = (c & 0xf0) >> 4
+        g = (g << (8-4)) | g
+        b = c & 0xf
+        b = (b << (8-4)) | b
+    return r, g, b, a
+
 def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
