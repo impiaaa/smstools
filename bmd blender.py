@@ -1211,10 +1211,10 @@ def importFile(filepath):
     bm.from_object(meshObject, bpy.context.scene)
     importMesh(filepath, bmd, mesh, bm)
 
-    mesh = bpy.data.meshes.new(bmd.name+"_debug")
-    meshObject = bpy.data.objects.new(name=mesh.name, object_data=mesh)
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
+    #mesh = bpy.data.meshes.new(bmd.name+"_debug")
+    #meshObject = bpy.data.objects.new(name=mesh.name, object_data=mesh)
+    #bm = bmesh.new()
+    #bm.from_mesh(mesh)
     
     for f in bmd.jnt1.frames:
         meshObject.vertex_groups.new(f.name)
