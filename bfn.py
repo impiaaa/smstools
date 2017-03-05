@@ -17,39 +17,10 @@ class Gly1(Section):
         self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=self.arrayCount)
     
     def export(self, name):
-        dataidx = 0
-        sliceno = 0
-        while dataidx < len(self.data):
-            if self.format == 0:
-                im = Image.new('L', (self.w, self.h))
-                for y in range(0, self.h, 8):
-                    for x in range(0, self.w, 8):
-                        for dy in range(8):
-                            for dx in range(0, 8, 2):
-                                if dataidx >= len(self.data): break
-                                c = ord(self.data[dataidx])
-                                dataidx += 1
-                                if x + dx < self.w and y + dy < self.h:
-                                    t = c&0xF0
-                                    im.putpixel((x+dx, y+dy), t | (t >> 4))
-                                    t = c&0x0F
-                                    im.putpixel((x+dx+1, y+dy), (t << 4) | t)
-            elif self.format == 2:
-                im = Image.new('RGBA', (self.w, self.h))
-                for y in range(0, self.h, 4):
-                    for x in range(0, self.w, 8):
-                        for dy in range(4):
-                            for dx in range(0, 8):
-                                if dataidx >= len(self.data): break
-                                c = ord(self.data[dataidx])
-                                dataidx += 1
-                                if x + dx < self.w and y + dy < self.h:
-                                    t = c&0xF0
-                                    #im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3)
-                                    a = c&0x0F
-                                    im.putpixel((x+dx, y+dy), (t | (t >> 4),)*3+((a << 4) | a,))
-            im.save(name+str(sliceno)+'.png')
-            sliceno += 1
+        images = decodeTexturePIL(self.data, self.format, self.w, self.h, arrayCount=self.arrayCount)
+        for arrayIdx in range(arrayCount):
+            for mipIdx in range(mipmapCount):
+                im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
     def __init__(self, *args, **kwargs):
