@@ -10,7 +10,7 @@ class Gly1(Section):
     def read(self, fin, start, size):
         fin.seek(0xC, 1)
         self.format, self.w, self.h = self.header.unpack(fin.read(0xa))
-        self.arrayCount = 
+        self.arrayCount = (size-0x18)/calcTextureSize(self.format, self.w, self.h)
         #self.h = (size-0x18)/w
         #if format == 0: self.h *= 2
         fin.seek(2, 1)
