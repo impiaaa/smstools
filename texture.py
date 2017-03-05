@@ -229,7 +229,7 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = calcTextureSize(format, width, height)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    data.fromlist(fin.read(arrayCount*sliceSize))
+    data.fromstring(fin.read(arrayCount*sliceSize))
     data.byteswap()
     return data
 
