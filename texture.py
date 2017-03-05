@@ -243,6 +243,7 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
             for y in range(0, height>>mipIdx, formatBlockHeight[format]):
                 for x in range(0, width>>mipIdx, formatBlockWidth[format]):
+                    print dataIdx
                     dataIdx = decodeBlock(format, data, dataIdx, im, x, y, palette)
             imgs[arrayIdx][mipIdx] = im
     return imgs
