@@ -83,6 +83,18 @@ class AnimIndex(Readable):
 class Key(object): pass
 class Animation(object): pass
 
+bl_info = {
+    "name": "Import J3D BCK",
+    "author": "Spencer Alves",
+    "version": (1,0,0),
+    "blender": (2, 6, 2),
+    "location": "Import",
+    "description": "Import J3D BCK",
+    "warning": "",
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Import-Export"}
+
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper
@@ -282,7 +294,7 @@ def importFile(filepath, context):
 
 class ImportBCK(Operator, ImportHelper):
     bl_idname = "import_anim.bck"  # important since its how bpy.ops.import_test.some_data is constructed
-    bl_label = "Import BCK"
+    bl_label = "Import J3D BCK"
 
     # ImportHelper mixin class uses this
     filename_ext = ".bck"
@@ -302,7 +314,7 @@ class ImportBCK(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
-    self.layout.operator(ImportBCK.bl_idname, text="Import BCK")
+    self.layout.operator(ImportBCK.bl_idname, text="Import J3D BCK (*.bck)")
 
 
 def register():
