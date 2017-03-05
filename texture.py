@@ -245,14 +245,29 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
+            putpixelpil = lambda dx, dy, c: im.putpixel((dx, dy), c)
             for y in range(0, im.height, formatBlockHeight[format]):
                 for x in range(0, im.width, formatBlockWidth[format]):
-                    dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, (lambda dx, dy, c: im.putpixel((dx, dy), c)), palette)
+                    dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, putpixelpil, palette)
             imgs[arrayIdx][mipIdx] = im
     return imgs
 
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
     dataIdx = 0
-    for y in range(0, im.height, formatBlockHeight[format]):
-        for x in range(0, im.width, formatBlockWidth[format]):
-            dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, (lambda dx, dy, c: im.pixels[dy] = c), palette)
+    def putpixelbpy(dx, dy, c):
+        if len(c) < 3:
+            im.pixels[dx+dy*width  ] = c[0]/255.0
+            im.pixels[dx+dy*width+1] = c[0]/255.0
+            im.pixels[dx+dy*width+2] = c[0]/255.0
+            if len(c) == 2:
+                im.pixels[dx+dy*width+3] = c[1]/255.0
+        else:
+            im.pixels[dx+dy*width  ] = c[0]/255.0
+            im.pixels[dx+dy*width+1] = c[1]/255.0
+            im.pixels[dx+dy*width+2] = c[2]/255.0
+            if len(c) == 4:
+                im.pixels[dx+dy*width+3] = c[3]/255.0
+    for y in range(0, height, formatBlockHeight[format]):
+        for x in range(0, width, formatBlockWidth[format]):
+            dataIdx = decodeBlock(format, data, dataIdx, width, height, x, y, putpixelbpy, palette)
+    im.update()
