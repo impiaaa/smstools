@@ -188,7 +188,10 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     elif format == GX_TF_CMPR:
         for x in range(xoff, xoff+8, 4):
             for y in range(yoff, yoff+8, 4):
-                color0, color1, pixels = unpack('HHI', f.read(8))
+                if dataidx >= len(data): break
+                c = data[dataidx:dataidx+8]
+                dataidx += 8
+                color0, color1, pixels = unpack('HHI', bytes(fixS3TC1Block(c)))
                 colors = [rgb565toColor(color0)+(255,),
                           rgb565toColor(color1)+(255,)]
                 if color0 > color1:
