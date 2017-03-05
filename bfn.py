@@ -18,8 +18,8 @@ class Gly1(Section):
     
     def export(self, name):
         images = decodeTexturePIL(self.data, self.format, self.w, self.h, arrayCount=self.arrayCount)
-        for arrayIdx in range(arrayCount):
-            for mipIdx in range(mipmapCount):
+        for arrayIdx, mips in enumerate(images):
+            for mipIdx, im in enumerate(mips):
                 im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
