@@ -580,7 +580,7 @@ class Image(Readable):
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
             fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
-            self.palette = fin.read()
+            #self.palette = fin.read()
             
             fin.seek(nextHeader)
 
