@@ -141,9 +141,9 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 dataidx += 1
                 if x < width and y < height:
                     t = c&0xF0
-                    putpixel(x, y, t | (t >> 4))
+                    putpixel(x, y, (t | (t >> 4),))
                     t = c&0x0F
-                    putpixel(x+1, y, (t << 4) | t)
+                    putpixel(x+1, y, ((t << 4) | t,))
     
     elif format == GX_TF_I8:
         for y in range(yoff, yoff+4):
@@ -152,7 +152,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    putpixel(x, y, c)
+                    putpixel(x, y, (c,))
     
     elif format == GX_TF_IA4:
         for y in range(yoff, yoff+4):
@@ -255,4 +255,4 @@ def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palett
     dataIdx = 0
     for y in range(0, im.height, formatBlockHeight[format]):
         for x in range(0, im.width, formatBlockWidth[format]):
-            dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, (lambda dx, dy, c: im.pixels[dx, dy] = c), palette)
+            dataIdx = decodeBlock(format, data, dataIdx, im.width, im.height, x, y, (lambda dx, dy, c: im.pixels[dy] = c), palette)
