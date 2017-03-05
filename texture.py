@@ -90,27 +90,19 @@ def rgb565toColor(rgb):
     return r,g,b
 
 def fixS3TC1Block(data, dataidx):
-    dest = [0]*(2*2*8)
-    destidx = 0
-    for dy in range(2):
-        for dx in range(2):
-            for k in range(8):
-                if dataidx >= len(data): break
-                c = data[dataidx]
-                dataidx += 1
-                if dx < mipwidth and dy < mipheight:
-                    dest[8*(dy*mipwidth/4 + dx) + k] = c
-            a = dest[destidx]
-            dest[destidx] = dest[destidx+1]
-            dest[destidx+1] = a
-            a = dest[destidx+2]
-            dest[destidx+2] = dest[destidx+3]
-            dest[destidx+3] = a
-            dest[destidx+4] = s3tc1ReverseByte(dest[destidx+4])
-            dest[destidx+5] = s3tc1ReverseByte(dest[destidx+5])
-            dest[destidx+6] = s3tc1ReverseByte(dest[destidx+6])
-            dest[destidx+7] = s3tc1ReverseByte(dest[destidx+7])
-            destidx += 8
+    dest = [0]*8
+    for k in range(8):
+        dest[8*(dy*mipwidth/4 + dx) + k] = data[k]
+    a = dest[0]
+    dest[0] = dest[1]
+    dest[1] = a
+    a = dest[2]
+    dest[2] = dest[3]
+    dest[3] = a
+    dest[4] = s3tc1ReverseByte(dest[4])
+    dest[5] = s3tc1ReverseByte(dest[5])
+    dest[6] = s3tc1ReverseByte(dest[6])
+    dest[7] = s3tc1ReverseByte(dest[7])
 
 def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
@@ -180,19 +172,20 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     #GX_TF_C8
     #GX_TF_C14X2
     elif format == GX_TF_CMPR:
-        for y in range(yoff, yoff+8, 2):
-            color0, color1, pixels = struct.unpack('HHI', f.read(8))
-            colors = [rgb565toColor(color0)+(255,),
-                    rgb565toColor(color1)+(255,)]
-            if color0 > color1:
-                colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
-                colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
-            else:
-                colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
-                colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
-            for j in range(16):
-                pixel = colors[bits(pixels, j*2, (j*2)+2)]
-                im.putpixel(xoff+(j&3), y+(j>>2), pixel)
+        for x in range(xoff, xoff+8, 4):
+            for y in range(yoff, yoff+8, 4):
+                color0, color1, pixels = struct.unpack('HHI', f.read(8))
+                colors = [rgb565toColor(color0)+(255,),
+                        rgb565toColor(color1)+(255,)]
+                if color0 > color1:
+                    colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
+                    colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
+                else:
+                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
+                    colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
+                for j in range(16):
+                    pixel = colors[bits(pixels, j*2, (j*2)+2)]
+                    im.putpixel(x+(j&3), y+(j>>2), pixel)
     else:
         raise Exception("Unsupported format %d"%format)
     return dataidx
