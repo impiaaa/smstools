@@ -1224,7 +1224,6 @@ def importFile(filepath):
     
     #armObject["scenegraph"] = repr(bmd.scenegraph.to_dict(bmd))
     
-    print("Importing", filepath, "mesh")
     bm = bmesh.new()
     bm.from_object(meshObject, bpy.context.scene)
     importMesh(filepath, bmd, mesh, bm)
