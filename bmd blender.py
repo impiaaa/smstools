@@ -577,6 +577,7 @@ class Image(Readable):
             self.hasAlpha = self.paletteFormat in (GX_TL_IA8, GX_TL_RGB5A3)
         else:
             self.hasAlpha = self.format in (GX_TF_IA4, GX_TF_IA8, GX_TF_RGB5A3, GX_TF_RGBA8)
+        print(self)
         if start is not None:
             nextHeader = fin.tell()
             
