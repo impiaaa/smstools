@@ -1194,7 +1194,7 @@ def importFile(filepath):
     bmd.read(fin)
     fin.close()
 
-    print("Importing", filepath)
+    print("Importing", filepath, "armature")
     mesh = bpy.data.meshes.new(bmd.name)
     meshObject = bpy.data.objects.new(name=mesh.name+"_mesh", object_data=mesh)
     arm = bpy.data.armatures.new(name=bmd.name)
@@ -1221,6 +1221,7 @@ def importFile(filepath):
     
     #armObject["scenegraph"] = repr(bmd.scenegraph.to_dict(bmd))
     
+    print("Importing", filepath, "mesh")
     bm = bmesh.new()
     bm.from_object(meshObject, bpy.context.scene)
     importMesh(filepath, bmd, mesh, bm)
