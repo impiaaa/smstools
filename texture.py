@@ -185,8 +185,8 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
         colors = [rgb565toColor(color0)+(255,),
                   rgb565toColor(color1)+(255,)]
         if color0 > color1:
-            colors += [tuple((2 * colors[0][j] + colors[1][j]) / 3 for j in range(3))+(255,)]
-            colors += [tuple((2 * colors[1][j] + colors[0][j]) / 3 for j in range(3))+(255,)]
+            colors += [tuple((colors[0][j] * 5 + colors[1][j] * 3) >> 3 for j in range(3))+(255,)]
+            colors += [tuple((colors[1][j] * 5 + colors[0][j] * 3) >> 3 for j in range(3))+(255,)]
         else:
             colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(255,)]
             colors += [tuple((colors[0][j] + colors[1][j]) / 2 for j in range(3))+(0,)]
