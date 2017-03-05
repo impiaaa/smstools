@@ -116,7 +116,7 @@ def fixS3TC1Block(data):
     dest[6] = s3tc1ReverseByte(data[6])
     dest[7] = s3tc1ReverseByte(data[7])
 
-def decodeBlock(format, data, dataidx, im, xoff, yoff):
+def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
             for x in range(xoff, xoff+8, 2):
@@ -208,3 +208,10 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff):
     else:
         raise Exception("Unsupported format %d"%format)
     return dataidx
+
+def decodeTexture(fin, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
+    dataIdx = 0
+    imgs = []
+    for arrayIdx in range(arrayCount):
+        for mipIdx in range(mipmapCount):
+            
