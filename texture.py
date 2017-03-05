@@ -131,6 +131,7 @@ def fixS3TC1Block(data):
     dest[5] = s3tc1ReverseByte(data[5])
     dest[6] = s3tc1ReverseByte(data[6])
     dest[7] = s3tc1ReverseByte(data[7])
+    return dest
 
 def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, palette=None):
     if format == GX_TF_I4:
