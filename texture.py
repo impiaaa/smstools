@@ -54,7 +54,7 @@ GX_TF_C14X2:  4,
 GX_TF_CMPR:   8
 }
 
-arrayTypes = {
+formatArrayTypes = {
 GX_TF_I4:     'B',
 GX_TF_I8:     'B',
 GX_TF_IA4:    'B',
@@ -66,6 +66,17 @@ GX_TF_C4:     'B',
 GX_TF_C8:     'B',
 GX_TF_C14X2:  'H',
 GX_TF_CMPR:   'B'
+}
+
+formatImageTypes = {
+GX_TF_I4:     'L',
+GX_TF_I8:     'L',
+GX_TF_IA4:    'LA',
+GX_TF_IA8:    'LA',
+GX_TF_RGB565: 'RGB',
+GX_TF_RGB5A3: 'RGBA',
+GX_TF_RGBA8:  'RGBA',
+GX_TF_CMPR:   'RGBA'
 }
 
 def s3tc1ReverseByte(b):
