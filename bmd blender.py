@@ -594,7 +594,7 @@ class Image(Readable):
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
                 n = "/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(arrayIdx)+'.png'
-                print(n)
+                raise Exception(n)
                 im.save(n)
 
     def __repr__(self):
