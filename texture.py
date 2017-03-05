@@ -83,6 +83,8 @@ def rgb565toColor(rgb):
     r = (rgb & 0xf100) >> 11
     g = (rgb & 0x7e0) >> 5
     b = (rgb & 0x1f)
+    return r<<3,g<<2,b<<3
+
 def decodeBlock(format, data, dataidx, im, xoff, yoff):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
