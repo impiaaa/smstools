@@ -591,9 +591,9 @@ class Image(Readable):
     def export(self, im):
         decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
         images = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
+        n = "/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(0)+'.png'
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
-                n = "/media/spencer/ExtraData/sms/scene/bianco0/telesa/"+self.name+str(arrayIdx)+'.png'
                 raise Exception(n)
                 im.save(n)
 
