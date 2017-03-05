@@ -7,7 +7,7 @@ import math
 import bpy, bmesh
 from mathutils import *
 from common import *
-from texture import readdata
+from texture import readData
 
 bbStruct = Struct('>fff')
 
