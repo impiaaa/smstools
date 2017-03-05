@@ -966,12 +966,14 @@ def importMesh(filePath, bmd, mesh, bm=None):
         btex.use_mipmap = texture.magFilter >= 2
         btex.use_mipmap_gauss = texture.magFilter >= 4
         imageName = filePath+"_tex"+texture.name+".tga"
-        if imageName in bpy.data.images:
-            btex.image = bpy.data.images[imageName]
+        if texture.name in bpy.data.images:
+            btex.image = bpy.data.images[texture.name]
         else:
-            try: btex.image = bpy.data.images.load(imageName)
-            except Exception as e:
-                print(e)
+            try:
+                btex.image = bpy.data.images.load(imageName)
+                btex.image.name = texture.name
+            except RuntimeError as e:
+                btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, texture.hasAlpha)
         btextures.append(btex)
 
     mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
