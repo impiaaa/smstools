@@ -1,4 +1,5 @@
 import struct
+from array import array
 
 GX_TF_I4 = 0x0
 GX_TF_I8 = 0x1
@@ -220,19 +221,19 @@ def decodeBlock(format, data, dataidx, im, xoff, yoff, palette=None):
         raise Exception("Unsupported format %d"%format)
     return dataidx
 
-from array import array
-
+def readData(format, width, height, mipmapCount=1, arrayCount=1):
+    data = array(formatArrayTypes[format])
+    # data length = sum from i=0 to mipCount of (w*h/(4^i))
+    mipSize = width*height*formatBytesPerPixel[self.format]
+    sliceSize = int(mipSize*(4-4**(-self.mipmapCount))/3)
+    data.fromfile(fin, arrayCount*sliceSize/struct.calcsize(data.format))
+    return data
 
 def decodeTexturePIL(data, format, width, height, paletteFormat, palette=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
     
     dataIdx = 0
     imgs = [[None]*mipmapCount]*arrayCount
-    data = array(formatArrayTypes[format])
-    # data length = sum from i=0 to mipCount of (w*h/(4^i))
-    mipSize = width*height*formatBytesPerPixel[self.format]
-    sliceSize = int(mipSize*(4-4**(-self.mipmapCount))/3)
-    data.fromfile(fin, arrayCount*sliceSize/struct.calcsize(data.format))
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
