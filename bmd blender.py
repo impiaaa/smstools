@@ -7,6 +7,7 @@ import math
 import bpy, bmesh
 from mathutils import *
 from common import *
+from texture import readdata
 
 bbStruct = Struct('>fff')
 
@@ -576,9 +577,7 @@ class Image(Readable):
             nextHeader = fin.tell()
             
             fin.seek(start+textureHeaderOffset+dataOffset+0x20*texIndex)
-            # data length = sum from i=0 to mipCount of (w*h/(4^i))
-            mipSize = self.width*self.height*formatBytesPerPixel[self.format]
-            self.data = fin.read(int(mipSize*(4-4**(-self.mipmapCount))/3))
+            self.data = fin.read()
             
             fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
             self.palette = fin.read()
