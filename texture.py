@@ -256,18 +256,19 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=No
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
     dataIdx = 0
     def putpixelbpy(dx, dy, c):
+        px = (dx+height-dy*width)*4
         if len(c) < 3:
-            im.pixels[(dx+dy*width)*4  ] = c[0]/255.0
-            im.pixels[(dx+dy*width)*4+1] = c[0]/255.0
-            im.pixels[(dx+dy*width)*4+2] = c[0]/255.0
+            im.pixels[px  ] = c[0]/255.0
+            im.pixels[px+1] = c[0]/255.0
+            im.pixels[px+2] = c[0]/255.0
             if len(c) == 2:
-                im.pixels[(dx+dy*width)*4+3] = c[1]/255.0
+                im.pixels[px+3] = c[1]/255.0
         else:
-            im.pixels[(dx+dy*width)*4  ] = c[0]/255.0
-            im.pixels[(dx+dy*width)*4+1] = c[1]/255.0
-            im.pixels[(dx+dy*width)*4+2] = c[2]/255.0
+            im.pixels[px  ] = c[0]/255.0
+            im.pixels[px+1] = c[1]/255.0
+            im.pixels[px+2] = c[2]/255.0
             if len(c) == 4:
-                im.pixels[(dx+dy*width)*4+3] = c[3]/255.0
+                im.pixels[px+3] = c[3]/255.0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
             dataIdx = decodeBlock(format, data, dataIdx, width, height, x, y, putpixelbpy, palette)
