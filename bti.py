@@ -168,12 +168,14 @@ if magFilter == 0: flags |= 0x01
 if format in (8, 9, 10):
     # read palette
     fin.seek(paletteOffset)
-    palette = [None]*paletteNumEntries
-    for i in xrange(paletteNumEntries):
-        if paletteFormat == 2:
-            palette[i] = unpackRGB5A3(unpack('>H', fin.read(2))[0])
-        else:
-            palette[i] = unpack('>H', fin.read(2))[0]
+    palette = readPaletteData(fin, paletteFormat, paletteNumEntries)
+    if 0:
+        palette = [None]*paletteNumEntries
+        for i in xrange(paletteNumEntries):
+            if paletteFormat == 2:
+                palette[i] = unpackRGB5A3(unpack('>H', fin.read(2))[0])
+            else:
+                palette[i] = unpack('>H', fin.read(2))[0]
 
 fin.seek(dataOffset)
 
