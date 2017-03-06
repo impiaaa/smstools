@@ -256,7 +256,7 @@ def deblock(format, data, width, height):
                         dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
-                    for i in range(formatBlockWidth[format]):
+                    for i in range(formatBlockWidth[format]*formatBytesPerPixel[format]/data.itemsize):
                         if dataidx >= len(data): break
                         c = data[dataidx]
                         dataidx += 1
