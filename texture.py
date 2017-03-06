@@ -371,7 +371,7 @@ DDSCAPS_MIPMAP = 0x00400000
 ddsFormats = {
     GX_TF_I4:     (DDPF_LUMINANCE,                  '',      4,       0x0F,          0,          0,          0),
     GX_TF_I8:     (DDPF_LUMINANCE,                  '',      8,       0xFF,          0,          0,          0),
-#    GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',      8,       0xF0,          0,          0,       0x0F),
+    GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',      8,       0xF0,          0,          0,       0x0F),
     GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',     16,     0x00FF,          0,          0,     0xFF00),
     GX_TF_IA8:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',     16,     0x00FF,          0,          0,     0xFF00),
     GX_TF_RGB565: (DDPF_RGB,                        '',     16,     0xF800,     0x07E0,     0x001F,          0),
@@ -398,7 +398,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             if paletteFormat == GX_TL_RGB5A3: bytesPerPixel = 4
             else: bytesPerPixel = 2
         else: bytesPerPixel = formatBytesPerPixel[format]
-        bytesPerPixel = 2
+        #bytesPerPixel = 2
         pitchOrLinearSize = width*bytesPerPixel
     if mipmapCount > 1:
         flags |= DDSD_MIPMAPCOUNT
@@ -432,7 +432,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2)))
-            if 1:#format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+            if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*components)
                 def putpixelarray(dx, dy, c):
                     offset = (mipWidth*dy + dx)*components
