@@ -250,7 +250,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                     pixel = colors[(pixels>>(j*2))&3]
                     putpixel(x+(j&3), y+(j>>2), pixel)
     else:
-        raise Exception("Unsupported format %d"%format)
+        raise ValueError("Unsupported format %d"%format)
     return dataidx
 
 def calcTextureSize(format, width, height):
