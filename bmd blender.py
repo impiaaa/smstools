@@ -592,7 +592,7 @@ class Image(Readable):
             fin.seek(nextHeader)
     
     def export(self, im):
-        decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, mipmapCount=self.mipmapCount)
+        decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
 
     def __repr__(self):
         return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
