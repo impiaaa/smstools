@@ -264,7 +264,11 @@ def deblock(format, data, width, height):
     return dest
 
 def calcTextureSize(format, width, height):
-    return int(width*height*formatBytesPerPixel[format])
+    blockWidth = formatBlockWidth[format]
+    blockHeight = formatBlockHeight[format]
+    fullWidth = int((width/blockWidth)+0.5)
+    fullHeight = int((height/blockHeight)+0.5)
+    return int(fullWidth*fullHeight*formatBytesPerPixel[format])
 
 def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data = array(formatArrayTypes[format])
