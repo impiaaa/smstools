@@ -74,7 +74,7 @@ format, width, height, wrapS, wrapT, paletteFormat, paletteNumEntries, paletteOf
 
 mipmapCount = max(mipmapCount, 1)
 
-print "%dx%d, fmt=%d, mips=%d, pfmt=%d" % (width, height, format, mipmapCount, paletteFormat)
+print("%dx%d, fmt=%d, mips=%d, pfmt=%d" % (width, height, format, mipmapCount, paletteFormat))
 
 if width > height:
     lowResImageWidth = min(16, width)
