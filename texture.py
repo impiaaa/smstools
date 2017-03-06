@@ -365,8 +365,6 @@ DDPF_RGB = 0x00000040
 DDSCAPS_COMPLEX = 0x00000008
 DDSCAPS_TEXTURE = 0x00001000
 DDSCAPS_MIPMAP = 0x00400000
-DDSCAPS2_VOLUME = 0x00200000
-DDSCAPS2_CUBEMAP = 0x00000200
 
 ddsFormats = {
     GX_TF_I4:     (DDPF_LUMINANCE,                  '',      4,       0x0F,          0,          0,          0),
@@ -406,4 +404,9 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     else:
         flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsPaletteFormats[paletteFormat]
     fout.write(struct.pack('<II4sIIIII', 32, flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask))
+    caps = DDSCAPS_TEXTURE
+    if mipmapCount > 1:
+        caps |= DDSCAPS_COMPLEX|DDSCAPS_MIPMAP
+    elif arrayCount > 1:
+        caps |= DDSCAPS_COMPLEX
     fout.write(struct.pack('<IIII8x', caps, caps2, caps3, caps4))
