@@ -413,7 +413,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         caps |= DDSCAPS_COMPLEX|DDSCAPS_MIPMAP
     elif arrayCount > 1:
         caps |= DDSCAPS_COMPLEX
-    fout.write(struct.pack('<IIII8x', caps, 0, 0, 0))
+    fout.write(struct.pack('<IIII4x', caps, 0, 0, 0))
     
     mipSize = calcTextureSize(format, width, height)/data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
