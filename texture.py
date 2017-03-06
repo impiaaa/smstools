@@ -435,7 +435,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                     dest[offset:offset + components] = c
                 for y in range(0, height, formatBlockHeight[format]):
                     for x in range(0, width, formatBlockWidth[format]):
-                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, , palette)
+                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
                 dest.tofile(fout)
             else:
                 deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
