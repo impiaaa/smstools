@@ -126,13 +126,13 @@ if format in (8, 9, 10):
 fin.seek(dataOffset)
 data = readTextureData(fin, format, width, height, mipmapCount)
 fin.close()
-fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
-decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
-fout.close()
 images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
 for arrayIdx, mips in enumerate(images):
     for mipIdx, im in enumerate(mips):
         im.save(os.path.splitext(sys.argv[1])[0]+str(arrayIdx)+'.png')
+fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
+decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+fout.close()
 exit()
 
 mipData = [None]*mipmapCount
