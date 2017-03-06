@@ -414,16 +414,25 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     mipSize = calcTextureSize(format, width, height)/data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
+    if format in (GX_TF_I4, GX_TF_I8): components = 1
+    elif format in (GX_TF_IA4, GX_TF_IA8): components = 2
+    elif format == GX_TF_RGB565: components = 3
+    elif format in (GX_TF_RGB5A3, GX_TF_RGBA8, GX_TF_CMPR): components = 4
+    elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+        if paletteFormat == GX_TL_IA8: components = 2
+        elif paletteFormat == GX_TL_RGB565: components = 3
+        elif paletteFormat == GX_TL_RGB5A3: components = 4
+
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2))))
             if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
-                dest = array('B', (0,)*
+                dest = array('B', (0,)*mipWidth*mipHeight*components)
                 for y in range(0, height, formatBlockHeight[format]):
                     for x in range(0, width, formatBlockWidth[format]):
-                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, lambda dx, dy, c: dest[width*(y + dy) + x + i], palette)
+                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, lambda dx, dy, c: dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + components] = c, palette)
             else:
                 deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': deblocked.byteswap()
