@@ -275,7 +275,14 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = calcTextureSize(format, width, height)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    data.fromfile(fin, int(arrayCount*sliceSize/data.itemsize))
+    start = fin.tell()
+    try:
+        data.fromfile(fin, int(arrayCount*sliceSize/data.itemsize))
+    except EOFError:
+        fin.seek(0, -1)
+        end = fin.tell()
+        fin.seek(start)
+        data.fromfile(fin, int((end-start)/data.itemsize))
     if sys.byteorder == 'little': data.byteswap()
     return data
 
