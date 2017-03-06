@@ -327,6 +327,7 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteDat
     return imgs
 
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
+    assert arrayCount <= 1
     dataIdx = 0
     def putpixelbpy(dx, dy, c):
         px = (dx+(height-dy-1)*width)*4
@@ -405,3 +406,4 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     else:
         flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsPaletteFormats[paletteFormat]
     fout.write(struct.pack('<II4sIIIII', 32, flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask))
+    fout.write(struct.pack('<IIII8x', caps, caps2, caps3, caps4))
