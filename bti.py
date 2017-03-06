@@ -181,7 +181,7 @@ if format in (8, 9, 10):
 fin.seek(dataOffset)
 data = readTextureData(fin, format, width, height, mipmapCount)
 fin.close()
-fout = open(os.path.splitext(sys.argv[1])[0]+'.vtf', 'wb')
+fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
 decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
 fout.close()
 exit()
