@@ -433,6 +433,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                 for y in range(0, height, formatBlockHeight[format]):
                     for x in range(0, width, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, lambda dx, dy, c: dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + components] = c, palette)
+                dest.tofile(fout)
             else:
                 deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': deblocked.byteswap()
