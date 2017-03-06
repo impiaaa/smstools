@@ -165,6 +165,7 @@ if wrapS == 0: flags |= 0x04
 if wrapT == 0: flags |= 0x08
 if magFilter == 0: flags |= 0x01
 
+palette = None
 if format in (8, 9, 10):
     # read palette
     fin.seek(paletteOffset)
