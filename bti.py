@@ -1,6 +1,6 @@
 import sys, os
 from struct import unpack, pack
-from texture import readTextureData, readPaletteData, decodeTextureDDS
+from texture import readTextureData, readPaletteData, decodeTextureDDS, decodeTexturePIL
 
 GX_TF_I4 = 0x0
 GX_TF_I8 = 0x1
