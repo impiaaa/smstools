@@ -450,8 +450,10 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                 for y in range(0, mipHeight, formatBlockHeight[format]):
                     for x in range(0, mipWidth, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
+                print("resulting data is %d long"%len(dest))
                 dest.tofile(fout)
             else:
                 deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
                 if sys.byteorder == 'big': deblocked.byteswap()
+                print("resulting data is %d long"%len(deblocked))
                 deblocked.tofile(fout)
