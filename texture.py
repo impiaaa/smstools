@@ -243,7 +243,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
     return dataidx
 
 def deblock(format, data, width, height):
-    dest = array(data.typecode)
+    dest = array(data.typecode, data)
     bytesPerUnit = data.itemsize
     dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
