@@ -398,7 +398,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             if paletteFormat == GX_TL_RGB5A3: bytesPerPixel = 4
             else: bytesPerPixel = 2
         else: bytesPerPixel = formatBytesPerPixel[format]
-        bytesPerPixel = 2
+        #bytesPerPixel = 2
         pitchOrLinearSize = width*bytesPerPixel
     if mipmapCount > 1:
         flags |= DDSD_MIPMAPCOUNT
