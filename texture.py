@@ -268,6 +268,7 @@ def calcTextureSize(format, width, height):
     blockHeight = formatBlockHeight[format]
     fullWidth = int((width/blockWidth)+0.5)*blockWidth
     fullHeight = int((height/blockHeight)+0.5)*blockHeight
+    print width, height, blockWidth, blockHeight, fullWidth, fullHeight
     return int(fullWidth*fullHeight*formatBytesPerPixel[format])
 
 def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
