@@ -350,10 +350,10 @@ def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palett
     im.update()
 
 DDSD_CAPS = 0x00000001
-DDSD_PIXELFORMAT = 0x00001000
-DDSD_WIDTH = 0x00000004
 DDSD_HEIGHT = 0x00000002
+DDSD_WIDTH = 0x00000004
 DDSD_PITCH = 0x00000008
+DDSD_PIXELFORMAT = 0x00001000
 DDSD_MIPMAPCOUNT = 0x00020000
 DDSD_LINEARSIZE = 0x00080000
 DDSD_DEPTH = 0x00800000
@@ -364,5 +364,13 @@ DDSCAPS_MIPMAP = 0x00400000
 DDSCAPS2_VOLUME = 0x00200000
 DDSCAPS2_CUBEMAP = 0x00000200
 
-def decodeTextureDDS(data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
-    
+def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
+    fout.write(b'DDS ')
+    flags = DDSD_CAPS|DDSD_HEIGHT|DDSD_WIDTH|DDSD_PIXELFORMAT
+    if format == GX_TF_CMPR:
+        flags |= DDSD_LINEARSIZE
+        pitchOrLinearSize = len(data)
+    else:
+        flags |= DDSD_PITCH
+        pitchOrLinearSize = width*formatBytesPerPixel[format]
+    fout.write(struct.pack('<IIIIIII', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
