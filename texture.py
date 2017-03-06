@@ -417,6 +417,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
+            print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2))))
             deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], width>>mipIdx, height>>mipIdx)
             if sys.byteorder == 'big': deblocked.byteswap()
             if format == GX_TF_RGB5A3:
