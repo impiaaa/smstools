@@ -244,7 +244,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
 
 def deblock(format, data, width, height):
     dest = array(data.typecode)
-    bytesPerChannel = struct.calcsize(data.typecode)
+    bytesPerUnit = struct.calcsize(data.typecode)
     dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
@@ -257,7 +257,7 @@ def deblock(format, data, width, height):
                         dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
-                    for i in range(formatBlockWidth[format]*bytesPerChannel):
+                    for i in range(formatBlockWidth[format]*bytesPerUnit):
                         c = data[dataidx]
                         dataidx += 1
                         dest[width*(y + dy) + x + i] = c
