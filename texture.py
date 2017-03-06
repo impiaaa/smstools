@@ -244,7 +244,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
 
 def deblock(format, data, width, height):
     dest = array(data.typecode)
-    bytesPerUnit = struct.calcsize(data.typecode)
+    bytesPerUnit = data.itemsize
     dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
@@ -271,7 +271,7 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
     mipSize = calcTextureSize(format, width, height)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    data.fromfile(fin, int(arrayCount*sliceSize/struct.calcsize(data.typecode)))
+    data.fromfile(fin, int(arrayCount*sliceSize/data.itemsize))
     if sys.byteorder == 'little': data.byteswap()
     return data
 
@@ -411,21 +411,19 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         caps |= DDSCAPS_COMPLEX
     fout.write(struct.pack('<IIII8x', caps, 0, 0, 0))
     
-    mipSize = calcTextureSize(format, width, height)/struct.calcsize(data.typecode)
+    mipSize = calcTextureSize(format, width, height)/data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2))))
-            deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], width>>mipIdx, height>>mipIdx)
-            if sys.byteorder == 'big': deblocked.byteswap()
-            if format == GX_TF_RGB5A3:
-                
-            elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2): 
-                if paletteFormat == GX_TL_RGB5A3:
-                    
-                else:
-                    
+            if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+                dest = array('B', 
+                for y in range(0, height, formatBlockHeight[format]):
+                    for x in range(0, width, formatBlockWidth[format]):
+                        dataOffset = decodeBlock(format, data, dataOffset, width>>mipIdx, height>>mipIdx, x, y, lambda dx, dy, c: , palette)
             else:
+                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], width>>mipIdx, height>>mipIdx)
+                if sys.byteorder == 'big': deblocked.byteswap()
                 deblocked.tofile(fout)
