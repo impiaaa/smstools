@@ -245,11 +245,14 @@ def readPaletteData(fin, paletteFormat, paletteNumEntries):
     if sys.byteorder == 'little': data.byteswap()
     return data
 
-def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
+def convertPalette(paletteData, paletteFormat):
+
+def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
     
     dataIdx = 0
     imgs = [[None]*mipmapCount for i in range(arrayCount)]
+    palette = convertPalette(paletteData, paletteFormat)
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
@@ -277,6 +280,7 @@ def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palett
             im.pixels[px+2] = c[2]/255.0
             if len(c) == 4:
                 im.pixels[px+3] = c[3]/255.0
+    palette = convertPalette(paletteData, paletteFormat)
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
             dataIdx = decodeBlock(format, data, dataIdx, width, height, x, y, putpixelbpy, palette)
