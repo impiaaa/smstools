@@ -372,10 +372,10 @@ ddsFormats = {
     GX_TF_I8:     (DDPF_LUMINANCE,                  '',      8,       0xFF,          0,          0,          0),
     GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',      8,       0xF0,          0,          0,       0x0F),
     GX_TF_IA8:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, '',     16,     0x00FF,          0,          0,     0xFF00),
-    GX_TF_RGB565: (DDPF_RGB,                        '',     16,    ),
+    GX_TF_RGB565: (DDPF_RGB,                        '',     16,     0xF800,     0x07E0,     0x001F,          0),
     GX_TF_RGB5A3: (DDPF_ALPHAPIXELS|DDPF_RGB,       '',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     GX_TF_RGBA8:  (DDPF_ALPHAPIXELS|DDPF_RGB,       '',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
-    GX_TF_CMPR:   (DDPF_ALPHAPIXELS|DDPF_FOURCC,    'DXT1',  0, 0, 0, 0, 0)
+    GX_TF_CMPR:   (DDPF_ALPHAPIXELS|DDPF_FOURCC,    'DXT1',  0,          0,          0,          0,          0)
 }
 
 def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
