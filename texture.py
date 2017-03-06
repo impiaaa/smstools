@@ -278,7 +278,7 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     try:
         data.fromfile(fin, int(arrayCount*sliceSize/data.itemsize))
     except EOFError:
-        fin.seek(0, -1)
+        fin.seek(0, 2)
         end = fin.tell()
         fin.seek(start)
         data.fromfile(fin, int((end-start)/data.itemsize))
