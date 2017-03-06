@@ -260,7 +260,7 @@ def deblock(format, data, width, height):
                         if dataidx >= len(data): break
                         c = data[dataidx]
                         dataidx += 1
-                        if x+i*data.itemsize < width*formatBytesPerPixel[format] and y+dy < height: dest[int(width*formatBytesPerPixel[format]*(y + dy)/data.itemsize + x + i)] = c
+                        dest[int(width*formatBytesPerPixel[format]*(y + dy)/data.itemsize + x + i)] = c
     return dest
 
 def calcTextureSize(format, width, height):
