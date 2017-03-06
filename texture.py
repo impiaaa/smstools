@@ -1,5 +1,6 @@
 import struct
 from array import array
+import sys
 
 GX_TF_I4 = 0x0
 GX_TF_I8 = 0x1
@@ -235,13 +236,13 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     mipSize = calcTextureSize(format, width, height)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     data.fromfile(fin, int(arrayCount*sliceSize/struct.calcsize(data.typecode)))
-    data.byteswap()
+    if sys.byteorder == 'little': data.byteswap()
     return data
 
 def readPaletteData(fin, paletteFormat, paletteNumEntries):
     data = array('H')
     data.fromfile(fin, paletteNumEntries)
-    data.byteswap()
+    if sys.byteorder == 'little': data.byteswap()
     return data
 
 def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
