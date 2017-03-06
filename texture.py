@@ -258,7 +258,6 @@ def deblock(format, data, width, height):
                 for dy in range(formatBlockHeight[format]):
                     for i in range(formatBlockWidth[format]):
                         if dataidx >= len(data): break
-                        print len(data), width, y, dy, x, i
                         c = data[dataidx]
                         dataidx += 1
                         if x+i < width and y+dy < height: dest[width*(y + dy) + x + i] = c
