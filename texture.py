@@ -414,8 +414,6 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     
     mipSize = calcTextureSize(format, width, height)/data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    print("mipSize=%d"%mipSize)
-    print("sliceSize=%d"%sliceSize)
     palette = convertPalette(paletteData, paletteFormat)
     if format in (GX_TF_I4, GX_TF_I8): components = 1
     elif format in (GX_TF_IA4, GX_TF_IA8): components = 2
