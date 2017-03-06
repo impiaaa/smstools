@@ -266,8 +266,8 @@ def deblock(format, data, width, height):
 def calcTextureSize(format, width, height):
     blockWidth = formatBlockWidth[format]
     blockHeight = formatBlockHeight[format]
-    fullWidth = int((float(width)/blockWidth)+0.5)*blockWidth
-    fullHeight = int((float(height)/blockHeight)+0.5)*blockHeight
+    fullWidth = int(round((float(width)/blockWidth)+0.5))*blockWidth
+    fullHeight = int(round((float(height)/blockHeight)+0.5))*blockHeight
     print width, height, blockWidth, blockHeight, fullWidth, fullHeight, int(fullWidth*fullHeight*formatBytesPerPixel[format])
     return int(fullWidth*fullHeight*formatBytesPerPixel[format])
 
