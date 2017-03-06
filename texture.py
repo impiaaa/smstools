@@ -202,25 +202,35 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 dataidx += 4
                 if x < width and y < height:
                     putpixel(x, y, c)
+    
     elif format == GX_TF_C4:
-        for y in range(8):
-            for x in range(0, 8, 2):
+        for y in range(yoff, yoff+8):
+            for x in range(xoff, xoff+8, 2):
                 if dataidx >= len(data): break
-                c = data[dataidx:dataidx+4]
-                dataidx += 4
+                c = data[dataidx]
+                dataidx += 1
                 if x < width and y < height:
                     putpixel(x, y, palette[(c & 0xf0) >> 4])
                     putpixel(x+1, y, palette[c & 0x0f])
-                    
+    
     elif format == GX_TF_C8:
-        for y in range(4):
-            for x in range(0, 8, 1):
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+8):
                 if dataidx >= len(data): break
-                c = data[dataidx:dataidx+4]
-                dataidx += 4
+                c = data[dataidx]
+                dataidx += 1
                 if x < width and y < height:
                     putpixel(x, y, palette[c])
-    #GX_TF_C14X2
+    
+    elif format == GX_TF_C14X2:
+        for y in range(yoff, yoff+4):
+            for x in range(xoff, xoff+4):
+                if dataidx >= len(data): break
+                c = data[dataidx]
+                dataidx += 1
+                if x < width and y < height:
+                    putpixel(x, y, palette[c&0x3FFF])
+    
     elif format == GX_TF_CMPR:
         for y in range(yoff, yoff+8, 4):
             for x in range(xoff, xoff+8, 4):
