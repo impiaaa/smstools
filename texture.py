@@ -390,5 +390,8 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     if mipmapCount > 1:
         flags |= DDSD_MIPMAPCOUNT
     fout.write(struct.pack('<IIIIIII44x', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
-    flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsFormats[format]
+    if format in ddsFormats:
+        flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsFormats[format]
+    else:
+        flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsPaletteFormats[paletteFormat]
     fout.write(struct.pack('<II4sIIIII', 32, flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask))
