@@ -373,4 +373,6 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     else:
         flags |= DDSD_PITCH
         pitchOrLinearSize = width*formatBytesPerPixel[format]
+    if mipmapCount > 1:
+        flags |= DDSD_MIPMAPCOUNT
     fout.write(struct.pack('<IIIIIII', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
