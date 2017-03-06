@@ -358,11 +358,32 @@ DDSD_MIPMAPCOUNT = 0x00020000
 DDSD_LINEARSIZE = 0x00080000
 DDSD_DEPTH = 0x00800000
 
+DDPF_ALPHAPIXELS = 0x00000001
+DDPF_ALPHA = 0x00000002
+DDPF_FOURCC = 0x00000004
+DDPF_RGB = 0x00000040
+DDPF_PALETTEINDEXED1 = 0x00000800
+DDPF_PALETTEINDEXED2 = 0x00001000
+DDPF_PALETTEINDEXED4 = 0x00000008
+DDPF_PALETTEINDEXED8 = 0x00000020
+DDPF_LUMINANCE = 0x00020000
+DDPF_ALPHAPREMULT = 0x00008000
+
 DDSCAPS_COMPLEX = 0x00000008
 DDSCAPS_TEXTURE = 0x00001000
 DDSCAPS_MIPMAP = 0x00400000
 DDSCAPS2_VOLUME = 0x00200000
 DDSCAPS2_CUBEMAP = 0x00000200
+
+ddsFormats = {
+    GX_TF_I4:     (DDPF_LUMINANCE),
+    GX_TF_I8:     (DDPF_LUMINANCE),
+    GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE),
+    GX_TF_IA8:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE),
+    GX_TF_RGB565: (DDPF_RGB),
+    GX_TF_RGBA8:  (DDPF_ALPHAPIXELS|DDPF_RGB),
+    GX_TF_CMPR:   (DDPF_ALPHAPIXELS|DDPF_FOURCC)
+}
 
 def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     fout.write(b'DDS ')
@@ -375,4 +396,6 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         pitchOrLinearSize = width*formatBytesPerPixel[format]
     if mipmapCount > 1:
         flags |= DDSD_MIPMAPCOUNT
-    fout.write(struct.pack('<IIIIIII', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
+    fout.write(struct.pack('<IIIIIII44x', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
+    flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsFormats[format]
+    fout.write(struct.pack('<II4sIIIII', 32, flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask))
