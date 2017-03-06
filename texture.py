@@ -430,7 +430,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2)))
-            if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+            if 1:#format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*components)
                 def putpixelarray(dx, dy, c):
                     offset = (mipWidth*dy + dx)*components
