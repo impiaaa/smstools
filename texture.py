@@ -412,8 +412,8 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     fout.write(struct.pack('<IIII8x', caps, 0, 0, 0))
     
     mipSize = calcTextureSize(format, width, height)
-    sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    data.fromfile(fin, int(arrayCount*sliceSize/struct.calcsize(data.typecode)))
+    sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)/struct.calcsize(data.typecode)
+    palette = convertPalette(paletteData, paletteFormat)
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
@@ -422,7 +422,9 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             if format == GX_TF_RGB5A3:
                 
             elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2): 
-                if paletteFormat == GX_TL_RGB5A3: bytesPerPixel = 4
-                else: bytesPerPixel = 2
+                if paletteFormat == GX_TL_RGB5A3:
+                    
+                else:
+                    
             else:
                 deblocked.tofile(fout)
