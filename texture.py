@@ -383,7 +383,6 @@ ddsFormats = {
     GX_TF_I4:     (DDPF_LUMINANCE,                  b'',      4,       0x0F,          0,          0,          0),
     GX_TF_I8:     (DDPF_LUMINANCE,                  b'',      8,       0xFF,          0,          0,          0),
     GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, b'',      8,       0xF0,          0,          0,       0x0F),
-    GX_TF_IA4:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, b'',     16,     0x00FF,          0,          0,     0xFF00),
     GX_TF_IA8:    (DDPF_ALPHAPIXELS|DDPF_LUMINANCE, b'',     16,     0x00FF,          0,          0,     0xFF00),
     GX_TF_RGB565: (DDPF_RGB,                        b'',     16,     0xF800,     0x07E0,     0x001F,          0),
     GX_TF_RGB5A3: (DDPF_ALPHAPIXELS|DDPF_RGB,       b'',     32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
