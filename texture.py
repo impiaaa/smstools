@@ -425,7 +425,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         caps |= DDSCAPS_COMPLEX
     fout.write(struct.pack('<IIII4x', caps, 0, 0, 0))
     
-    mipSize = calcTextureSize(format, width, height)/data.itemsize
+    mipSize = int(calcTextureSize(format, width, height)/data.itemsize)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
     if format in (GX_TF_I4, GX_TF_I8): components = 1
