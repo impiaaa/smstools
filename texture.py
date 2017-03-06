@@ -416,14 +416,15 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     palette = convertPalette(paletteData, paletteFormat)
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
+            mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2))))
             if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
-                dest = array('B', 
+                dest = array('B', (0,)*
                 for y in range(0, height, formatBlockHeight[format]):
                     for x in range(0, width, formatBlockWidth[format]):
-                        dataOffset = decodeBlock(format, data, dataOffset, width>>mipIdx, height>>mipIdx, x, y, lambda dx, dy, c: , palette)
+                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, lambda dx, dy, c: dest[width*(y + dy) + x + i], palette)
             else:
-                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], width>>mipIdx, height>>mipIdx)
+                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': deblocked.byteswap()
                 deblocked.tofile(fout)
