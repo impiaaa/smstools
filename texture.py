@@ -238,6 +238,12 @@ def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data.byteswap()
     return data
 
+def readPaletteData(fin, paletteFormat, paletteNumEntries):
+    data = array('H')
+    data.fromfile(fin, paletteNumEntries)
+    data.byteswap()
+    return data
+
 def decodeTexturePIL(data, format, width, height, paletteFormat=None, palette=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
     
