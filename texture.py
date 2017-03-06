@@ -246,6 +246,13 @@ def readPaletteData(fin, paletteFormat, paletteNumEntries):
     return data
 
 def convertPalette(paletteData, paletteFormat):
+    if paletteData is None: return paletteData
+    palette = [None]*len(paletteData)
+    for i, x in enumerate(paletteData):
+        if paletteFormat == GX_TL_IA8:
+            palette[i] = x & 0x00FF, (x & 0xFF00) >> 8
+        elif paletteFormat == GX_TL_RGB565:
+        elif paletteFormat == GX_TL_RGB5A3:
 
 def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
