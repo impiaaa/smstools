@@ -184,6 +184,10 @@ fin.close()
 fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
 decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
 fout.close()
+images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
+for arrayIdx, mips in enumerate(images):
+    for mipIdx, im in enumerate(mips):
+        im.save(name+str(arrayIdx)+'.png')
 exit()
 
 mipData = [None]*mipmapCount
