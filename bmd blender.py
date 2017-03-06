@@ -583,8 +583,9 @@ class Image(Readable):
             fin.seek(start+textureHeaderOffset+dataOffset+0x20*texIndex)
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
-            fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
-            #self.palette = fin.read()
+            if self.format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+                fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
+                self.palette = readPaletteData(fin, self.paletteFormat, paletteNumEntries)
             
             fin.seek(nextHeader)
     
