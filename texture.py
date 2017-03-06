@@ -260,7 +260,7 @@ def deblock(format, data, width, height):
                         if dataidx >= len(data): break
                         c = data[dataidx]
                         dataidx += 1
-                        print x, i, y, dy, width, height, data.itemsize
+                        print x, i, y, dy, width, height, data.itemsize, formatBytesPerPixel[format]
                         if x+i*data.itemsize < width*formatBytesPerPixel[format] and y+dy < height: dest[width*(y + dy) + x + i] = c
     return dest
 
