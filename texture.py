@@ -249,16 +249,16 @@ def deblock(format, data, width, height):
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
             if format == GX_TF_CMPR:
-                for y in range(yoff, yoff+8, 4):
-                    for x in range(xoff, xoff+8, 4):
+                for dy in range(0, 8, 4):
+                    for dx in range(0, 8, 4):
                         if dataidx >= len(data): break
                         c = data[dataidx:dataidx+8]
                         dataidx += 8
-                        fixS3TC1Block(c)
+                        dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
                     for i in range(formatBlockWidth[format]*bytesPerChannel):
-                        c = data[dataidx:dataidx+8]
+                        c = data[dataidx]
                         dataidx += 1
                         dest[width*(y + dy) + x + i] = c
 
