@@ -261,7 +261,7 @@ def deblock(format, data, width, height):
                         print len(data), width, y, dy, x, i
                         c = data[dataidx]
                         dataidx += 1
-                        dest[width*(y + dy) + x + i] = c
+                        if x+i < width and y+dy < height: dest[width*(y + dy) + x + i] = c
     return dest
 
 def calcTextureSize(format, width, height):
