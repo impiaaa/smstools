@@ -409,4 +409,15 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         caps |= DDSCAPS_COMPLEX|DDSCAPS_MIPMAP
     elif arrayCount > 1:
         caps |= DDSCAPS_COMPLEX
-    fout.write(struct.pack('<IIII8x', caps, caps2, caps3, caps4))
+    fout.write(struct.pack('<IIII8x', caps, 0, 0, 0))
+    for arrayIdx in range(arrayCount):
+        for mipIdx in range(mipmapCount):
+            deblocked = deblock(format, data, width>>mipIdx, height>>mipIdx)
+            if sys.byteorder == 'big': deblocked.byteswap()
+            if format == GX_TF_RGB5A3:
+                
+            elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2): 
+                if paletteFormat == GX_TL_RGB5A3: bytesPerPixel = 4
+                else: bytesPerPixel = 2
+            else:
+                deblocked.tofile(fout)
