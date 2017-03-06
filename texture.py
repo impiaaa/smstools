@@ -256,7 +256,7 @@ def deblock(format, data, width, height):
                         dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
-                    for i in range(formatBlockWidth[format]/data.itemsize):
+                    for i in range(formatBlockWidth[format]):
                         c = data[dataidx]
                         dataidx += 1
                         dest[width*(y + dy) + x + i] = c
