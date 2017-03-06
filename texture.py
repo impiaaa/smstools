@@ -431,11 +431,11 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
             print("data for array %d mip %d is at %d and is %d big"%(arrayIdx, mipIdx, dataOffset, mipSize>>(mipIdx*2)))
             if format in (GX_TF_RGB5A3, GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*components)
+                def putpixelarray(dx, dy, c):
+                    offset = (mipWidth*dy + dx)*components
+                    dest[offset:offset + components] = array('B', c)
                 for y in range(0, mipHeight, formatBlockHeight[format]):
                     for x in range(0, mipWidth, formatBlockWidth[format]):
-                        def putpixelarray(dx, dy, c):
-                            offset = (mipWidth*(y + dy) + x + dx)*components
-                            dest[offset:offset + components] = array('B', c)
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
                 dest.tofile(fout)
             else:
