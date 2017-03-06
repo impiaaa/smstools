@@ -243,15 +243,21 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
     return dataidx
 
 def deblock(format, data, width, height):
-    dest = [None]*len(data)
+    dest = array(data.typecode)
+    bytesPerChannel = struct.calcsize(data.typecode)
     dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
             if format == GX_TF_CMPR:
-                
+                for y in range(yoff, yoff+8, 4):
+                    for x in range(xoff, xoff+8, 4):
+                        if dataidx >= len(data): break
+                        c = data[dataidx:dataidx+8]
+                        dataidx += 8
+                        fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
-                    for i in range(formatBlockWidth[format]*formatBytesPerPixel[format]):
+                    for i in range(formatBlockWidth[format]*bytesPerChannel):
                         c = data[dataidx:dataidx+8]
                         dataidx += 1
                         dest[width*(y + dy) + x + i] = c
