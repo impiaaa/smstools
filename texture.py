@@ -253,14 +253,15 @@ def deblock(format, data, width, height):
                         if dataidx >= len(data): break
                         c = data[dataidx:dataidx+8]
                         dataidx += 8
-                        if y+dy+8 <= height: dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
+                        if y+dy+4 <= height: dest[width*(y + dy) + x + dx:width*(y + dy) + x + dx + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
                     for i in range(int(formatBlockWidth[format]/data.itemsize)):
                         if dataidx >= len(data): break
                         c = data[dataidx]
                         dataidx += 1
-                        if y+dy < height: dest[int((width*(y + dy) + x)/data.itemsize + i)] = c
+                        idx = int((width*(y + dy) + x)/data.itemsize + i)
+                        if idx < len(dest): dest[idx] = c
     return dest
 
 def calcTextureSize(format, width, height):
