@@ -1,22 +1,6 @@
 import sys, os
 from struct import unpack, pack
-from texture import readTextureData, readPaletteData, decodeTextureDDS, decodeTexturePIL
-
-GX_TF_I4 = 0x0
-GX_TF_I8 = 0x1
-GX_TF_IA4 = 0x2
-GX_TF_IA8 = 0x3
-GX_TF_RGB565 = 0x4
-GX_TF_RGB5A3 = 0x5
-GX_TF_RGBA8 = 0x6
-GX_TF_C4 = 0x8
-GX_TF_C8 = 0x9
-GX_TF_C14X2 = 0xA
-GX_TF_CMPR = 0xE # S3TC/DXT
-
-GX_TL_IA8 = 0x0
-GX_TL_RGB565 = 0x1
-GX_TL_RGB5A3 = 0x2
+from texture import *
 
 IMAGE_FORMAT_RGBA8888 = 0,
 IMAGE_FORMAT_ABGR8888 = 1
@@ -53,19 +37,7 @@ GX_TF_RGB565: IMAGE_FORMAT_RGB565,
 GX_TF_CMPR: IMAGE_FORMAT_DXT1,
 GX_TF_RGBA8: IMAGE_FORMAT_RGBA8888
 }
-formatWidths = {
- 0: .5,
- 1:  1,
- 2:  1,
- 3:  2,
- 4:  2,
- 5:  1,
- 6:  1,
- 8: .5,
- 9:  1,
-10:  2,
-14: .5
-}
+
 vtfFormatWidths = {
  8: 1,
  1: 4,
@@ -95,33 +67,6 @@ vtfFormatWidths = {
 26: 4,
 23: 4
 }
-
-def s3tc1ReverseByte(b):
-    b1 = b & 0x3
-    b2 = b & 0xc
-    b3 = b & 0x30
-    b4 = b & 0xc0
-    return (b1 << 6) | (b2 << 2) | (b3 >> 2) | (b4 >> 6)
-
-def unpackRGB5A3(c):
-    if (c & 0x8000) == 0x8000:
-        a = 0xff
-        r = (c & 0x7c00) >> 10
-        r = (r << (8-5)) | (r >> (10-8))
-        g = (c & 0x3e0) >> 5
-        g = (g << (8-5)) | (g >> (10-8))
-        b = c & 0x1f
-        b = (b << (8-5)) | (b >> (10-8))
-    else:
-        a = (c & 0x7000) >> 12
-        a = (a << (8-3)) | (a << (8-6)) | (a >> (9-8))
-        r = (c & 0xf00) >> 8
-        r = (r << (8-4)) | r
-        g = (c & 0xf0) >> 4
-        g = (g << (8-4)) | g
-        b = c & 0xf
-        b = (b << (8-4)) | b
-    return r, g, b, a
 
 fin = open(sys.argv[1], 'rb')
 
@@ -184,10 +129,6 @@ fin.close()
 fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
 decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
 fout.close()
-images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-for arrayIdx, mips in enumerate(images):
-    for mipIdx, im in enumerate(mips):
-        im.save(os.path.splitext(sys.argv[1])[0]+str(arrayIdx)+'.png')
 exit()
 
 mipData = [None]*mipmapCount
