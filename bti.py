@@ -178,6 +178,12 @@ if format in (8, 9, 10):
                 palette[i] = unpack('>H', fin.read(2))[0]
 
 fin.seek(dataOffset)
+data = readTextureData(fin, format, width, height, mipmapCount)
+fin.close()
+fout = open(os.path.splitext(sys.argv[1])[0]+'.vtf', 'wb')
+decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1)
+fout.close()
+exit()
 
 mipData = [None]*mipmapCount
 mipwidth = width
