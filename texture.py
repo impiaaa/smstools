@@ -74,17 +74,6 @@ GX_TF_C14X2:  'H',
 GX_TF_CMPR:   'B'
 }
 
-formatImageTypes = {
-GX_TF_I4:     'L',
-GX_TF_I8:     'L',
-GX_TF_IA4:    'LA',
-GX_TF_IA8:    'LA',
-GX_TF_RGB565: 'RGB',
-GX_TF_RGB5A3: 'RGBA',
-GX_TF_RGBA8:  'RGBA',
-GX_TF_CMPR:   'RGBA'
-}
-
 def s3tc1ReverseByte(b):
     b1 = b & 0x3
     b2 = b & 0xc
@@ -253,6 +242,11 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
         raise ValueError("Unsupported format %d"%format)
     return dataidx
 
+def deblock(format, data, width, height):
+    dest = [None]*len(data)
+    for y in range(0, height, formatBlockHeight[format]):
+        for x in range(0, width, formatBlockWidth[format]):
+
 def calcTextureSize(format, width, height):
     return int(width*height*formatBytesPerPixel[format])
 
@@ -282,6 +276,23 @@ def convertPalette(paletteData, paletteFormat):
         elif paletteFormat == GX_TL_RGB5A3:
             palette[i] = unpackRGB5A3(x)
 
+formatImageTypes = {
+GX_TF_I4:     'L',
+GX_TF_I8:     'L',
+GX_TF_IA4:    'LA',
+GX_TF_IA8:    'LA',
+GX_TF_RGB565: 'RGB',
+GX_TF_RGB5A3: 'RGBA',
+GX_TF_RGBA8:  'RGBA',
+GX_TF_CMPR:   'RGBA'
+}
+
+paletteFormatImageTypes = {
+GX_TL_IA8:    'LA',
+GX_TL_RGB565: 'RGB',
+GX_TL_RGB5A3: 'RGBA'
+}
+
 def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     from PIL import Image
     
@@ -290,7 +301,7 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteDat
     palette = convertPalette(paletteData, paletteFormat)
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
-            im = Image.new(formatImageTypes[format], (width>>mipIdx, height>>mipIdx))
+            im = Image.new(formatImageTypes[format] if format in formatImageTypes else paletteFormatImageTypes[paletteFormat], (width>>mipIdx, height>>mipIdx))
             putpixelpil = lambda dx, dy, c: im.putpixel((dx, dy), c)
             for y in range(0, im.height, formatBlockHeight[format]):
                 for x in range(0, im.width, formatBlockWidth[format]):
@@ -320,3 +331,19 @@ def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palett
         for x in range(0, width, formatBlockWidth[format]):
             dataIdx = decodeBlock(format, data, dataIdx, width, height, x, y, putpixelbpy, palette)
     im.update()
+
+DDSD_CAPS = 0x00000001
+DDSD_PIXELFORMAT = 0x00001000
+DDSD_WIDTH = 0x00000004
+DDSD_HEIGHT = 0x00000002
+DDSD_PITCH = 0x00000008
+DDSD_MIPMAPCOUNT = 0x00020000
+DDSD_LINEARSIZE = 0x00080000
+DDSD_DEPTH = 0x00800000
+
+DDSCAPS_COMPLEX = 0x00000008
+DDSCAPS_TEXTURE = 0x00001000
+DDSCAPS_MIPMAP = 0x00400000
+DDSCAPS2_VOLUME = 0x00200000
+DDSCAPS2_CUBEMAP = 0x00000200
+
