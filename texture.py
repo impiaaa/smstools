@@ -377,6 +377,9 @@ ddsFormats = {
     GX_TF_RGBA8:  (DDPF_ALPHAPIXELS|DDPF_RGB,       '',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     GX_TF_CMPR:   (DDPF_ALPHAPIXELS|DDPF_FOURCC,    'DXT1',  0,          0,          0,          0,          0)
 }
+GX_TL_IA8 = 0x0
+GX_TL_RGB565 = 0x1
+GX_TL_RGB5A3 = 0x2
 
 def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     fout.write(b'DDS ')
@@ -386,7 +389,12 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         pitchOrLinearSize = len(data)
     else:
         flags |= DDSD_PITCH
-        pitchOrLinearSize = width*formatBytesPerPixel[format]
+        if format == GX_TF_RGB5A3: bytesPerPixel = 4
+        elif format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2): 
+            if paletteFormat == GX_TL_RGB5A3: bytesPerPixel = 4
+            else: bytesPerPixel = 2
+        else: bytesPerPixel = formatBytesPerPixel[format]
+        pitchOrLinearSize = width*bytesPerPixel
     if mipmapCount > 1:
         flags |= DDSD_MIPMAPCOUNT
     fout.write(struct.pack('<IIIIIII44x', 124, flags, height, width, pitchOrLinearSize, 0, mipmapCount))
