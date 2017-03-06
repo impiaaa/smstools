@@ -244,8 +244,17 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
 
 def deblock(format, data, width, height):
     dest = [None]*len(data)
+    dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
+            if format == GX_TF_CMPR:
+                
+            else:
+                for dy in range(formatBlockHeight[format]):
+                    for i in range(formatBlockWidth[format]*formatBytesPerPixel[format]):
+                        c = data[dataidx:dataidx+8]
+                        dataidx += 1
+                        dest[width*(y + dy) + x + i] = c
 
 def calcTextureSize(format, width, height):
     return int(width*height*formatBytesPerPixel[format])
