@@ -364,3 +364,5 @@ DDSCAPS_MIPMAP = 0x00400000
 DDSCAPS2_VOLUME = 0x00200000
 DDSCAPS2_CUBEMAP = 0x00000200
 
+def decodeTextureDDS(data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
+    
