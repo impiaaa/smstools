@@ -436,7 +436,6 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                 dest = array('B', (0,)*mipWidth*mipHeight*components)
                 def putpixelarray(dx, dy, c):
                     offset = (mipWidth*dy + dx)*components
-                    print offset
                     dest[offset:offset + components] = array('B', c)
                 for y in range(0, mipHeight, formatBlockHeight[format]):
                     for x in range(0, mipWidth, formatBlockWidth[format]):
