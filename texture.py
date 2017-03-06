@@ -433,7 +433,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                 dest = array('B', (0,)*mipWidth*mipHeight*components)
                 def putpixelarray(dx, dy, c):
                     offset = (width*(y + dy) + x + dx)*components
-                    dest[offset:offset + components] = c
+                    dest[offset:offset + components] = array('B', c)
                 for y in range(0, height, formatBlockHeight[format]):
                     for x in range(0, width, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
