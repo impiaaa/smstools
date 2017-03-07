@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-from PIL import Image
-from struct import Struct, unpack
+from struct import Struct
 from common import Section, BFile
 from texture import readTextureData, decodeTexturePIL
 
