@@ -756,9 +756,10 @@ def computeSectionLengths(offsets, sizeOfSection):
 
 class Mdl3Dummy(Section):
     def read(self, fin, start, size):
-        fout = open("mld3.cdata", 'wb')
-        fout.write(fin.read(size-8))
-        fout.close()
+        #fout = open("mld3.cdata", 'wb')
+        #fout.write(fin.read(size-8))
+        #fout.close()
+        pass
 
 class BModel(BFile):
     sectionHandlers = {
