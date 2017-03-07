@@ -1168,8 +1168,8 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
         bone.matrix = effP
         if parent is not None:
             bone.parent = parent
-        bone["_bmd_rest_scale"] = ','.join([repr(x) for x in f.scale])
-        bone["_bmd_rest"] = repr(frameMatrix(f)[:])
+        bone['_bmd_rest_scale'] = ','.join([repr(x) for x in f.scale])
+        bone['_bmd_rest'] = repr(frameMatrix(f)[:])
     else:
         bone = parent
 
