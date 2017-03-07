@@ -275,6 +275,7 @@ def calcTextureSize(format, width, height):
     else: fullWidth = width+blockWidth-(width%blockWidth)
     return int(fullWidth*height*formatBytesPerPixel[format])
 
+# Read texture data into an array object, byte-swapped and with various data sizes for convenience
 def readTextureData(fin, format, width, height, mipmapCount=1, arrayCount=1):
     data = array(formatArrayTypes[format])
     # data length = sum from i=0 to mipCount of (w*h/(4^i))
