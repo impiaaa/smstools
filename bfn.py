@@ -23,10 +23,8 @@ class Gly1(Section):
                 im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
-    def __init__(self, *args, **kwargs):
-        super(BFont, self).__init__(*args, **kwargs)
-        # TODO: INF1, WID1, MAP1
-        self.sectionHandlers = {b"GLY1": Gly1}
+    # TODO: INF1, WID1, MAP1
+    sectionHandlers = {b"GLY1": Gly1}
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
