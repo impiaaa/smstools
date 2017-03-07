@@ -17,7 +17,7 @@ class Tex0(Section):
                 im.save(name+str(arrayIdx)+'.png')
         
         fout = open(name+".dds", 'wb')
-        decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+        decodeTextureDDS(fout, self.data, self.format, self.width, self.height, 0, None, self.mipmapCount)
         fout.close()
 
 class BRres(BFile):
