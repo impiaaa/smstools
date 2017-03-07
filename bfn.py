@@ -21,11 +21,11 @@ class Gly1(Section):
         images = decodeTexturePIL(self.data, self.format, self.w, self.h, arrayCount=self.arrayCount)
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
-                im.save(name+str(arrayIdx)+'.png')
+                im.save(name+str(arrayIdx)+".png")
 
 class BFont(BFile):
     # TODO: INF1, WID1, MAP1
-    sectionHandlers = {b"GLY1": Gly1}
+    sectionHandlers = {b'GLY1': Gly1}
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <bfn>\n"%sys.argv[0])
