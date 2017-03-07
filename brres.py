@@ -1,15 +1,11 @@
-import sys, struct
-from struct import unpack, pack
-from warnings import warn
-from array import array
-import os.path
+import sys
+from struct import unpack
+from common import *
+from texture import *
 
-def s3tc1ReverseByte(b):
-    b1 = b & 0x3
-    b2 = b & 0xc
-    b3 = b & 0x30
-    b4 = b & 0xc0
-    return (b1 << 6) | (b2 << 2) | (b3 >> 2) | (b4 >> 6)
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <brres>\n"%sys.argv[0])
+    exit(1)
 
 fin = open(sys.argv[1], 'rb')
 signature, fileLength, chunkCount, extraHeaderSize = unpack('>8sL2xH4xL', fin.read(0x18))
