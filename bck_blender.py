@@ -139,13 +139,15 @@ def doCurve(action, data_path, loopFlags, data):
         curve = action.fcurves.new(data_path=data_path, index=i)
         if loopFlags == 2:
             mod = curve.modifiers.new('CYCLES')
+        
         curve.keyframe_points.add(len(subData))
         lastKey = lastKeyPoint = None
         for key_point, key in zip(curve.keyframe_points, subData):
             key_point.co = Vector((key.time, key.value))
-            key_point.interpolation = 'LINEAR'#"BEZIER"
+            key_point.interpolation = 'LINEAR'#"BEZIER" # TODO add back after I figure out how to transform the handle
             
             deltaTime = 0.0 if lastKey is None else key.time-lastKey.time
+            # TODO: This thing is called "tangent" in bmdview, and it looks good as a bezier handle, but I can't be sure of the actual interpolation algorithm they use.
             key_point.handle_left = Vector((-1.0, -key.tangent))*deltaTime+key_point.co
             
             key_point.handle_left_type = 'ALIGNED'
