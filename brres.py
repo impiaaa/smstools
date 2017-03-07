@@ -1,7 +1,20 @@
 import sys
 from struct import unpack
-from common import *
-from texture import *
+from common import BFile, Section
+from texture import readTextureData, decodeTexturePIL
+
+class Tex0(Section):
+    header = struct.Struct('>L16xHH32x')
+    
+    def read(self, fin, start, size):
+        self.mipmapCount, self.width, self.height = self.header.unpack(fin.read(0x38))
+        self.data = readTextureData(fin, self.format, self.width, self.height, mipmapCount=self.mipmapCount)
+    
+    def export(self):
+        images = decodeTexturePIL(self.data, self.format, self.width, self.height, mipmapCount=self.mipmapCount)
+        for arrayIdx, mips in enumerate(images):
+            for mipIdx, im in enumerate(mips):
+                im.save(name+str(arrayIdx)+'.png')
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <brres>\n"%sys.argv[0])
@@ -19,7 +32,7 @@ for chunkNumber in xrange(chunkCount-1):
         continue
     print hex(fin.tell()), chunk, hex(chunksize)
     if chunk == 'TEX0':
-        mipmapCount, width, height = unpack('>L16xHH32x', fin.read(0x38))
+        
         mipData = [None]*mipmapCount
         mipwidth = width
         mipheight = height
