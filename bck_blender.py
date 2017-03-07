@@ -208,16 +208,16 @@ def importFile(filepath, context):
         bone = arm.bones[i]
 
         rest = bone.matrix_local
-        if "_bmd_rest_scale" in bone:
+        if '_bmd_rest_scale' in bone:
             s = Matrix()
-            scale = tuple(map(float, bone["_bmd_rest_scale"].split(',')))
+            scale = tuple(map(float, bone['_bmd_rest_scale'].split(',')))
             s[0][0] = scale[0]
             s[1][1] = scale[1]
             s[2][2] = scale[2]
             rest = rest*s
         if bone.parent:
             rest = bone.parent.matrix_local.inverted()*rest
-        #rest = Matrix(eval(bone["_bmd_rest"]))
+        #rest = Matrix(eval(bone['_bmd_rest']))
         
         animList = (anim.scalesX, anim.scalesY, anim.scalesZ,
                     anim.rotationsX, anim.rotationsY, anim.rotationsZ,
@@ -271,7 +271,7 @@ def importFile(filepath, context):
                 mat = rest.inverted()*mat
                 
                 newLoc, newRot, newScale = mat.decompose()
-                newRot = newRot.to_euler("XYZ") if lastRot is None else newRot.to_euler("XYZ", lastRot)
+                newRot = newRot.to_euler('XYZ') if lastRot is None else newRot.to_euler('XYZ', lastRot)
                 lastRot = newRot
                 newData = newScale[:]+newRot[:]+newLoc[:]
                 
@@ -283,9 +283,9 @@ def importFile(filepath, context):
 
         bone_path = 'pose.bones["%s"]' % bone.name
         
-        doCurve(action, bone_path+".scale", bck.ank1.loopFlags, newAnim[0:3])
-        doCurve(action, bone_path+".rotation_euler", bck.ank1.loopFlags, newAnim[3:6])
-        doCurve(action, bone_path+".location", bck.ank1.loopFlags, newAnim[6:9])
+        doCurve(action, bone_path+'.scale', bck.ank1.loopFlags, newAnim[0:3])
+        doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopFlags, newAnim[3:6])
+        doCurve(action, bone_path+'.location', bck.ank1.loopFlags, newAnim[6:9])
     
     context.scene.frame_start = 0.0
     context.scene.frame_end = bck.ank1.animationLength
