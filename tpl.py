@@ -20,7 +20,7 @@ while fin.tell() < endfile:
     images = decodeTexturePIL(data, format, width, height, 0, None)
     images[0][0].save(os.path.splitext(sys.argv[1])[0]+str(i)+'.png')
     fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
-    decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+    decodeTextureDDS(fout, data, format, width, height, 0, None)
     fout.close()
     i += 1
 
