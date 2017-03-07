@@ -1,5 +1,6 @@
 /*
  * wwdumpsnd 0.4 by hcs
+ * some stuff added by impiaaa
  * dump audio from Wind Waker or Super Mario Sunshine
  * needs JaiInit.aaf or msound.aaf, and *.aw in current directory, Banks/, or
  * Waves/
