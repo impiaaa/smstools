@@ -61,7 +61,7 @@ class Ank1(Section):
             self.anims[i] = anim
 
 class Bck(BFile):
-    sectionHandlers = {b"ANK1": Ank1}
+    sectionHandlers = {b'ANK1': Ank1}
 
 class AnimatedJoint(Readable):
     def read(self, f):
@@ -138,27 +138,27 @@ def doCurve(action, data_path, loopFlags, data):
     for i, subData in enumerate(data):
         curve = action.fcurves.new(data_path=data_path, index=i)
         if loopFlags == 2:
-            mod = curve.modifiers.new("CYCLES")
+            mod = curve.modifiers.new('CYCLES')
         curve.keyframe_points.add(len(subData))
         lastKey = lastKeyPoint = None
         for key_point, key in zip(curve.keyframe_points, subData):
             key_point.co = Vector((key.time, key.value))
-            key_point.interpolation = "LINEAR"#"BEZIER"
+            key_point.interpolation = 'LINEAR'#"BEZIER"
             
             deltaTime = 0.0 if lastKey is None else key.time-lastKey.time
             key_point.handle_left = Vector((-1.0, -key.tangent))*deltaTime+key_point.co
             
-            key_point.handle_left_type = "ALIGNED"
+            key_point.handle_left_type = 'ALIGNED'
 
             if lastKeyPoint is not None:
                 lastKeyPoint.handle_right = Vector((1.0, lastKey.tangent))*deltaTime+lastKeyPoint.co
-                lastKeyPoint.handle_right_type = "ALIGNED"
+                lastKeyPoint.handle_right_type = 'ALIGNED'
             
             lastKeyPoint = key_point
             lastKey = key
         
         lastKeyPoint.handle_right = lastKeyPoint.co
-        lastKeyPoint.handle_right_type = "ALIGNED"
+        lastKeyPoint.handle_right_type = 'ALIGNED'
 
 def animateSingle(time, keyList):
     timeList = [key.time for key in keyList]
