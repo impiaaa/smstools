@@ -314,7 +314,7 @@ class ImportBCK(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
-    self.layout.operator(ImportBCK.bl_idname, text="Import J3D BCK (*.bck)")
+    self.layout.operator(ImportBCK.bl_idname, text="Import J3D BCK animation (*.bck)")
 
 
 def register():
@@ -328,9 +328,7 @@ def unregister():
 
 
 if __name__ == "__main__":
-    #register()
+    register()
 
     # test call
     #bpy.ops.import_anim.bck('INVOKE_DEFAULT')
-    
-    importFile('/Volumes/ExtraData/sms/scene/bianco0/butterfly/butterfly_fly.bck', bpy.context)
