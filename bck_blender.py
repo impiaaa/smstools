@@ -209,12 +209,19 @@ def importFile(filepath, context):
         
         # OKAY SO
         # Here's a problem.
-        # BMD/BCK store bone transformation relative to parent.
+        # BMD stores bone transformation relative to parent.
+        # BCK stores pose transformation "absolute".
         # Blender does the same thing... for edit bones.
         # Pose bones have transformation relative to their *rest pose* (i.e., the edit bone)
         # So, we can just divide it out. Simple, right?
         # ha.
-        # Pos/loc/rot are keyed separately
+        # Pos/rot/scale are keyed separately, so we can't just compose matrix -> re-transform -> add key.
+        # Pos/rot are inter-dependent, so we can't just compose a matrix out of one or the other. # XXX scratch that seems to work fine
+        # Pos/rot/scale keys can all be on separate frames, so we can't just grab the nearest one and compose a matrix from that.
+        # Even then, Blender can't key by full matrix (that'd be dumb anyway), so the full matrix has to be decomposed.
+        # So the strategy is:
+        # for each keyframe:
+        #   
 
         rest = bone.matrix_local
         if '_bmd_rest_scale' in bone:
