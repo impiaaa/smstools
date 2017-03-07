@@ -17,7 +17,7 @@ class Tex0(Section):
                 im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
-    align = True
+    aligned = True
     header = Struct('>8sL2xH4xL')
     sectionHandlers = {b'TEX0': Tex0}
     def readHeader(self, fin):
