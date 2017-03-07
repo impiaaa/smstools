@@ -1181,12 +1181,12 @@ def importSkeleton(bmd, arm):
     return arm
 
 bl_info = {
-    "name": "Import J3D BMD/BDL",
+    "name": "Import BMD/BDL",
     "author": "Spencer Alves",
     "version": (1,0,0),
     "blender": (2, 6, 2),
     "location": "Import",
-    "description": "Import BMD/BDL",
+    "description": "Import J3D BMD/BDL model",
     "warning": "",
     "wiki_url": "",
     "tracker_url": "",
