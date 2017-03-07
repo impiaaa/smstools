@@ -1206,7 +1206,7 @@ def importFile(filepath):
     bmd.read(fin)
     fin.close()
 
-    print("Importing", filepath, "armature")
+    print("Importing armature")
     mesh = bpy.data.meshes.new(bmd.name)
     meshObject = bpy.data.objects.new(name=mesh.name+"_mesh", object_data=mesh)
     arm = bpy.data.armatures.new(name=bmd.name)
@@ -1261,7 +1261,7 @@ def importFile(filepath):
                     m[0][0] = size.x
                     m[1][1] = size.y
                     m[2][2] = size.z
-                    for v in bmesh.ops.create_cube(bm, size=1.0, matrix=p*m, calc_uvs=False)["verts"]:
+                    for v in bmesh.ops.create_cube(bm, size=1.0, matrix=p*m, calc_uvs=False)['verts']:
                         v[layer][sg.index] = 1.0
 
             for node in sg.children:
@@ -1271,7 +1271,7 @@ def importFile(filepath):
         bm.verts.layers.deform.verify()
         meshObject.draw_type = 'WIRE'
         meshObject.parent = armObject
-        armMod = meshObject.modifiers.new("Armature", "ARMATURE")
+        armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
         armMod.object = armObject
         bm.to_mesh(mesh)
         bm.free()
