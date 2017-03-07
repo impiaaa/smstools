@@ -1,5 +1,17 @@
 import bpy, struct, os, bmesh
 
+bl_info = {
+    "name": "Import COL",
+    "author": "Spencer Alves",
+    "version": (1,0,0),
+    "blender": (2, 6, 2),
+    "location": "Import",
+    "description": "Import J3D COL collision data",
+    "warning": "",
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Import-Export"}
+
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper
@@ -67,7 +79,7 @@ class ImportCOL(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
-    self.layout.operator(ImportCOL.bl_idname, text="Import COL")
+    self.layout.operator(ImportCOL.bl_idname, text="Import J3D COL collision data (*.col)")
 
 
 def register():
@@ -85,4 +97,3 @@ if __name__ == "__main__":
 
     # test call
     #bpy.ops.import_scene.bmd('INVOKE_DEFAULT')
-    #importFile("/Users/spenceralves/Desktop/sms/scene/bianco2/map/map.col")
