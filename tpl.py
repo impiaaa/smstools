@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from texture import *
 from struct import unpack
 
