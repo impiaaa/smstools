@@ -1,3 +1,6 @@
+# THIS IS A MESS
+# rewrite it pls
+
 from struct import unpack
 import sys
 from warnings import warn
