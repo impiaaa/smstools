@@ -3,15 +3,7 @@
 
 import sys
 from struct import unpack, Struct
-
-def readString(fin):
-    s = ''
-    while True:
-        c = fin.read(1)
-        if c == '\0': break
-        elif c == '': raise Exception("EOF found while reading string")
-        s += c
-    return s.decode('shift-jis')
+from common import getString
 
 def printHex(s):
     for i in range(0, len(s), 4):
