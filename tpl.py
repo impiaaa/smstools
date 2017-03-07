@@ -19,7 +19,7 @@ while fin.tell() < endfile:
     data = readTextureData(fin, format, width, height)
     images = decodeTexturePIL(data, format, width, height, 0, None)
     images[0][0].save(os.path.splitext(sys.argv[1])[0]+str(i)+'.png')
-    fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
+    fout = open(os.path.splitext(sys.argv[1])[0]+str(i)+".dds", 'wb')
     decodeTextureDDS(fout, data, format, width, height, 0, None)
     fout.close()
     i += 1
