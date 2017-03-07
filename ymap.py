@@ -2,11 +2,7 @@
 
 from struct import unpack
 import sys, os
-try:
-	from PIL import Image
-except ImportError:
-	sys.stderr.write("Requires PIL or Pillow\n")
-	raise
+from texture import GX_TF_I8, readTextureData, decodeTexturePIL
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s ymap.ymp\n"%sys.argv[0])
@@ -41,15 +37,10 @@ for i in range(nRegions):
     lastRegionHeader = fin.tell()
     
     fin.seek(dataOffset)
-    im = Image.new('L', (width, height))
-    for y in range(0, height, 4):
-        for x in range(0, width, 8):
-            for dy in range(4):
-                for dx in range(8):
-                    c = ord(fin.read(1))
-                    if x + dx < width and y + dy < height:
-                        im.putpixel((x+dx, y+dy), c)
-    im.save(os.path.splitext(sys.argv[1])[0]+"-%d-%X.png"%(i, unk3))
+    data = readTextureData(fin, GX_TF_I8, width, height)
+    
+    images = decodeTexturePIL(data, GX_TF_I8, width, height, 0, None)
+    images[0][0].save(os.path.splitext(sys.argv[1])[0]+"-%d-%X.png"%(i, unk3))
     
     fin.seek(lastRegionHeader)
 
