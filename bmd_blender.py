@@ -248,18 +248,18 @@ class ZMode(Readable):
     def __repr__(self):
         return "ZMode enable=%x, func=%x, updateEnable=%x"%(self.enable, self.func, self.updateEnable)
 
-srcregs = ['CPREV', 'APREV', 'C0', 'A0', 'C1', 'A1', 'C2', 'A2', \
-'TEXC', 'TEXA', 'RASC', 'RASA', 'ONE', 'HALF', 'KONST', 'ZERO']
-ops = ['ADD', 'SUB', None, None, None, None, None, None, \
-'COMP_R8_GT', 'COMP_R8_EQ', \
-'COMP_GR16_GT', 'COMP_GR16_EQ', \
-'COMP_BGR24_GT', 'COMP_BGR24_EQ', \
-'COMP_RGB8_GT', 'COMP_RGB8_EQ']
+srcregs = ["CPREV", "APREV", "C0", "A0", "C1", "A1", "C2", "A2", \
+"TEXC", "TEXA", "RASC", "RASA", "ONE", "HALF", "KONST", "ZERO"]
+ops = ["ADD", "SUB", None, None, None, None, None, None, \
+"COMP_R8_GT", "COMP_R8_EQ", \
+"COMP_GR16_GT", "COMP_GR16_EQ", \
+"COMP_BGR24_GT", "COMP_BGR24_EQ", \
+"COMP_RGB8_GT", "COMP_RGB8_EQ"]
 biases = ["ZERO", "ADDHALF", "SUBHALF"]
-scales = ['SCALE_1', 'SCALE_2', 'SCALE_4', 'DIVIDE_2']
-destregs = ['PREV', 'REG0', 'REG1', 'REG2']
+scales = ["SCALE_1", "SCALE_2", "SCALE_4", "DIVIDE_2"]
+destregs = ["PREV", "REG0", "REG1", "REG2"]
 def fmtsrcreg(x): return safeindex(srcregs, x)
-def fmtsrcregs(l): return '('+(', '.join(tuple(map(fmtsrcreg, l))))+')'
+def fmtsrcregs(l): return "("+(", ".join(tuple(map(fmtsrcreg, l))))+")"
 class TevStageInfo(Readable):
     colorInStruct = Struct('>x4B')
     colorInfoStruct = Struct('>BBBBB')
@@ -609,7 +609,7 @@ class Tex1(Section):
                 textureNames = []
                 textureHeaderOffset = 0
             else:
-                textureNames = [name.decode('shift-jis').strip('\0')]
+                textureNames = [name.decode('shift-jis').strip("\0")]
                 textureHeaderOffset = 0x20
         else:
             textureHeaderOffset, stringTableOffset = self.headerOffsets.unpack(fin.read(self.headerOffsets.size))
