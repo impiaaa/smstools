@@ -15,6 +15,10 @@ class Tex0(Section):
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
                 im.save(name+str(arrayIdx)+'.png')
+        
+        fout = open(name+".dds", 'wb')
+        decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+        fout.close()
 
 class BRres(BFile):
     aligned = True
