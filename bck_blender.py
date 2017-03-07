@@ -328,6 +328,7 @@ def importFile(filepath, context):
         doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopFlags, newAnim[3:6])
         doCurve(action, bone_path+'.location', bck.ank1.loopFlags, newAnim[6:9])
     
+    # TODO: Shouldn't affect the global scene
     context.scene.frame_start = 0.0
     context.scene.frame_end = bck.ank1.animationLength
     context.scene.render.fps = 60
