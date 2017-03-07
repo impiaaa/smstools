@@ -1139,6 +1139,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
     for i, colorLayer in enumerate(bmd.vtx1.colors):
         if colorLayer is not None:
             bm.loops.layers.color.new(str(i))
+            # Blender doesn't support vertex color alphas :(
             if len(colorLayer[0]) == 4: bm.loops.layers.color.new(str(i)+'a')
     for i, texLayer in enumerate(bmd.vtx1.texCoords):
         if texLayer is not None:
@@ -1213,7 +1214,7 @@ def importFile(filepath):
     meshObject.parent = armObject
     armObject.scale = Vector((1,1,1))/64
     armObject.rotation_euler = Vector((math.pi/2,0,0))
-    armMod = meshObject.modifiers.new("Armature", "ARMATURE")
+    armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
     armMod.object = armObject
     bpy.context.scene.objects.link(meshObject)
     bpy.context.scene.objects.link(armObject)
