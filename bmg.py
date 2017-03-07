@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-from struct import unpack, pack, Struct
-from warnings import warn
-from array import array
+from struct import unpack, Struct
 import os.path
 from common import Section, BFile
 
