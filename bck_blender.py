@@ -83,29 +83,6 @@ class AnimIndex(Readable):
 class Key(object): pass
 class Animation(object): pass
 
-bl_info = {
-    "name": "Import J3D BCK",
-    "author": "Spencer Alves",
-    "version": (1,0,0),
-    "blender": (2, 6, 2),
-    "location": "Import",
-    "description": "Import J3D BCK",
-    "warning": "",
-    "wiki_url": "",
-    "tracker_url": "",
-    "category": "Import-Export"}
-
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
-from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
-from bpy.types import Operator
-import bpy
-import os
-from mathutils import *
-from bisect import bisect
-import mathutils.geometry
-
 def readComp(src, index):
     dst = [None]*index.count
     #violated by biawatermill01.bck
@@ -133,6 +110,29 @@ def readComp(src, index):
         dst.sort(key=lambda a: a.time)
     
     return dst
+
+bl_info = {
+    "name": "Import J3D BCK",
+    "author": "Spencer Alves",
+    "version": (1,0,0),
+    "blender": (2, 6, 2),
+    "location": "Import",
+    "description": "Import J3D BCK",
+    "warning": "",
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Import-Export"}
+
+# ImportHelper is a helper class, defines filename and
+# invoke() function which calls the file selector.
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.types import Operator
+import bpy
+import os
+from mathutils import *
+from bisect import bisect
+import mathutils.geometry
 
 def doCurve(action, data_path, loopFlags, data):
     for i, subData in enumerate(data):
@@ -206,6 +206,15 @@ def importFile(filepath, context):
     
     for i, anim in enumerate(bck.ank1.anims):
         bone = arm.bones[i]
+        
+        # OKAY SO
+        # Here's a problem.
+        # BMD/BCK store bone transformation relative to parent.
+        # Blender does the same thing... for edit bones.
+        # Pose bones have transformation relative to their *rest pose* (i.e., the edit bone)
+        # So, we can just divide it out. Simple, right?
+        # ha.
+        # Pos/loc/rot are keyed separately
 
         rest = bone.matrix_local
         if '_bmd_rest_scale' in bone:
