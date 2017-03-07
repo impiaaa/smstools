@@ -1,3 +1,5 @@
+# Common functions for (chunked) Mario/Zelda data files
+
 import sys
 import struct
 import warnings
