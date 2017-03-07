@@ -1,5 +1,7 @@
+#!/usr/bin/env python
+
 import sys, os
-from struct import unpack, pack
+from struct import unpack
 from texture import *
 
 if len(sys.argv) != 2:
