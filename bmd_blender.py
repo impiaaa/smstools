@@ -984,6 +984,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
         btex.filter_type = 'BOX'
         btex.use_mipmap = texture.magFilter >= 2
         btex.use_mipmap_gauss = texture.magFilter >= 4
+        # look for a texture exported from bmdview
         imageName = filePath+"_tex"+texture.name+".tga"
         if texture.name in bpy.data.images:
             btex.image = bpy.data.images[texture.name]
@@ -1034,7 +1035,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
         bi = bmd.mat3.blendInfos[mat.blendIndex]
         if bi.blendMode in (0,1):
             if bi.dstFactor == 1:
-                bmat.game_settings.alpha_blend = "ADD"
+                bmat.game_settings.alpha_blend = 'ADD'
 
         matTexures = [None]*8
         for j, stage in enumerate(mat.texStages):
@@ -1058,14 +1059,14 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         warn("writeTexGen() type %d: unsupported matrix 0x%x", texGen.texGenType, texGen.matrix)
 
                     if texGen.texGenSrc >= 4 and texGen.texGenSrc <= 11:
-                        slot.texture_coords = "UV"
+                        slot.texture_coords = 'UV'
                         slot.uv_layer = str(texGen.texGenSrc - 4)
                     elif texGen.texGenSrc == 0:
-                        slot.texture_coords = "GLOBAL"
+                        slot.texture_coords = 'GLOBAL'
                     elif texGen.texGenSrc == 1:
-                        slot.texture_coords = "NORMAL"
+                        slot.texture_coords = 'NORMAL'
                     elif texGen.texGenSrc == 3:
-                        slot.texture_coords = "TANGENT"
+                        slot.texture_coords = 'TANGENT'
                     else:
                         warn("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
                     
@@ -1081,7 +1082,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     if texGen.texGenSrc != 0x13:
                         warn("writeTexGen() type 0xa: unexpected src 0x%x", texGen.texGenSrc)
                     # TODO
-                    slot.texture_coords = "NORMAL"
+                    slot.texture_coords = 'NORMAL'
             
             if order.texMap < 8: slot.texture = matTexures[order.texMap]
             
