@@ -220,6 +220,7 @@ def importFile(filepath, context):
         # ha.
         # Pos/rot/scale are keyed separately, so we can't just compose matrix -> re-transform -> add key.
         # Pos/rot are inter-dependent, so we can't just compose a matrix out of one or the other. # XXX scratch that seems to work fine
+        # Individual components of pos/rot/scale are inter-dependent, too
         # Pos/rot/scale keys can all be on separate frames, so we can't just grab the nearest one and compose a matrix from that.
         # Even then, Blender can't key by full matrix (that'd be dumb anyway), so the full matrix has to be decomposed.
         # So the strategy is:
@@ -292,6 +293,7 @@ def importFile(filepath, context):
                     rotation = animate(key.time, animList[3:6])
                     mat = Euler(rotation).to_matrix().to_4x4()
                 else:
+                    
                     #v = Vector()
                     #v[axisIndex] = key.value
                     #mat = Matrix.Translation(v).to_4x4()
