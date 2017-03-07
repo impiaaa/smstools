@@ -1,6 +1,5 @@
 import sys, os
 from struct import unpack, pack
-from texture import *
 
 IMAGE_FORMAT_RGBA8888 = 0,
 IMAGE_FORMAT_ABGR8888 = 1
@@ -110,30 +109,17 @@ if wrapS == 0: flags |= 0x04
 if wrapT == 0: flags |= 0x08
 if magFilter == 0: flags |= 0x01
 
-palette = None
 if format in (8, 9, 10):
     # read palette
     fin.seek(paletteOffset)
-    palette = readPaletteData(fin, paletteFormat, paletteNumEntries)
-    if 0:
-        palette = [None]*paletteNumEntries
-        for i in xrange(paletteNumEntries):
-            if paletteFormat == 2:
-                palette[i] = unpackRGB5A3(unpack('>H', fin.read(2))[0])
-            else:
-                palette[i] = unpack('>H', fin.read(2))[0]
+    palette = [None]*paletteNumEntries
+    for i in xrange(paletteNumEntries):
+        if paletteFormat == 2:
+            palette[i] = unpackRGB5A3(unpack('>H', fin.read(2))[0])
+        else:
+            palette[i] = unpack('>H', fin.read(2))[0]
 
 fin.seek(dataOffset)
-data = readTextureData(fin, format, width, height, mipmapCount)
-fin.close()
-images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-for arrayIdx, mips in enumerate(images):
-    for mipIdx, im in enumerate(mips):
-        im.save(os.path.splitext(sys.argv[1])[0]+str(arrayIdx)+'.png')
-fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
-decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
-fout.close()
-exit()
 
 mipData = [None]*mipmapCount
 mipwidth = width
