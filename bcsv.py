@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 # real editor here http://kuribo64.net/board/thread.php?id=126&page=2
 # spktable.bct and metable.bmt look similar; this code supports reading strings from them
 
