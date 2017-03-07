@@ -2,6 +2,10 @@ import sys, os
 from struct import unpack, pack
 from texture import *
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <bti>\n"%sys.argv[0])
+    exit(1)
+
 fin = open(sys.argv[1], 'rb')
 
 format, width, height, wrapS, wrapT, paletteFormat, paletteNumEntries, paletteOffset, minFilter, magFilter, mipmapCount, dataOffset = unpack('>BxHHBBxBHL4xBB2xBx2xL', fin.read(32))
@@ -19,9 +23,7 @@ fin.seek(dataOffset)
 data = readTextureData(fin, format, width, height, mipmapCount)
 fin.close()
 images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-for arrayIdx, mips in enumerate(images):
-    for mipIdx, im in enumerate(mips):
-        im.save(os.path.splitext(sys.argv[1])[0]+str(arrayIdx)+'.png')
+im.ages[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
 fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
 decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
 fout.close()
