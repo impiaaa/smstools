@@ -1,5 +1,5 @@
 import sys
-from struct import unpack
+from struct import Struct
 from common import BFile, Section
 from texture import readTextureData, decodeTexturePIL
 
@@ -17,15 +17,20 @@ class Tex0(Section):
                 im.save(name+str(arrayIdx)+'.png')
 
 class BFont(BFile):
+    align = True
+    header = Struct('>8sL2xH4xL')
     sectionHandlers = {b'TEX0': Tex0}
+    def readHeader(self, fin):
+        self.signature, self.fileLength, self.chunkCount, extraHeaderSize = self.header.unpack(fin.read(0x18))
+        fin.seek(extraHeaderSize, 1)
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <brres>\n"%sys.argv[0])
     exit(1)
 
 fin = open(sys.argv[1], 'rb')
-signature, fileLength, chunkCount, extraHeaderSize = unpack('>8sL2xH4xL', fin.read(0x18))
-fin.seek(extraHeaderSize, 1)
+
+
 
 for chunkNumber in xrange(chunkCount-1):
     chunkstart = fin.tell()
