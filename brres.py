@@ -10,11 +10,14 @@ class Tex0(Section):
         self.mipmapCount, self.width, self.height = self.header.unpack(fin.read(0x38))
         self.data = readTextureData(fin, self.format, self.width, self.height, mipmapCount=self.mipmapCount)
     
-    def export(self):
+    def export(self, name):
         images = decodeTexturePIL(self.data, self.format, self.width, self.height, mipmapCount=self.mipmapCount)
         for arrayIdx, mips in enumerate(images):
             for mipIdx, im in enumerate(mips):
                 im.save(name+str(arrayIdx)+'.png')
+
+class BFont(BFile):
+    sectionHandlers = {b'TEX0': Tex0}
 
 if len(sys.argv) != 2:
     sys.stderr.write("Usage: %s <brres>\n"%sys.argv[0])
