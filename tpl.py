@@ -17,7 +17,7 @@ while fin.tell() < endfile:
     print(format, width, height)
     fin.seek(0x20,1)
     data = readTextureData(fin, format, width, height)
-    images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
+    images = decodeTexturePIL(data, format, width, height, 0, None)
     images[0][0].save(os.path.splitext(sys.argv[1])[0]+str(i)+'.png')
     i += 1
 
