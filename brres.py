@@ -16,7 +16,7 @@ class Tex0(Section):
             for mipIdx, im in enumerate(mips):
                 im.save(name+str(arrayIdx)+'.png')
 
-class BFont(BFile):
+class BRres(BFile):
     aligned = True
     header = Struct('>8sL2xH4xL')
     sectionHandlers = {b'TEX0': Tex0}
@@ -29,8 +29,10 @@ if len(sys.argv) != 2:
     exit(1)
 
 fin = open(sys.argv[1], 'rb')
-
-
+brres = BRres()
+brres.read(fin)
+fin.close()
+brres.tex0.export(os.path.splitext(sys.argv[1])[0])
 
 for chunkNumber in xrange(chunkCount-1):
     chunkstart = fin.tell()
