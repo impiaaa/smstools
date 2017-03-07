@@ -104,19 +104,19 @@ class SceneGraph(object):
         self.type = 0
         self.index = 0
     def to_dict(self, bmd=None):
-        d = {"children": [c.to_dict(bmd) for c in self.children],
-             "type": self.type,
-             "index": self.index}
+        d = {'children': [c.to_dict(bmd) for c in self.children],
+             'type': self.type,
+             'index': self.index}
         if bmd is not None:
             if self.type == 0x10:
                 # joint
-                d["frame"] = bmd.jnt1.frames[self.index]
+                d['frame'] = bmd.jnt1.frames[self.index]
             elif self.type == 0x11:
                 # material
-                d["material"] = bmd.mat3.materials[bmd.mat3.indexToMatIndex[self.index]]
+                d['material'] = bmd.mat3.materials[bmd.mat3.indexToMatIndex[self.index]]
             elif self.type == 0x12:
                 # shape
-                d["batch"] = bmd.shp1.batches[self.index]
+                d['batch'] = bmd.shp1.batches[self.index]
         return d
 
 def buildSceneGraph(inf1, sg, j=0):
