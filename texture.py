@@ -1,3 +1,5 @@
+# Common functions for reading, decoding, reformatting, and exporting GameCube TEV/Flipper/GX texture data.
+
 import struct
 from array import array
 import sys
@@ -123,6 +125,7 @@ def fixS3TC1Block(data):
         s3tc1ReverseByte(data[7])
     ]
 
+# Decode a block (format-dependent size) of texture into pixels
 def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, palette=None):
     if format == GX_TF_I4:
         for y in range(yoff, yoff+8):
@@ -242,6 +245,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
         raise ValueError("Unsupported format %d"%format)
     return dataidx
 
+# Just transform the pixel data from blocked to linear, so we can put it in a PC format
 def deblock(format, data, width, height):
     dest = array(data.typecode, [0]*int(width*height*formatBytesPerPixel[format]))
     dataidx = 0
