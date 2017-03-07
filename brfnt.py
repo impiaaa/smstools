@@ -17,8 +17,7 @@ class Tglp(Section):
     def export(self, fname):
         images = decodeTexturePIL(self.data, self.format, self.width, self.height, arrayCount=self.count)
         for arrayIdx, mips in enumerate(images):
-            for mipIdx, im in enumerate(mips):
-                im.save(fname+str(arrayIdx)+'.png')
+            mips[0].save(fname+str(arrayIdx)+'.png')
 
 class Cwdh(Section):
     header = Struct('>I4x3x')
