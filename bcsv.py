@@ -71,8 +71,7 @@ for i in range(count):
             if val == 0xFFFFFFFF:
                 val = None
             else:
-                fin.seek(val+strTableOffset)
-                val = readString(fin)
+                val = getString(val+strTableOffset, fin)
         elif fieldType in (1, 7):
             val = None
         print repr(val)+",",
