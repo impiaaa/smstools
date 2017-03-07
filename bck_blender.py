@@ -220,10 +220,20 @@ def importFile(filepath, context):
         # Pos/rot/scale keys can all be on separate frames, so we can't just grab the nearest one and compose a matrix from that.
         # Even then, Blender can't key by full matrix (that'd be dumb anyway), so the full matrix has to be decomposed.
         # So the strategy is:
-        # for each keyframe:
-        #   
+        # for each bone:
+        #   for each component keyframe:
+        #     figure out what data it's driving
+        #     evaluate the animation for that data at the keyframe time
+        #     make a matrix out of it
+        #     divide out the matrix
+        #     decompose the matrix (and pray that it's somewhat sane)
+        #     index into the decomposed to find the component this keyframe is for
+        #     make a key with the decomposed component at the current time
+        # then, take that NEW list of re-jiggered keyframes, and add them to the animation.
 
+        # get the bone rest pose from the edit bone
         rest = bone.matrix_local
+        # edit bone doesn't have a scale, so it grab it from the imported BMD, if there was one
         if '_bmd_rest_scale' in bone:
             s = Matrix()
             scale = tuple(map(float, bone['_bmd_rest_scale'].split(',')))
@@ -231,6 +241,7 @@ def importFile(filepath, context):
             s[1][1] = scale[1]
             s[2][2] = scale[2]
             rest = rest*s
+        # make modelspace
         if bone.parent:
             rest = bone.parent.matrix_local.inverted()*rest
         #rest = Matrix(eval(bone['_bmd_rest']))
