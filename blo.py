@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os
-from struct import unpack, Struct, error as StructError
-from warnings import warn
+from struct import unpack, Struct
 from common import Section, BFile
 
 class Bgn1(Section): pass
