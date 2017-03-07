@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # Converts Zelda/Mario sequence files (*.bms, *.com, yaz0 *.szs) to MIDI
 # Requires python-midi (https://github.com/avsaj/python-midi)
+# It's quite a mess, but fairly capable. I need to decide if I should rewrite/refactor it or port/contribute to the other one
 
 # broken in Windows Media Player: k_manma, t_casino_fanf, t_chuboss, t_delfino, t_event, t_mechakuppa_, t_pinnapaco, t_select, t_shilena
 # broken in MuseScore: t_delfino, t_event, t_shilena
