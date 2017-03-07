@@ -762,15 +762,15 @@ class Mdl3Dummy(Section):
 
 class BModel(BFile):
     sectionHandlers = {
-        b"INF1": Inf1,
-        b"VTX1": Vtx1,
-        b"JNT1": Jnt1,
-        b"SHP1": Shp1,
-        b"MAT3": Mat3,
-        b"TEX1": Tex1,
-        b"EVP1": Evp1,
-        b"DRW1": Drw1,
-        b"MDL3": Mdl3Dummy
+        b'INF1': Inf1,
+        b'VTX1': Vtx1,
+        b'JNT1': Jnt1,
+        b'SHP1': Shp1,
+        b'MAT3': Mat3,
+        b'TEX1': Tex1,
+        b'EVP1': Evp1,
+        b'DRW1': Drw1,
+        b'MDL3': Mdl3Dummy
     }
     
     def readChunks(self, fin):
