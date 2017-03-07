@@ -274,6 +274,7 @@ def importFile(filepath, context):
                 #s[2][2] = scale[2]
                 #mat = t*r*s
                 if animDataIndex < 3:
+                    # can't just use this component
                     #mat = Matrix()
                     #mat[axisIndex][axisIndex] = key.value
                     #print("XYZ"[axisIndex], "scale =", key.value)
