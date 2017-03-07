@@ -1293,7 +1293,7 @@ class ImportBMD(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
-    self.layout.operator(ImportBMD.bl_idname, text="Import J3D BMD/BDL (*.bmd,*.bdl)")
+    self.layout.operator(ImportBMD.bl_idname, text="Import J3D BMD/BDL model (*.bmd,*.bdl)")
 
 
 def register():
@@ -1311,4 +1311,3 @@ if __name__ == "__main__":
 
     # test call
     #bpy.ops.import_scene.bmd('INVOKE_DEFAULT')
-    #importFile('/media/spencer/ExtraData/sms/scene/bianco0/telesa/modoki.bmd')
