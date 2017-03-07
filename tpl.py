@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys, os
 from texture import *
 from struct import unpack
