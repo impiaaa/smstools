@@ -1,4 +1,4 @@
-# Common functions for (chunked) Mario/Zelda data files
+# Common functions and templates for (chunked) Mario/Zelda data files
 
 import sys
 import struct
