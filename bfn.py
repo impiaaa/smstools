@@ -3,6 +3,7 @@
 import sys, struct
 from common import BFile, Section
 from texture import readTextureData, decodeTexturePIL, calcTextureSize
+import os.path
 
 class Gly1(Section):
     header = struct.Struct('>H4xHH')
@@ -34,4 +35,4 @@ fin = open(sys.argv[1], 'rb')
 bfn = BFont()
 bfn.read(fin)
 fin.close()
-bfn.gly1.export(sys.argv[1])
+bfn.gly1.export(os.path.splitext(sys.argv[1])[0])
