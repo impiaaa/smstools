@@ -174,7 +174,7 @@ def animateSingle(time, keyList):
         keyBefore = keyList[i-1]
         keyAfter = keyList[i]
         # TODO: Use bezier animation to figure out the current state.
-        # Might be overkill, so linear is good enough for now.
+        # Might be overkill just to fix the transformation, so linear is good enough for now.
         return keyBefore.value+(keyAfter.value-keyBefore.value)*(time-keyBefore.time)/(keyAfter.time-keyBefore.time)
 
 def animate(time, keyListSet):
@@ -190,7 +190,7 @@ def importFile(filepath, context):
 
     armObj = context.active_object
     assert armObj is not None
-    assert armObj.type == "ARMATURE"
+    assert armObj.type == 'ARMATURE'
     if len(armObj.data.bones) != len(bck.ank1.anims):
         context.window_manager.popup_menu(lambda self, context: self.layout.label("%d bones required (given %d)"%(len(bck.ank1.anims), len(armObj.data.bones))),
             title="Incompatible armature", icon='ERROR')
@@ -313,8 +313,9 @@ def importFile(filepath, context):
                 newAnimData[animDataSubIndex] = newKey
                 newKey.time = key.time
                 newKey.value = newData[animDataIndex]
-                # Downside of this whole 
-                newKey.tangent = key.tangent if key.value == 0 else key.tangent*newKey.value/key.value # TODO not sure about this
+                # Downside of this whole process is that there's no direct analog to transform the bezier handles.
+                # TODO: Could probably get a good estimate by adding the tangent to the data, re-do the matrix undo, and subtract the undid data
+                newKey.tangent = key.tangent if key.value == 0 else key.tangent*newKey.value/key.value
 
         bone_path = 'pose.bones["%s"]' % bone.name
         
