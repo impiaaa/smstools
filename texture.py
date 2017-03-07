@@ -1,4 +1,4 @@
-# Common functions for reading, decoding, reformatting, and exporting GameCube TEV/Flipper/GX texture data.
+# Common functions for reading, decoding, reformatting, and exporting block-based GameCube TEV/Flipper/GX texture data.
 
 import struct
 from array import array
