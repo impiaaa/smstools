@@ -13,7 +13,7 @@ class Tex0(Section):
     def export(self, name):
         images = decodeTexturePIL(self.data, self.format, self.width, self.height, mipmapCount=self.mipmapCount)
         for arrayIdx, mips in enumerate(images):
-            mips[0].save(name+str(arrayIdx)+'.png')
+            mips[0].save(name+str(arrayIdx)+".png")
         
         fout = open(name+".dds", 'wb')
         decodeTextureDDS(fout, self.data, self.format, self.width, self.height, 0, None, self.mipmapCount)
