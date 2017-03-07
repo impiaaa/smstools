@@ -246,6 +246,7 @@ def importFile(filepath, context):
             rest = bone.parent.matrix_local.inverted()*rest
         #rest = Matrix(eval(bone['_bmd_rest']))
         
+        # big table of transformation components so that we can index them easily
         animList = (anim.scalesX, anim.scalesY, anim.scalesZ,
                     anim.rotationsX, anim.rotationsY, anim.rotationsZ,
                     anim.translationsX, anim.translationsY, anim.translationsZ)
@@ -255,6 +256,7 @@ def importFile(filepath, context):
             lastRot = None
             axisIndex = animDataIndex%3
             for animDataSubIndex, key in enumerate(animData):
+                # animate the whole stack - not needed?
                 #scale = animate(key.time, animList[0:3])
                 #rotation = animate(key.time, animList[3:6])
                 #translation = animate(key.time, animList[6:9])
@@ -295,11 +297,15 @@ def importFile(filepath, context):
                     translation = animate(key.time, animList[6:9])
                     mat = Matrix.Translation(translation).to_4x4()
                 
+                # here's where the magic happens
                 mat = rest.inverted()*mat
                 
+                # decompose the new matrix
                 newLoc, newRot, newScale = mat.decompose()
+                # euler-ize the rotation - that's what we were given in the first place, anyway
                 newRot = newRot.to_euler('XYZ') if lastRot is None else newRot.to_euler('XYZ', lastRot)
                 lastRot = newRot
+                # put it into a big table
                 newData = newScale[:]+newRot[:]+newLoc[:]
                 
                 newKey = Key()
