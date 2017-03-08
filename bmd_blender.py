@@ -134,7 +134,7 @@ def buildSceneGraph(inf1, sg, j=0):
             t.index = n.index
             sg.children.append(t)
         else:
-            warn("buildSceneGraph(): unexpected node type %d", n.type)
+            warn("buildSceneGraph(): unexpected node type %d"%n.type)
         
         i += 1
 
@@ -143,7 +143,7 @@ def buildSceneGraph(inf1, sg, j=0):
         sg = sg.children[0]
     else:
         sg.type = sg.index = -1
-        warn("buildSceneGraph(): Unexpected size %d", len(sg.children))
+        warn("buildSceneGraph(): Unexpected size %d"%len(sg.children))
 
     return 0
 
@@ -327,7 +327,7 @@ class Mat3(Section):
 
         self.materialNames = readstringtable(start+offsets[2], fin)
         if count != len(self.materialNames):
-            warn("mat3: number of strings (%d) doesn't match number of elements (%d)", len(self.materialNames), count)
+            warn("mat3: number of strings (%d) doesn't match number of elements (%d)"%len(self.materialNames), count)
 
         lengths = computeSectionLengths(offsets, size)
 
@@ -665,7 +665,7 @@ class Vtx1(Section):
                 tmp.fromfile(fin, length)
                 data.extend([float(tmp[k]) for k in range(0, length)])
             else:
-                warn("vtx1: unknown array data type %d", dataType)
+                warn("vtx1: unknown array data type %d"%dataType)
                 j += 1
                 continue
 
@@ -684,7 +684,7 @@ class Vtx1(Section):
                         self.positions[l] = Vector((data[k], data[k + 1], data[k + 2]))
                         k += 3
                 else:
-                    warn("vtx1: unsupported componentCount for positions array: %d", currFormat["componentCount"])
+                    warn("vtx1: unsupported componentCount for positions array: %d"%currFormat["componentCount"])
                     self.positions = []
             elif currFormat.arrayType == 0xa: #normals
                 if currFormat.componentCount == 0: #xyz
@@ -694,7 +694,7 @@ class Vtx1(Section):
                         self.normals[l] = Vector((data[k], data[k + 1], data[k + 2]))
                         k += 3
                 else:
-                    warn("vtx1: unsupported componentCount for normals array: %d", currFormat["componentCount"])
+                    warn("vtx1: unsupported componentCount for normals array: %d"%currFormat["componentCount"])
             elif currFormat.arrayType in (0xb, 0xc): #color0,color1
                 index = currFormat.arrayType-0xb
                 if currFormat.componentCount == 0: #rgb
@@ -710,7 +710,7 @@ class Vtx1(Section):
                         self.colors[index][l] = (data[k], data[k + 1], data[k + 2], data[k + 3])
                         k += 4
                 else:
-                    warn("vtx1: unsupported componentCount for colors array %d: %d",
+                    warn("vtx1: unsupported componentCount for colors array %d: %d"%
                         index, currFormat.componentCount)
             #texcoords 0 - 7
             elif currFormat.arrayType in (0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14):
@@ -726,10 +726,10 @@ class Vtx1(Section):
                         self.texCoords[index][l] = Vector((data[k], data[k + 1]))
                         k += 2
                 else:
-                    warn("vtx1: unsupported componentCount for texcoords array %d: %d", index, currFormat.componentCount)
+                    warn("vtx1: unsupported componentCount for texcoords array %d: %d"%index, currFormat.componentCount)
 
             else:
-                warn("vtx1: unknown array type %d", currFormat.arrayType)
+                warn("vtx1: unknown array type %d"%currFormat.arrayType)
 
             j += 1
 
@@ -779,13 +779,14 @@ class BModel(BFile):
         super().readChunks(fin)
 
         self.scenegraph = SceneGraph()
-        buildSceneGraph(self.inf1, self.scenegraph)
+        if hasattr(self, "inf1"):
+            buildSceneGraph(self.inf1, self.scenegraph)
         # remove dummy node at root
         if len(self.scenegraph.children) == 1:
             self.scenegraph = self.scenegraph.children[0]
         else:
             self.scenegraph.type = self.scenegraph.index = -1
-            warn("buildSceneGraph(): Unexpected size %d", len(self.scenegraph.children))
+            warn("buildSceneGraph(): Unexpected size %d"%len(self.scenegraph.children))
 
         buildMatrices(self.scenegraph, self)
 
@@ -975,177 +976,181 @@ def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, in
 def importMesh(filePath, bmd, mesh, bm=None):
     print("Importing textures")
     btextures = []
-    for texture in bmd.tex1.textures:
-        btex = bpy.data.textures.new(texture.name, 'IMAGE')
-        if texture.wrapS == 0: btex.extension = 'EXTEND'
-        elif texture.wrapS == 1: btex.extension = 'REPEAT'
-        elif texture.wrapS == 2: btex.extension = 'CHECKER'
-        btex.use_interpolation = texture.magFilter%2 == 1
-        btex.filter_type = 'BOX'
-        btex.use_mipmap = texture.magFilter >= 2
-        btex.use_mipmap_gauss = texture.magFilter >= 4
-        # look for a texture exported from bmdview
-        imageName = filePath+"_tex"+texture.name+".tga"
-        if texture.name in bpy.data.images:
-            btex.image = bpy.data.images[texture.name]
-        else:
-            try:
-                btex.image = bpy.data.images.load(imageName)
-            except RuntimeError as e:
-                pass
-            if btex.image:
-                btex.image.name = texture.name
+    if hasattr(bmd, "tex1"):
+        for texture in bmd.tex1.textures:
+            btex = bpy.data.textures.new(texture.name, 'IMAGE')
+            if texture.wrapS == 0: btex.extension = 'EXTEND'
+            elif texture.wrapS == 1: btex.extension = 'REPEAT'
+            elif texture.wrapS == 2: btex.extension = 'CHECKER'
+            btex.use_interpolation = texture.magFilter%2 == 1
+            btex.filter_type = 'BOX'
+            btex.use_mipmap = texture.magFilter >= 2
+            btex.use_mipmap_gauss = texture.magFilter >= 4
+            # look for a texture exported from bmdview
+            imageName = filePath+"_tex"+texture.name+".tga"
+            if texture.name in bpy.data.images:
+                btex.image = bpy.data.images[texture.name]
             else:
-                btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, alpha=texture.hasAlpha)
-                texture.export(btex.image)
-        btextures.append(btex)
+                try:
+                    btex.image = bpy.data.images.load(imageName)
+                except RuntimeError as e:
+                    pass
+                if btex.image:
+                    btex.image.name = texture.name
+                else:
+                    btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, alpha=texture.hasAlpha)
+                    texture.export(btex.image)
+            btextures.append(btex)
 
     print("Importing materials")
-    mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
-    for i, mat in enumerate(bmd.mat3.materials):
-        bmat = None
-        for m in range(len(bmd.mat3.indexToMatIndex)):
-            if bmd.mat3.indexToMatIndex[m] == i:
-                bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
-                break
+    if hasattr(bmd, "mat3"):
+        mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
+        for i, mat in enumerate(bmd.mat3.materials):
+            bmat = None
+            m = bmd.mat3.indexToMatIndex.index(i)
+            if bmd.mat3.materialNames[m] in bpy.data.materials:
+                mesh.materials.append(bpy.data.materials[bmd.mat3.materialNames[m]])
+                continue
+            bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
 
-        bmat.specular_intensity = 0.0
-        bmat.diffuse_intensity = 1.0
-        bmat.diffuse_color = (1,1,1)
-        bmat.alpha = 1.0
+            bmat.specular_intensity = 0.0
+            bmat.diffuse_intensity = 1.0
+            bmat.diffuse_color = (1,1,1)
+            bmat.alpha = 1.0
 
-        # VERY rough approximation of the end results of the TEV pipeline.
-        # TODO: It should be possible to emulate the TEV in full with
-        # material/shader nodes
+            # VERY rough approximation of the end results of the TEV pipeline.
+            # TODO: It should be possible to emulate the TEV in full with
+            # material/shader nodes
 
-        if mat.chanControls[0] >= len(bmd.mat3.colorChanInfos):
-            bmat.use_vertex_color_paint = True
-        else:
-            chanInfo = bmd.mat3.colorChanInfos[mat.chanControls[0]]
-            if chanInfo.matColorSource == 1:
+            if mat.chanControls[0] >= len(bmd.mat3.colorChanInfos):
                 bmat.use_vertex_color_paint = True
             else:
-                c = bmd.mat3.color1[mat.color1[0]]
-                bmat.diffuse_color = [x/255 for x in c[:3]]
-                bmat.alpha = c[3]/255
-
-        bmat.invert_z = bmd.mat3.zModes[mat.zModeIndex].func in (4, 6)
-        bmat.use_transparency = bmd.mat3.alphaCompares[mat.alphaCompIndex].alphaOp == 0
-        bmat.game_settings.use_backface_culling = bmd.mat3.cullModes[mat.cullIndex] == 2
-        bi = bmd.mat3.blendInfos[mat.blendIndex]
-        if bi.blendMode in (0,1):
-            if bi.dstFactor == 1:
-                bmat.game_settings.alpha_blend = 'ADD'
-
-        matTexures = [None]*8
-        for j, stage in enumerate(mat.texStages):
-            if stage != 0xffff:
-                matTexures[j] = btextures[bmd.mat3.texStageIndexToTextureIndex[stage]]
-        texGens = [None]*8
-        for j in range(bmd.mat3.texGenCounts[mat.texGenCountIndex]):
-            texGens[j] = bmd.mat3.texGenInfos[mat.texGenInfos[j]]
-        for j in range(bmd.mat3.tevCounts[mat.tevCountIndex]):
-            order = bmd.mat3.tevOrderInfos[mat.tevOrderInfo[j]]
-            stage = bmd.mat3.tevStageInfos[mat.tevStageInfo[j]]
-            slot = bmat.texture_slots.add()
-            if order.texCoordId < 8:
-                texGen = texGens[order.texCoordId]
-                if texGen.texGenType in (0,1):
-                    if texGen.matrix == 0x3c:
-                        pass
-                    elif texGen.matrix >= 0x1e and texGen.matrix <= 0x39:
-                        pass
-                    else:
-                        warn("writeTexGen() type %d: unsupported matrix 0x%x", texGen.texGenType, texGen.matrix)
-
-                    if texGen.texGenSrc >= 4 and texGen.texGenSrc <= 11:
-                        slot.texture_coords = 'UV'
-                        slot.uv_layer = str(texGen.texGenSrc - 4)
-                    elif texGen.texGenSrc == 0:
-                        slot.texture_coords = 'GLOBAL'
-                    elif texGen.texGenSrc == 1:
-                        slot.texture_coords = 'NORMAL'
-                    elif texGen.texGenSrc == 3:
-                        slot.texture_coords = 'TANGENT'
-                    else:
-                        warn("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
-                    
-                    if mat.texMtxInfos[order.texCoordId] != 0xffff:
-                        tmi = bmd.mat3.texMtxInfos[mat.texMtxInfos[order.texCoordId]]
-                        slot.scale.x = tmi.scaleU
-                        slot.scale.y = tmi.scaleV
-                        slot.offset.x = tmi.scaleCenterX*(1 - tmi.scaleU)
-                        slot.offset.y = tmi.scaleCenterY*(1 - tmi.scaleV)
-                elif texGen.texGenType == 0xa:
-                    if texGen.matrix != 0x3c:
-                        warn("writeTexGen() type 0xa: unexpected matrix 0x%x", texGen.matrix)
-                    if texGen.texGenSrc != 0x13:
-                        warn("writeTexGen() type 0xa: unexpected src 0x%x", texGen.texGenSrc)
-                    # TODO
-                    slot.texture_coords = 'NORMAL'
-            
-            if order.texMap < 8: slot.texture = matTexures[order.texMap]
-            
-            slot.use_map_color_diffuse = stage.colorRegId == 0
-            slot.diffuse_color_factor = [1, 2, 4, 0.5][stage.colorScale]
-            if stage.colorOp in (0,1) and stage.colorIn[3] == 0:
-                slot.blend_type = ['ADD', 'SUBTRACT'][stage.colorOp]
-                if 0:
-                    if stage.colorIn[2] == 12:
-                        slot.diffuse_color_factor = 1.0
-                    elif stage.colorIn[2] == 13:
-                        slot.diffuse_color_factor = 0.5
-                    elif stage.colorIn[2] == 14:
-                        if mat.constColorSel[j] <= 7:
-                            slot.diffuse_color_factor = 1.0-(mat.constColorSel[j]/8.0)
-                        elif mat.constColorSel[j] < 0xc:
-                            raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
-                        else:
-                            konst = mat.constColorSel[j]-0xc
-                            slot.diffuse_color_factor = bmd.mat3.color3[konst%4][konst//4]
-                    elif stage.colorIn[2] == 15:
-                        slot.diffuse_color_factor = 0.0
-            elif stage.colorOp in (8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf):
-                slot.blend_type = 'SCREEN'
-            else:
-                slot.blend_type = 'MULTIPLY'
-
-            slot.use_map_alpha = stage.alphaRegId == 0
-            slot.alpha_factor = [1, 2, 4, 0.5][stage.alphaScale]
-            slot.use_rgb_to_intensity = (stage.alphaIn[3]%2)==0
-            if 0:
-                if stage.alphaOp in (0,1):
-                    if stage.alphaIn[2] == 12:
-                        slot.alpha_factor = 1.0
-                    elif stage.alphaIn[2] == 13:
-                        slot.alpha_factor = 0.5
-                    elif stage.alphaIn[2] == 14:
-                        if mat.constAlphaSel[j] <= 7:
-                            slot.alpha_factor = 1.0-(mat.constAlphaSel[j]/8.0)
-                        elif mat.constAlphaSel[j] < 0xc:
-                            raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
-                        else:
-                            konst = mat.constAlphaSel[j]-0xc
-                            slot.alpha_factor = bmd.mat3.color3[konst%4][konst//4]
-                    elif stage.colorIn[2] == 15:
-                        slot.alpha_factor = 0.0
+                chanInfo = bmd.mat3.colorChanInfos[mat.chanControls[0]]
+                if chanInfo.matColorSource == 1:
+                    bmat.use_vertex_color_paint = True
                 else:
-                    slot.use_rgb_to_intensity = True
+                    c = bmd.mat3.color1[mat.color1[0]]
+                    bmat.diffuse_color = [x/255 for x in c[:3]]
+                    bmat.alpha = c[3]/255
 
-        mesh.materials.append(bmat)
+            bmat.invert_z = bmd.mat3.zModes[mat.zModeIndex].func in (4, 6)
+            bmat.use_transparency = bmd.mat3.alphaCompares[mat.alphaCompIndex].alphaOp == 0
+            bmat.game_settings.use_backface_culling = bmd.mat3.cullModes[mat.cullIndex] == 2
+            bi = bmd.mat3.blendInfos[mat.blendIndex]
+            if bi.blendMode in (0,1):
+                if bi.dstFactor == 1:
+                    bmat.game_settings.alpha_blend = 'ADD'
+
+            matTexures = [None]*8
+            for j, stage in enumerate(mat.texStages):
+                if stage != 0xffff:
+                    matTexures[j] = btextures[bmd.mat3.texStageIndexToTextureIndex[stage]]
+            texGens = [None]*8
+            for j in range(bmd.mat3.texGenCounts[mat.texGenCountIndex]):
+                texGens[j] = bmd.mat3.texGenInfos[mat.texGenInfos[j]]
+            for j in range(bmd.mat3.tevCounts[mat.tevCountIndex]):
+                order = bmd.mat3.tevOrderInfos[mat.tevOrderInfo[j]]
+                stage = bmd.mat3.tevStageInfos[mat.tevStageInfo[j]]
+                slot = bmat.texture_slots.add()
+                if order.texCoordId < 8:
+                    texGen = texGens[order.texCoordId]
+                    if texGen.texGenType in (0,1):
+                        if texGen.matrix == 0x3c:
+                            pass
+                        elif texGen.matrix >= 0x1e and texGen.matrix <= 0x39:
+                            pass
+                        else:
+                            warn("writeTexGen() type %d: unsupported matrix 0x%x", texGen.texGenType, texGen.matrix)
+
+                        if texGen.texGenSrc >= 4 and texGen.texGenSrc <= 11:
+                            slot.texture_coords = 'UV'
+                            slot.uv_layer = str(texGen.texGenSrc - 4)
+                        elif texGen.texGenSrc == 0:
+                            slot.texture_coords = 'GLOBAL'
+                        elif texGen.texGenSrc == 1:
+                            slot.texture_coords = 'NORMAL'
+                        elif texGen.texGenSrc == 3:
+                            slot.texture_coords = 'TANGENT'
+                        else:
+                            warn("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
+                        
+                        if mat.texMtxInfos[order.texCoordId] != 0xffff:
+                            tmi = bmd.mat3.texMtxInfos[mat.texMtxInfos[order.texCoordId]]
+                            slot.scale.x = tmi.scaleU
+                            slot.scale.y = tmi.scaleV
+                            slot.offset.x = tmi.scaleCenterX*(1 - tmi.scaleU)
+                            slot.offset.y = tmi.scaleCenterY*(1 - tmi.scaleV)
+                    elif texGen.texGenType == 0xa:
+                        if texGen.matrix != 0x3c:
+                            warn("writeTexGen() type 0xa: unexpected matrix 0x%x", texGen.matrix)
+                        if texGen.texGenSrc != 0x13:
+                            warn("writeTexGen() type 0xa: unexpected src 0x%x", texGen.texGenSrc)
+                        # TODO
+                        slot.texture_coords = 'NORMAL'
+                
+                if order.texMap < 8: slot.texture = matTexures[order.texMap]
+                
+                slot.use_map_color_diffuse = stage.colorRegId == 0
+                slot.diffuse_color_factor = [1, 2, 4, 0.5][stage.colorScale]
+                if stage.colorOp in (0,1) and stage.colorIn[3] == 0:
+                    slot.blend_type = ['ADD', 'SUBTRACT'][stage.colorOp]
+                    if 0:
+                        if stage.colorIn[2] == 12:
+                            slot.diffuse_color_factor = 1.0
+                        elif stage.colorIn[2] == 13:
+                            slot.diffuse_color_factor = 0.5
+                        elif stage.colorIn[2] == 14:
+                            if mat.constColorSel[j] <= 7:
+                                slot.diffuse_color_factor = 1.0-(mat.constColorSel[j]/8.0)
+                            elif mat.constColorSel[j] < 0xc:
+                                raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
+                            else:
+                                konst = mat.constColorSel[j]-0xc
+                                slot.diffuse_color_factor = bmd.mat3.color3[konst%4][konst//4]
+                        elif stage.colorIn[2] == 15:
+                            slot.diffuse_color_factor = 0.0
+                elif stage.colorOp in (8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf):
+                    slot.blend_type = 'SCREEN'
+                else:
+                    slot.blend_type = 'MULTIPLY'
+
+                slot.use_map_alpha = stage.alphaRegId == 0
+                slot.alpha_factor = [1, 2, 4, 0.5][stage.alphaScale]
+                slot.use_rgb_to_intensity = (stage.alphaIn[3]%2)==0
+                if 0:
+                    if stage.alphaOp in (0,1):
+                        if stage.alphaIn[2] == 12:
+                            slot.alpha_factor = 1.0
+                        elif stage.alphaIn[2] == 13:
+                            slot.alpha_factor = 0.5
+                        elif stage.alphaIn[2] == 14:
+                            if mat.constAlphaSel[j] <= 7:
+                                slot.alpha_factor = 1.0-(mat.constAlphaSel[j]/8.0)
+                            elif mat.constAlphaSel[j] < 0xc:
+                                raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
+                            else:
+                                konst = mat.constAlphaSel[j]-0xc
+                                slot.alpha_factor = bmd.mat3.color3[konst%4][konst//4]
+                        elif stage.colorIn[2] == 15:
+                            slot.alpha_factor = 0.0
+                    else:
+                        slot.use_rgb_to_intensity = True
+
+            mesh.materials.append(bmat)
 
     print("Importing mesh")
     if bm is None: bm = bmesh.new()
 
-    for i, colorLayer in enumerate(bmd.vtx1.colors):
-        if colorLayer is not None:
-            bm.loops.layers.color.new(str(i))
-            # Blender doesn't support vertex color alphas :(
-            if len(colorLayer[0]) == 4: bm.loops.layers.color.new(str(i)+'a')
-    for i, texLayer in enumerate(bmd.vtx1.texCoords):
-        if texLayer is not None:
-            bm.loops.layers.uv.new(str(i))
-    if len(bmd.jnt1.frames) > 0:
+    if hasattr(bmd, "vtx1"):
+        for i, colorLayer in enumerate(bmd.vtx1.colors):
+            if colorLayer is not None:
+                bm.loops.layers.color.new(str(i))
+                # Blender doesn't support vertex color alphas :(
+                if len(colorLayer[0]) == 4: bm.loops.layers.color.new(str(i)+'a')
+        for i, texLayer in enumerate(bmd.vtx1.texCoords):
+            if texLayer is not None:
+                bm.loops.layers.uv.new(str(i))
+    if hasattr(bmd, "jnt1") and len(bmd.jnt1.frames) > 0:
         bm.verts.layers.deform.verify()
 
     bmverts = {}
@@ -1195,8 +1200,8 @@ bl_info = {
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
-from bpy.types import Operator
+from bpy.props import StringProperty, BoolProperty, EnumProperty, CollectionProperty
+from bpy.types import Operator, OperatorFileListElement
 
 def importFile(filepath):
     fin = open(filepath, 'rb')
@@ -1206,12 +1211,12 @@ def importFile(filepath):
     bmd.read(fin)
     fin.close()
 
-    print("Importing armature")
     mesh = bpy.data.meshes.new(bmd.name)
     meshObject = bpy.data.objects.new(name=mesh.name+"_mesh", object_data=mesh)
     arm = bpy.data.armatures.new(name=bmd.name)
     armObject = bpy.data.objects.new(name=arm.name+"_arm", object_data=arm)
 
+    print("Importing armature")
     meshObject.parent = armObject
     armObject.scale = Vector((1,1,1))/64
     armObject.rotation_euler = Vector((math.pi/2,0,0))
@@ -1223,11 +1228,12 @@ def importFile(filepath):
     bpy.context.scene.objects.active = armObject
     bpy.ops.object.mode_set(mode='EDIT')
 
-    for i, f in enumerate(bmd.jnt1.frames):
-        meshObject.vertex_groups.new(f.name)
-        arm.edit_bones.new(f.name)
+    if hasattr(bmd, "jnt1"):
+        for i, f in enumerate(bmd.jnt1.frames):
+            meshObject.vertex_groups.new(f.name)
+            arm.edit_bones.new(f.name)
     
-    importSkeleton(bmd, arm)
+        importSkeleton(bmd, arm)
     
     bpy.ops.object.mode_set(mode='OBJECT')
     
@@ -1278,6 +1284,9 @@ def importFile(filepath):
         bpy.context.scene.objects.link(meshObject)
 
 class ImportBMD(Operator, ImportHelper):
+    files = CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
+    directory = StringProperty(maxlen=1024, subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
+
     bl_idname = "import_scene.bmd"  # important since its how bpy.ops.import_test.some_data is constructed
     bl_label = "Import BMD/BDL"
 
@@ -1285,12 +1294,16 @@ class ImportBMD(Operator, ImportHelper):
     filename_ext = ".bmd"
 
     filter_glob = StringProperty(
-            default="*.bmd",
+            default="*.bmd;*.bmt;*.bdl",
             options={'HIDDEN'},
             )
 
     def execute(self, context):
-        importFile(self.filepath)
+        context.window_manager.progress_begin(0, len(self.files))
+        for i, file in enumerate(self.files):
+            context.window_manager.progress_update(i)
+            importFile(os.path.join(self.directory, file.name))
+        context.window_manager.progress_end()
         return {'FINISHED'}
 
 # Only needed if you want to add into a dynamic menu

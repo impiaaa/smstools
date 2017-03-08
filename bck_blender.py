@@ -112,12 +112,12 @@ def readComp(src, index):
     return dst
 
 bl_info = {
-    "name": "Import J3D BCK",
+    "name": "Import BCK",
     "author": "Spencer Alves",
     "version": (1,0,0),
     "blender": (2, 6, 2),
     "location": "Import",
-    "description": "Import J3D BCK",
+    "description": "Import J3D BCK animation",
     "warning": "",
     "wiki_url": "",
     "tracker_url": "",
@@ -336,7 +336,7 @@ def importFile(filepath, context):
 
 class ImportBCK(Operator, ImportHelper):
     bl_idname = "import_anim.bck"  # important since its how bpy.ops.import_test.some_data is constructed
-    bl_label = "Import J3D BCK"
+    bl_label = "Import BCK"
 
     # ImportHelper mixin class uses this
     filename_ext = ".bck"

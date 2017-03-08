@@ -344,6 +344,9 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteDat
     return imgs
 
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
+    # Note: REALLY slow.
+    # Like, EXTREMELY SLOW.
+    # Should probably either profile or just export/import
     assert arrayCount <= 1
     dataIdx = 0
     def putpixelbpy(dx, dy, c):
