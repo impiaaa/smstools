@@ -22,7 +22,7 @@ def bmd2vmfcoords(x, y, z, rx, ry, rz):
     return -x, z, y, -rx, rz, ry
 
 def bmd2blendcoords(x, y, z, rx, ry, rz):
-    return (z, x, y), (radians(rz), radians(rx), radians(ry))
+    return (z, x, y), (radians(rz+90), radians(rx), radians(ry+90))
 
 def getmesh(name):
     try:
@@ -62,17 +62,15 @@ def readsection(fin, indent=0, vmfout=None):
         # Light
         x, y, z, r, g, b = unpack('>fffBBBx4x', fin.read(20))
         if console: print("%s%r %r %r %s"%('  '*indent, x, y, z, stylecolor(r, g, b)))
-        if 0:#r > 0 or g > 0 or b > 0:
+        if 1:#r > 0 or g > 0 or b > 0:
             if blender:
                 lamp = bpy.data.lamps.new(jpname, "POINT")
                 obj = bpy.data.objects.new(enname, lamp)
                 bpy.context.scene.objects.link(obj)
-                obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
+                obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, 0, 0, 0)
                 lamp.color = (r/255.0, g/255.0, b/255.0)
-                lamp.energy = 0.1
-                lamp.falloff_type = "CONSTANT"
             if vmf:
-                x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
+                x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, 0, 0, 0)
                 vmfout.write("""entity
 {
 	"id" "%d"
@@ -183,12 +181,12 @@ def readsection(fin, indent=0, vmfout=None):
     elif op == 0xbeaa:
         # StageEventInfo
         n1, = unpack('>I', fin.read(4))
-        if console: print '  '*indent, hex(n1),
+        if console: print('  '*indent+hex(n1))
         while fin.tell() < start+sectionlength-4:
             s = readstring(fin)
-            if console: print s,
+            if console: print(s)
         n2, = unpack('>I', fin.read(4))
-        if console: print hex(n2)
+        if console: print(hex(n2))
     elif op == 0x54e9:
         # CubeGeneralInfo
         x, y, z, rx, ry, rz, sx, sy, sz = unpack('>fffffffff', fin.read(36))
@@ -221,9 +219,9 @@ def readsection(fin, indent=0, vmfout=None):
     else:
         if start+sectionlength-endinfo >= 36:
             x, y, z, rx, ry, rz, sx, sy, sz = unpack('>fffffffff', fin.read(36))
-            #if (abs(x) < 0.001 or abs(x) > 1000000) and (abs(y) < 0.001 or abs(y) > 1000000) and (abs(z) < 0.001 or abs(z) > 1000000):
-            #    fin.seek(start+sectionlength)
-            #    return
+            if (abs(x) < 0.001 or abs(x) > 1000000) and (abs(y) < 0.001 or abs(y) > 1000000) and (abs(z) < 0.001 or abs(z) > 1000000):
+                fin.seek(start+sectionlength)
+                return
             left = start-endinfo+sectionlength-36
             if console: print("%s%r %r %r, 0x%x left" % ('  '*indent, x, y, z, left))
             if 0:#left > 1:
@@ -239,16 +237,59 @@ def readsection(fin, indent=0, vmfout=None):
                             print('  '*indent+"no second name")
                 except UnicodeDecodeError:
                     print('  '*indent+"no first name")
-            if blender:
-                mesh = getmesh(enname)
-                obj = bpy.data.objects.new(jpname, mesh)
-                bpy.context.scene.objects.link(obj)
-                obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
-                obj.scale = (sx, sy, sz)
-            if vmf:
-                x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
-                if op == 0xa3d9:
-                    # SunModel --> env_sun
+            if op in (0xf58f, 0xc6c0, 0x3887):
+                # MiniWindmill, BellWatermill, BiaWatermillVertical
+                name1 = readstring(fin)
+                fin.seek(4, 1)
+                name2 = readstring(fin)
+                if blender:
+                    mesh = getmesh(name2)
+                    obj = bpy.data.objects.new(jpname, mesh)
+                    bpy.context.scene.objects.link(obj)
+                    obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
+                    obj.scale = (sx, sy, sz)
+                if vmf:
+                    x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
+                    vmfout.write("""entity
+{
+"id" "%d"
+"classname" "prop_physics_multiplayer" // %s
+"origin" "%r %r %r"
+"angles" "%r %r %r"
+"model" "models/bianco2/%s.mdl"
+}
+"""%(id, enname, x,y,z, rx,ry,rz, name2))
+            elif op == 0x6db4:
+                # FlowerCoin
+                name1 = readstring(fin)
+                fin.seek(4, 1)
+                name2 = readstring(fin)
+                if blender:
+                    mesh = getmesh(name2)
+                    obj = bpy.data.objects.new(jpname, mesh)
+                    bpy.context.scene.objects.link(obj)
+                    obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
+                    obj.scale = (sx, sy, sz)
+                if vmf:
+                    x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
+                    vmfout.write("""entity
+{
+"id" "%d"
+"classname" "prop_detail" // %s
+"origin" "%r %r %r"
+"angles" "%r %r %r"
+"model" "models/bianco2/%s.mdl"
+}
+"""%(id, enname, x,y,z, rx,ry,rz, name2))
+            elif op == 0xa3d9:
+                # SunModel --> env_sun
+                if blender:
+                    lamp = bpy.data.lamps.new(jpname, "SUN")
+                    obj = bpy.data.objects.new(enname, lamp)
+                    bpy.context.scene.objects.link(obj)
+                    obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
+                if vmf:
+                    x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
                     vmfout.write("""entity
 {
 	"id" "%d"
@@ -264,7 +305,15 @@ def readsection(fin, indent=0, vmfout=None):
 	"origin" "%r %r %r"
 }
 """%(id, rx,ry,rz, x,y,z))
-                elif op == 0x2844:
+            elif blender:
+                mesh = getmesh(enname)
+                obj = bpy.data.objects.new(jpname, mesh)
+                bpy.context.scene.objects.link(obj)
+                obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
+                obj.scale = (sx, sy, sz)
+            elif vmf:
+                x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
+                if op == 0x2844:
                     # Mario -> info_player_start
                     vmfout.write("""entity
 {
@@ -401,66 +450,22 @@ def readsection(fin, indent=0, vmfout=None):
 	}
 }
 """%(id, rx,ry,rz, x,y,z, id+1, id+2,bx,ay,az,ax,ay,az,ax,by,az, id+3,bx,by,bz,ax,by,bz,ax,ay,bz, id+4,bx,ay,az,bx,by,az,bx,by,bz, id+5,ax,ay,bz,ax,by,bz,ax,by,az, id+6,ax,ay,az,bx,ay,az,bx,ay,bz, id+7,ax,by,bz,bx,by,bz,bx,by,az))
-                elif op in (0xf58f, 0xc6c0, 0x3887):
-                    # MiniWindmill, BellWatermill, BiaWatermillVertical
-                    name1 = readstring(fin)
-                    fin.seek(4, 1)
-                    name2 = readstring(fin)
-                    if blender:
-                        mesh = getmesh(name2)
-                        obj = bpy.data.objects.new(jpname, mesh)
-                        bpy.context.scene.objects.link(obj)
-                        obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
-                        obj.scale = (sx, sy, sz)
-                    if vmf:
-                        x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
-                        vmfout.write("""entity
-{
-	"id" "%d"
-	"classname" "prop_physics_multiplayer" // %s
-	"origin" "%r %r %r"
-	"angles" "%r %r %r"
-	"model" "models/bianco2/%s.mdl"
-}
-"""%(id, enname, x,y,z, rx,ry,rz, name2))
-                elif op == 0x6db4:
-                    # FlowerCoin
-                    name1 = readstring(fin)
-                    fin.seek(4, 1)
-                    name2 = readstring(fin)
-                    if blender:
-                        mesh = getmesh(name2)
-                        obj = bpy.data.objects.new(jpname, mesh)
-                        bpy.context.scene.objects.link(obj)
-                        obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
-                        obj.scale = (sx, sy, sz)
-                    if vmf:
-                        x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
-                        vmfout.write("""entity
-{
-	"id" "%d"
-	"classname" "prop_detail" // %s
-	"origin" "%r %r %r"
-	"angles" "%r %r %r"
-	"model" "models/bianco2/%s.mdl"
-}
-"""%(id, enname, x,y,z, rx,ry,rz, name2))
                 else:
                     vmfout.write("""entity
 {
-	"id" "%d"
-	"classname" "info_null"
-	"angles" "%r %r %r"
-	"origin" "%r %r %r"
-	//"scale" "%r %r %r"
-	"comments" "%s"
+"id" "%d"
+"classname" "info_null"
+"angles" "%r %r %r"
+"origin" "%r %r %r"
+//"scale" "%r %r %r"
+"comments" "%s"
 }
 """%(id, rx,ry,rz, x,y,z, sx,sy,sz, enname))
         extradata = fin.read((start+sectionlength)-fin.tell())
         if console and len(extradata) < 1920 and len(extradata) > 0: print(''.join(['%02X' % ord(c) for c in extradata]))
     assert fin.tell() == start+sectionlength, (fin.tell(), start, sectionlength)
 
-if blender: fin = open("E:\sms\scene\dolpic0\map\scene.bin", 'rb')
+if blender: fin = open("", 'rb')
 else: fin = open(sys.argv[1], 'rb')
 if vmf:
     vmfout = open(sys.argv[1][:sys.argv[1].rfind('.')]+".vmf", 'w')

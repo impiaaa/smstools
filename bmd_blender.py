@@ -593,6 +593,10 @@ class Image(Readable):
     
     def export(self, im):
         decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+        im.pack(as_png=True)
+        #imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+        #imgs[0][0].save("/tmp/"+im.name+".png")
+        #im.load("/tmp/"+im.name+".png")
 
     def __repr__(self):
         return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
@@ -986,11 +990,11 @@ def importMesh(filePath, bmd, mesh, bm=None):
             btex.filter_type = 'BOX'
             btex.use_mipmap = texture.magFilter >= 2
             btex.use_mipmap_gauss = texture.magFilter >= 4
-            # look for a texture exported from bmdview
-            imageName = filePath+"_tex"+texture.name+".tga"
             if texture.name in bpy.data.images:
                 btex.image = bpy.data.images[texture.name]
             else:
+                # look for a texture exported from bmdview
+                imageName = filePath+"_tex"+texture.name+".tga"
                 try:
                     btex.image = bpy.data.images.load(imageName)
                 except RuntimeError as e:
@@ -1009,9 +1013,11 @@ def importMesh(filePath, bmd, mesh, bm=None):
             bmat = None
             m = bmd.mat3.indexToMatIndex.index(i)
             if bmd.mat3.materialNames[m] in bpy.data.materials:
-                mesh.materials.append(bpy.data.materials[bmd.mat3.materialNames[m]])
+                bmat = bpy.data.materials[bmd.mat3.materialNames[m]]
+                mesh.materials.append(bmat)
                 continue
-            bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
+            else:
+                bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
 
             bmat.specular_intensity = 0.0
             bmat.diffuse_intensity = 1.0
