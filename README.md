@@ -1,6 +1,6 @@
 # smstools
 
-These are a bunch of scripts for looking at miscellaneous Nintendo game data files. They were mostly originally built for *Super Mario Sunshine*, but they also work well with *The Legend of Zelda: The Wind Waker*. There is some support for the later-generation 3D games like Mario Galaxy (2). Some are Blender plugins, some work in Python 2 and 3, and some only work in Python 2. Most of the Python scripts require PIL or [Pillow](/python-pillow/Pillow). Check the file headers for details.
+These are a bunch of scripts for looking at miscellaneous Nintendo game data files. They were mostly originally built for *Super Mario Sunshine*, but they also work well with *The Legend of Zelda: The Wind Waker*. There is some support for the later-generation 3D games like Mario Galaxy (2). Some are Blender plugins, some work in Python 2 and 3, and some only work in Python 2. Most of the Python scripts require PIL or [Pillow](//github.com/python-pillow/Pillow). Check the file headers for details.
 
 * **bmd_blender and bck_blender:** Blender importers for BMD/BDL model files, BMT materials, and BCK animations. They're basically just Python ports of [bmdview](http://www.amnoid.de/gc/) (complete with comments!). Animations are currently restricted to linear interpolation only, and materials are rough approximations, not full shaders. Make sure common.py and texture.py are in the Python path somewhere (like blender/2.xx/scripts/addons/modules/)
 * **bcsv.py:** Rudimentary Python2 command-line script for dumping strings from BMT and BCT table files.
