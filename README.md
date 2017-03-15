@@ -1,10 +1,10 @@
 # smstools
 
-These are a bunch of scripts for looking at miscellaneous Nintendo game data files. Originally built for *Super Mario Sunshine*, but they also work well with *The Legend of Zelda: The Wind Waker*. Some support for the later-generation 3D games like Mario Galaxy.
+These are a bunch of scripts for looking at miscellaneous Nintendo game data files. They were mostly originally built for *Super Mario Sunshine*, but they also work well with *The Legend of Zelda: The Wind Waker*. There is some support for the later-generation 3D games like Mario Galaxy (2). Some are Blender plugins, some work in Python 2 and 3, and some only work in Python 2. Most of the Python scripts require PIL or [Pillow](/python-pillow/Pillow). Check the file headers for details.
 
 * **bmd_blender and bck_blender:** Blender importers for BMD/BDL model files, BMT materials, and BCK animations. They're basically just Python ports of [bmdview](http://www.amnoid.de/gc/) (complete with comments!). Animations are currently restricted to linear interpolation only, and materials are rough approximations, not full shaders. Make sure common.py and texture.py are in the Python path somewhere (like blender/2.xx/scripts/addons/modules/)
 * **bcsv.py:** Rudimentary Python2 command-line script for dumping strings from BMT and BCT table files.
-* **bfn.py:** Python command-line script for dumping BFN bitmap fonts (requires PIL or Pillow).
+* **bfn.py:** Python command-line script for dumping BFN bitmap fonts.
 * **blo.py:** Script for BLO layout files. BLO are used for GUI things like the HUD and menus. This tool makes HTML from them, and references images dumped with bti.py.
 * **bmg.py:** BMG files are for localized strings. Some are used for subtitles in cutscenes; the script will make Subrip files out of those, and TXT dumps of anything else.
 * **brfnt.py:** Like BFN, for later games.
@@ -20,4 +20,4 @@ These are a bunch of scripts for looking at miscellaneous Nintendo game data fil
 
 LICENSE:
 
-bmd_blender, bck_blender, col_blender, wwdumpsnd, and possibly others are directly based on the work of other people. I don't know what the original licenses were, so I can't say if these can be freely distributes. But I also assume you're probably not going to use these comercially, anyway.
+bmd_blender, bck_blender, col_blender, wwdumpsnd, and possibly others are directly based on the work of other people. I don't know what the original licenses were, so I can't say if these can be freely distributed. But, you're probably not going to use these comercially anyway, right?
