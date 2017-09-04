@@ -66,26 +66,37 @@ def handlePerf(type, value, duration, maxValue, track, tick):
     return event
 
 def handleBankProgram(which, selection, track, tick):
-  if which == 0x20:
+  if which == 7:
+    # pitch
+    print "Pitch", selection
+    event = midi.ControlChangeEvent(tick=tick)
+    event.control = 101 # RPN MSB
+    event.value = 0
+    track.append(event)
+    event = midi.ControlChangeEvent(tick=0)
+    event.control = 100 # RPN LSB
+    event.value = 0
+    track.append(event)
+    event = midi.ControlChangeEvent(tick=0)
+    event.control = 6 # Data entry MSB
+    event.value = selection
+    track.append(event)
+    event = midi.ControlChangeEvent(tick=0)
+    event.control = 38 # Data entry LSB
+    event.value = 0
+    track.append(event)
+  elif which == 0x20:
     # bank
     print "Bank", selection
     event = midi.ControlChangeEvent(tick=tick)
     event.control = 32 # Bank Select
     event.value = selection
-    # Bank is always 0 or 1, and consistent per file. Keeping default MIDI bank
-    # makes more sense.
-    event = midi.TextMetaEvent(tick=tick, text="Bank %d"%(selection))
     track.append(event)
   elif which == 0x21:
     # program
     print "Program", selection
-    if selection < 1 or selection > 127:
-      warn("Program %d out of range 1..127!"%selection)
-      event = midi.TextMetaEvent(tick=tick, text="Program %d"%(selection))
-      track.append(event)
-    else:
-      event = midi.ProgramChangeEvent(tick=tick, value=selection-1)
-      track.append(event)
+    event = midi.ProgramChangeEvent(tick=tick, value=selection%128)
+    track.append(event)
   else:
     warn("Unknown bank/program %x (%d)"%(which, selection))
     event = midi.TextMetaEvent(tick=tick, text="Bank/Program %d (%d)"%(which, selection))
@@ -150,6 +161,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       #warn("Passed track bounds")
       #break
     #print hex(fin.tell()),
+    #print totalTime,
     c = fin.read(1)
     if c == '': break
     cmd = ord(c)
@@ -158,7 +170,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       nextDelay, = unpack('>B', fin.read(1)) if cmd in (0xF0, 0x80) else unpack('>H', fin.read(2))
       delay += nextDelay
       totalTime += nextDelay
-      #print "Delay", nextDelay
+      #print "Delay", hex(cmd), nextDelay
       if pattern is not None:
         queuedEvents.sort(key=lambda e: 0 if e is None else e.tick)
         i = 0
@@ -227,7 +239,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
     elif cmd == 0x9E:
       # perf
       type, value, duration = unpack('>BhB', fin.read(4))
-     # print "Perf", type, value, duration
+      #print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0x7FFF, track, delay))
       delay = 0
     elif cmd == 0x9F:
@@ -267,7 +279,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # cmdOpenTrack
       childTrackId, tmp, trackPos = unpack('>BBH', fin.read(4))
       trackPos |= tmp<<16
-      print "New track", childTrackId, "at", hex(trackPos)
+      print "New track", childTrackId, "at", hex(trackPos), "delay", delay
       tracksToDo.append((trackPos, childTrackId, delay))
     elif cmd == 0xC2:
       # sibling track
@@ -477,14 +489,16 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         # voice off
         voiceId = cmd & 0x7F
         unk, = struct.unpack('>B', fin.read(1))
-        print "Voice off", voiceId, unk
-        if pattern is not None: doNoteOff(voiceId, track, delay, voices)
+        #print "Voice off", voiceId, unk
+        if pattern is not None:
+          doNoteOff(voiceId, track, delay, voices)
         delay = 0
       elif (cmd&0x80) == 0x80:
         # voice off
         voiceId = cmd & 0x7F
         #print "Voice off", voiceId
-        if pattern is not None: doNoteOff(voiceId, track, delay, voices)
+        if pattern is not None:
+          doNoteOff(voiceId, track, delay, voices)
         delay = 0
       else:
         # voice on
@@ -495,6 +509,12 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
           continue
         #print "Voice on", cmd, voiceId, velocity
         if pattern is not None:
+          if voiceId in voices:
+            warn("Voice id %d already on!"%voiceId)
+          if note in voices.values():
+            warn("Note %d already on!"%note)
+          if velocity == 0:
+            velocity = 1
           noteOn = midi.NoteOnEvent(tick=delay, pitch=note, velocity=velocity)
           track.append(noteOn)
           #voices[voiceId].append(noteOn)
@@ -512,6 +532,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       event.channel = channel
   for i, (trackPos, childTrackId, delay) in enumerate(tracksToDo):
     #if childTrackId == 15: continue
+    if childTrackId == 2: continue
     print "Track", childTrackId
     fin.seek(trackPos)
     readTrack(fin, pattern, childTrackId, delay, totalTime, tracksToDo[i+1][0] if i+1 < len(tracksToDo) else maxpos)
