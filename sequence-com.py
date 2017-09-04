@@ -532,7 +532,6 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       event.channel = channel
   for i, (trackPos, childTrackId, delay) in enumerate(tracksToDo):
     #if childTrackId == 15: continue
-    if childTrackId == 2: continue
     print "Track", childTrackId
     fin.seek(trackPos)
     readTrack(fin, pattern, childTrackId, delay, totalTime, tracksToDo[i+1][0] if i+1 < len(tracksToDo) else maxpos)
