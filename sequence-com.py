@@ -148,14 +148,14 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
   stack = []
   totalTime = delay
   if pattern is not None:
-    #voices = [[] for i in range(256)]
+    #voices = [[] for i in range(8)]
     voices = {}
     track = midi.Track()
     pattern.append(track)
     queuedEvents = []
   tracksToDo = []
   channel = (trackId)%16
-  if trackId == 15: channel = 9
+  #if trackId == 15: channel = 9
   while True:
     #if fin.tell() >= maxpos and maxpos != -1:
       #warn("Passed track bounds")
@@ -351,8 +351,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # delay
       # cmdWait
       raise NotImplementedError("")
-    # 0x?? 0x8027ebe0 cmdParentWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027ec68 cmdChildWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xD1 0x8027ebe0 cmdParentWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xD2 0x8027ec68 cmdChildWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     elif cmd == 0xD4:
       # prev note
       # cmdSetLastNote
@@ -439,25 +439,25 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # delay
       # cmdWait
       raise NotImplementedError("")
-    # 0x?? 0x8027f2ac cmdPanPowSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f544 cmdIIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f330 cmdFIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f368 cmdEXTSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xEB 0x8027f2ac cmdPanPowSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xEC 0x8027f544 cmdIIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xED 0x8027f330 cmdFIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xEE 0x8027f368 cmdEXTSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     # 0xEF? 0x8027f3bc cmdPanSwSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     # TODO used by t_pinnapaco_m and k_kagemario
     elif cmd == 0xEF:
       print "Unknown EF"
       fin.seek(3, 1)
+    # 0xF0 0x8027f460 cmdOscRoute__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     elif cmd == 0xF0:
       print "Unknown F0", hex(ord(fin.read(1)))
-    # 0x?? 0x8027f460 cmdOscRoute__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f5c8 cmdIIRCutOff__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f65c cmdOscFull__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f098 cmdVolumeMode__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xF1 0x8027f5c8 cmdIIRCutOff__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xF2 0x8027f65c cmdOscFull__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xF3 0x8027f098 cmdVolumeMode__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     # 0x?? 0x8027f4fc cmdVibPitch__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f698 cmdCheckWave__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f6a8 cmdPrintf__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f2a4 cmdNop__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xFA 0x8027f698 cmdCheckWave__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xFB 0x8027f6a8 cmdPrintf__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xFC 0x8027f2a4 cmdNop__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
     
     elif cmd == 0xF9:
       print "Unknown F9"
@@ -483,11 +483,11 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       if pattern is not None: track.append(midi.EndOfTrackEvent(tick=delay))
       delay = 0
       break
-    elif cmd < 0x94:
+    elif cmd < 0x90:
       # note
       if (cmd&0x88) == 0x88:
         # voice off
-        voiceId = cmd & 0x7F
+        voiceId = cmd & 0x07
         unk, = struct.unpack('>B', fin.read(1))
         #print "Voice off", voiceId, unk
         if pattern is not None:
@@ -495,7 +495,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         delay = 0
       elif (cmd&0x80) == 0x80:
         # voice off
-        voiceId = cmd & 0x7F
+        voiceId = cmd & 0x07
         #print "Voice off", voiceId
         if pattern is not None:
           doNoteOff(voiceId, track, delay, voices)
@@ -503,10 +503,9 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       else:
         # voice on
         note = cmd
-        voiceId, velocity = struct.unpack('>BB', fin.read(2))
-        if 0xFF in (voiceId, velocity):
-          fin.seek(-2,1)
-          continue
+        flags, velocity = struct.unpack('>BB', fin.read(2))
+        voiceId = flags&0x07
+        flags &= 0xF8
         #print "Voice on", cmd, voiceId, velocity
         if pattern is not None:
           if voiceId in voices:
