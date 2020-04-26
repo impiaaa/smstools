@@ -115,7 +115,7 @@ bl_info = {
     "name": "Import BCK",
     "author": "Spencer Alves",
     "version": (1,0,0),
-    "blender": (2, 6, 2),
+    "blender": (2, 80, 0),
     "location": "Import",
     "description": "Import J3D BCK animation",
     "warning": "",
@@ -194,7 +194,7 @@ def importFile(filepath, context):
     assert armObj is not None
     assert armObj.type == 'ARMATURE'
     if len(armObj.data.bones) != len(bck.ank1.anims):
-        context.window_manager.popup_menu(lambda self, context: self.layout.label("%d bones required (given %d)"%(len(bck.ank1.anims), len(armObj.data.bones))),
+        context.window_manager.popup_menu(lambda self, context: self.layout.label(text="%d bones required (given %d)"%(len(bck.ank1.anims), len(armObj.data.bones))),
             title="Incompatible armature", icon='ERROR')
         return
 
@@ -244,10 +244,10 @@ def importFile(filepath, context):
             s[0][0] = scale[0]
             s[1][1] = scale[1]
             s[2][2] = scale[2]
-            rest = rest*s
+            rest = rest@s
         # make modelspace
         if bone.parent:
-            rest = bone.parent.matrix_local.inverted()*rest
+            rest = bone.parent.matrix_local.inverted()@rest
         #rest = Matrix(eval(bone['_bmd_rest']))
         
         # big table of transformation components so that we can index them easily
@@ -272,7 +272,7 @@ def importFile(filepath, context):
                 #s[0][0] = scale[0]
                 #s[1][1] = scale[1]
                 #s[2][2] = scale[2]
-                #mat = t*r*s
+                #mat = t@r@s
                 if animDataIndex < 3:
                     # can't just use this component
                     #mat = Matrix()
@@ -304,7 +304,7 @@ def importFile(filepath, context):
                     mat = Matrix.Translation(translation).to_4x4()
                 
                 # here's where the magic happens
-                mat = rest.inverted()*mat
+                mat = rest.inverted()@mat
                 
                 # decompose the new matrix
                 newLoc, newRot, newScale = mat.decompose()
@@ -341,7 +341,7 @@ class ImportBCK(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".bck"
 
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
             default="*.bck",
             options={'HIDDEN'},
             )
@@ -361,12 +361,12 @@ def menu_func_import(self, context):
 
 def register():
     bpy.utils.register_class(ImportBCK)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
 
 def unregister():
     bpy.utils.unregister_class(ImportBCK)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
 
 if __name__ == "__main__":

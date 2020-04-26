@@ -64,9 +64,9 @@ def readsection(fin, indent=0, vmfout=None):
         if console: print("%s%r %r %r %s"%('  '*indent, x, y, z, stylecolor(r, g, b)))
         if 1:#r > 0 or g > 0 or b > 0:
             if blender:
-                lamp = bpy.data.lamps.new(jpname, "POINT")
+                lamp = bpy.data.lights.new(jpname, "POINT")
                 obj = bpy.data.objects.new(enname, lamp)
-                bpy.context.scene.objects.link(obj)
+                bpy.context.scene.collection.objects.link(obj)
                 obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, 0, 0, 0)
                 lamp.color = (r/255.0, g/255.0, b/255.0)
             if vmf:
@@ -91,7 +91,7 @@ def readsection(fin, indent=0, vmfout=None):
         if blender:
             mesh = getmesh(name2)
             obj = bpy.data.objects.new(jpname, mesh)
-            bpy.context.scene.objects.link(obj)
+            bpy.context.scene.collection.objects.link(obj)
             obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
             obj.scale = (sx, sy, sz)
         if vmf:
@@ -114,7 +114,7 @@ def readsection(fin, indent=0, vmfout=None):
         if blender:
             mesh = getmesh(name2)
             obj = bpy.data.objects.new(jpname, mesh)
-            bpy.context.scene.objects.link(obj)
+            bpy.context.scene.collection.objects.link(obj)
             obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
             obj.scale = (sx, sy, sz)
         if vmf:
@@ -245,7 +245,7 @@ def readsection(fin, indent=0, vmfout=None):
                 if blender:
                     mesh = getmesh(name2)
                     obj = bpy.data.objects.new(jpname, mesh)
-                    bpy.context.scene.objects.link(obj)
+                    bpy.context.scene.collection.objects.link(obj)
                     obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
                     obj.scale = (sx, sy, sz)
                 if vmf:
@@ -267,7 +267,7 @@ def readsection(fin, indent=0, vmfout=None):
                 if blender:
                     mesh = getmesh(name2)
                     obj = bpy.data.objects.new(jpname, mesh)
-                    bpy.context.scene.objects.link(obj)
+                    bpy.context.scene.collection.objects.link(obj)
                     obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
                     obj.scale = (sx, sy, sz)
                 if vmf:
@@ -286,7 +286,7 @@ def readsection(fin, indent=0, vmfout=None):
                 if blender:
                     lamp = bpy.data.lamps.new(jpname, "SUN")
                     obj = bpy.data.objects.new(enname, lamp)
-                    bpy.context.scene.objects.link(obj)
+                    bpy.context.scene.collection.objects.link(obj)
                     obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
                 if vmf:
                     x, y, z, rx, ry, rz = bmd2vmfcoords(x, y, z, rx, ry, rz)
@@ -308,7 +308,7 @@ def readsection(fin, indent=0, vmfout=None):
             elif blender:
                 mesh = getmesh(enname)
                 obj = bpy.data.objects.new(jpname, mesh)
-                bpy.context.scene.objects.link(obj)
+                bpy.context.scene.collection.objects.link(obj)
                 obj.location, obj.rotation_euler = bmd2blendcoords(x, y, z, rx, ry, rz)
                 obj.scale = (sx, sy, sz)
             elif vmf:

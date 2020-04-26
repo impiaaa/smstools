@@ -591,12 +591,14 @@ class Image(Readable):
             
             fin.seek(nextHeader)
     
-    def export(self, im):
-        decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
-        im.pack(as_png=True)
-        #imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
-        #imgs[0][0].save("/tmp/"+im.name+".png")
-        #im.load("/tmp/"+im.name+".png")
+    def export(self, imageName):
+        #im = bpy.data.images.new(self.name, self.width, self.height, alpha=self.hasAlpha)
+        #decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+        imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+        imgs[0][0].save(imageName)
+        im = bpy.data.images.load(imageName)
+        im.pack()
+        return im
 
     def __repr__(self):
         return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
@@ -805,7 +807,7 @@ def localMatrix(i, bm):
 
     #looks wrong in certain circumstances...
     return bm.jnt1.matrices[i] #this looks better with vf_064l.bdl (from zelda)
-    return bm.jnt1.matrices[i]*s #this looks a bit better with mario's bottle_in animation
+    return bm.jnt1.matrices[i]@s #this looks a bit better with mario's bottle_in animation
 
 def updateMatrixTable(bmd, currPacket, matrixTable):
     for n, index in enumerate(currPacket.matrixTable):
@@ -823,7 +825,7 @@ def updateMatrixTable(bmd, currPacket, matrixTable):
                 for mIdx, mWeight in zip(mmi, mmw):
                     sm1 = bmd.evp1.matrices[mIdx]
                     sm2 = localMatrix(mIdx, bmd)
-                    m += mWeight*(sm2*sm1)
+                    m += mWeight*(sm2@sm1)
                 m[3][3] = 1
 
                 matrixTable[n] = (m, mmi, mmw)
@@ -871,9 +873,9 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
                     if bmIdx in bmverts:
                         bmFaceVerts.append(bmverts[bmIdx])
                     else:
-                        v = bm.verts.new(mat*bmd.vtx1.positions[p.posIndex])
+                        v = bm.verts.new(mat@bmd.vtx1.positions[p.posIndex])
                         if batch.hasNormals:
-                            v.normal = (mat*bmd.vtx1.normals[p.normalIndex].resized(4)).resized(3)
+                            v.normal = (mat@bmd.vtx1.normals[p.normalIndex].resized(4)).resized(3)
                         layer = bm.verts.layers.deform.verify()
                         for jntIdx, weight in zip(mmi, mmw):
                             jnt = bmd.jnt1.frames[jntIdx]
@@ -892,14 +894,9 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
                     for j, hasColorLayer in enumerate(batch.hasColors):
                         if hasColorLayer:
                             layer = bm.loops.layers.color[str(j)]
-                            f.loops[0][layer] = [c/255 for c in bmd.vtx1.colors[j][pa.colorIndex[j]][:3]]
-                            f.loops[1][layer] = [c/255 for c in bmd.vtx1.colors[j][pb.colorIndex[j]][:3]]
-                            f.loops[2][layer] = [c/255 for c in bmd.vtx1.colors[j][pc.colorIndex[j]][:3]]
-                            if len(bmd.vtx1.colors[j][pa.colorIndex[j]]) == 4:
-                                layer = bm.loops.layers.color[str(j)+'a']
-                                f.loops[0][layer] = [bmd.vtx1.colors[j][pa.colorIndex[j]][3]/255 for c in range(3)]
-                                f.loops[1][layer] = [bmd.vtx1.colors[j][pb.colorIndex[j]][3]/255 for c in range(3)]
-                                f.loops[2][layer] = [bmd.vtx1.colors[j][pc.colorIndex[j]][3]/255 for c in range(3)]
+                            f.loops[0][layer] = [c/255 for c in bmd.vtx1.colors[j][pa.colorIndex[j]]]
+                            f.loops[1][layer] = [c/255 for c in bmd.vtx1.colors[j][pb.colorIndex[j]]]
+                            f.loops[2][layer] = [c/255 for c in bmd.vtx1.colors[j][pc.colorIndex[j]]]
                     for j, hasTexLayer in enumerate(batch.hasTexCoords):
                         if hasTexLayer:
                             layer = bm.loops.layers.uv[str(j)]
@@ -924,10 +921,10 @@ def frameMatrix(f):
     s[0][0] = f.scale.x
     s[1][1] = f.scale.y
     s[2][2] = f.scale.z
-    return t*r*s
+    return t@r@s
 
 def updateMatrix(f, effP):
-    return effP*frameMatrix(f)
+    return effP@frameMatrix(f)
 
 def printMatrix(m, indent=0):
     for i in range(4):
@@ -999,15 +996,21 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     btex.image = bpy.data.images.load(imageName)
                 except RuntimeError as e:
                     pass
-                if btex.image:
-                    btex.image.name = texture.name
-                else:
-                    btex.image = bpy.data.images.new(texture.name, texture.width, texture.height, alpha=texture.hasAlpha)
-                    texture.export(btex.image)
+                if not btex.image:
+                    dirName = "/tmp/" + bmd.name
+                    imageName = dirName + "/" + texture.name + ".png"
+                    try:
+                        btex.image = bpy.data.images.load(imageName)
+                    except RuntimeError as e:
+                        pass
+                    if not btex.image:
+                        if not os.path.isdir(dirName): os.mkdir(dirName)
+                        btex.image = texture.export(imageName)
+                btex.image.name = texture.name
             btextures.append(btex)
 
-    print("Importing materials")
-    if hasattr(bmd, "mat3"):
+    #print("Importing materials")
+    if False and hasattr(bmd, "mat3"):
         mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
         for i, mat in enumerate(bmd.mat3.materials):
             bmat = None
@@ -1151,8 +1154,6 @@ def importMesh(filePath, bmd, mesh, bm=None):
         for i, colorLayer in enumerate(bmd.vtx1.colors):
             if colorLayer is not None:
                 bm.loops.layers.color.new(str(i))
-                # Blender doesn't support vertex color alphas :(
-                if len(colorLayer[0]) == 4: bm.loops.layers.color.new(str(i)+'a')
         for i, texLayer in enumerate(bmd.vtx1.texCoords):
             if texLayer is not None:
                 bm.loops.layers.uv.new(str(i))
@@ -1195,7 +1196,7 @@ bl_info = {
     "name": "Import BMD/BDL",
     "author": "Spencer Alves",
     "version": (1,0,0),
-    "blender": (2, 6, 2),
+    "blender": (2, 80, 0),
     "location": "Import",
     "description": "Import J3D BMD/BDL model",
     "warning": "",
@@ -1224,20 +1225,20 @@ def importFile(filepath):
 
     print("Importing armature")
     meshObject.parent = armObject
-    armObject.scale = Vector((1,1,1))/64
-    armObject.rotation_euler = Vector((math.pi/2,0,0))
+    armObject.scale = Vector((1,1,1))/256
+    armObject.rotation_euler = Vector((math.pi/2,0,math.pi/2))
     armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
     armMod.object = armObject
-    bpy.context.scene.objects.link(meshObject)
-    bpy.context.scene.objects.link(armObject)
+    bpy.context.scene.collection.objects.link(meshObject)
+    bpy.context.scene.collection.objects.link(armObject)
 
-    bpy.context.scene.objects.active = armObject
+    bpy.context.view_layer.objects.active = armObject
     bpy.ops.object.mode_set(mode='EDIT')
 
     if hasattr(bmd, "jnt1"):
         for i, f in enumerate(bmd.jnt1.frames):
-            meshObject.vertex_groups.new(f.name)
-            arm.edit_bones.new(f.name)
+            meshObject.vertex_groups.new(name=f.name)
+            arm.edit_bones.new(name=f.name)
     
         importSkeleton(bmd, arm)
     
@@ -1246,7 +1247,7 @@ def importFile(filepath):
     #armObject["scenegraph"] = repr(bmd.scenegraph.to_dict(bmd))
     
     bm = bmesh.new()
-    bm.from_object(meshObject, bpy.context.scene)
+    bm.from_object(meshObject, bpy.context.evaluated_depsgraph_get())
     importMesh(filepath, bmd, mesh, bm)
 
     if 0:
@@ -1287,7 +1288,7 @@ def importFile(filepath):
         armMod.object = armObject
         bm.to_mesh(mesh)
         bm.free()
-        bpy.context.scene.objects.link(meshObject)
+        bpy.context.scene.collection.objects.link(meshObject)
 
 class ImportBMD(Operator, ImportHelper):
     files = CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
@@ -1299,7 +1300,7 @@ class ImportBMD(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".bmd"
 
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
             default="*.bmd;*.bmt;*.bdl",
             options={'HIDDEN'},
             )
@@ -1319,12 +1320,12 @@ def menu_func_import(self, context):
 
 def register():
     bpy.utils.register_class(ImportBMD)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
 
 def unregister():
     bpy.utils.unregister_class(ImportBMD)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
 
 if __name__ == "__main__":
@@ -1332,3 +1333,4 @@ if __name__ == "__main__":
 
     # test call
     #bpy.ops.import_scene.bmd('INVOKE_DEFAULT')
+

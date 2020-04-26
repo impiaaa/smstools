@@ -4,7 +4,7 @@ bl_info = {
     "name": "Import COL",
     "author": "Spencer Alves",
     "version": (1,0,0),
-    "blender": (2, 6, 2),
+    "blender": (2, 80, 0),
     "location": "Import",
     "description": "Import J3D COL collision data",
     "warning": "",
@@ -44,14 +44,10 @@ def importFile(fname):
         m.materials.append(mat)
         t = fin.tell()
         fin.seek(indicesOffset)
-        #baseTriIndex = len(m.tessfaces)
         #baseTriIndex = len(bm.faces)
-        #m.tessfaces.add(numTriIndices)
         for j in range(numTriIndices):
-            #m.tessfaces[j+baseTriIndex].vertices[:3] = struct.unpack('>HHH', fin.read(6))
             try: face = bm.faces.new([bm.verts[idx] for idx in struct.unpack('>HHH', fin.read(6))])
             except ValueError: continue
-            #m.tessfaces[j+baseTriIndex].material_index = i
             face.material_index = i
         fin.seek(t)
     o = bpy.data.objects.new(m.name, m)
@@ -59,7 +55,7 @@ def importFile(fname):
     bm.free()
     #m.update()
     fin.close()
-    bpy.context.scene.objects.link(o)
+    bpy.context.scene.collection.objects.link(o)
 
 class ImportCOL(Operator, ImportHelper):
     bl_idname = "import_scene.col"  # important since its how bpy.ops.import_test.some_data is constructed
@@ -68,7 +64,7 @@ class ImportCOL(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".col"
 
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
             default="*.col",
             options={'HIDDEN'},
             )
@@ -84,12 +80,12 @@ def menu_func_import(self, context):
 
 def register():
     bpy.utils.register_class(ImportCOL)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
 
 def unregister():
     bpy.utils.unregister_class(ImportCOL)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
 
 if __name__ == "__main__":
