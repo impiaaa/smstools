@@ -478,7 +478,7 @@ int doaw(FILE *infile, const int offset, int dump) {
 int doOscTable(FILE *infile) {
 	unsigned char buf[4];
 	if (verbose) {
-		printf("OscTable@0x%x,", ftell(infile));
+		printf("OscTable@0x%lx,", ftell(infile));
 	}
 	return 0;
 }
