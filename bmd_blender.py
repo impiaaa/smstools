@@ -193,31 +193,31 @@ class Jnt1Entry(Readable):
 
 
 class ColorChanInfo(Readable):
-    header = Struct('>BBBBB3x')
+    header = Struct('>BBBBBB2x')
     def read(self, fin):
-        self.ambColorSource, self.matColorSource, self.litMask, \
-            self.attenuationFracFunc, self.diffuseAttenuationFunc = self.header.unpack(fin.read(8))
+        self.lightingEnabled, self.matColorSource, self.litMask, \
+            self.diffuseFunction, self.attenuationFunction, \
+            self.ambColorSource = self.header.unpack(fin.read(8))
 
 class TexGenInfo(Readable):
     header = Struct('>BBBx')
     def read(self, fin):
-        self.texGenType, self.texGenSrc, self.matrix = self.header.unpack(fin.read(4))
+        self.type, self.source, self.matrix = self.header.unpack(fin.read(4))
     def __repr__(self):
-        return "TexGenInfo texGenType=%x, texGenSrc=%x, matrix=%x"%(self.texGenType, self.texGenSrc, self.matrix)
+        return "TexGenInfo texGenType=%x, texGenSrc=%x, matrix=%x"%(self.type, self.source, self.matrix)
 
 class TexMtxInfo(Readable):
-    header = Struct('<H2x')
+    header = Struct('>BB2x')
     def read(self, fin):
-        self.unk, = self.header.unpack(fin.read(4))
-        self.f1 = unpack('>5f', fin.read(20))
-        self.unk2, = self.header.unpack(fin.read(4))
-        self.f2 = unpack('>2f', fin.read(8))
-        self.f3 = unpack('>16f', fin.read(64))
-        
-        self.scaleCenterX, self.scaleCenterY, self.scaleU, self.scaleV = self.f1[0], self.f1[1], self.f1[3], self.f1[4]
+        self.projection, self.info = self.header.unpack(fin.read(4))
+        self.center = unpack('>3f', fin.read(12))
+        self.scale = unpack('>2f', fin.read(8))
+        self.rotation = unpack('>h2x', fin.read(4))[0]/0x7FFF
+        self.translation = unpack('>2f', fin.read(8))
+        self.effectMatrix = unpack('>16f', fin.read(64))
 
 def safeindex(ls,index):
-    if index < len(ls): return ls[index]
+    if index < len(ls) and index > 0: return ls[index]
     else: return hex(index)
 
 colorids = ['COLOR0', 'COLOR1', 'ALPHA0', 'ALPHA1', 'COLOR0A0', 'COLOR1A1', 'COLORZERO', 'BUMP ', 'BUMPN', 'COLORNULL']
@@ -281,15 +281,15 @@ class Material(Readable):
     def read(self, fin):
         self.flag, self.cullIndex, self.numChansIndex, self.texGenCountIndex, \
             self.tevCountIndex, self.zModeIndex = self.header.unpack(fin.read(8))
-        self.color1 = unpack('>2H', fin.read(4))
+        self.materialColor = unpack('>2H', fin.read(4))
         self.chanControls = unpack('>4H', fin.read(8))
 
-        self.color2 = unpack('>2H', fin.read(4))
+        self.ambientColor = unpack('>2H', fin.read(4))
         self.lights = unpack('>8H', fin.read(16))
 
-        self.texGenInfos = unpack('>8H', fin.read(16))
+        self.texGenInfos = unpack('>8h', fin.read(16)) # postTexGen
         self.texGenInfos2 = unpack('>8H', fin.read(16))
-        self.texMtxInfos = unpack('>10H', fin.read(20))
+        self.texMtxInfos = unpack('>10h', fin.read(20))
         self.dttMatrices = unpack('>20H', fin.read(40))
         self.texStages = unpack('>8H', fin.read(16))
         self.color3 = unpack('>4H', fin.read(8))
@@ -297,7 +297,7 @@ class Material(Readable):
         self.constAlphaSel = unpack('>16B', fin.read(16))
         self.tevOrderInfo = unpack('>16H', fin.read(32))
         self.colorS10 = unpack('>4H', fin.read(8))
-        self.tevStageInfo = unpack('>16H', fin.read(32))
+        self.tevStageInfo = unpack('>16h', fin.read(32))
         self.tevSwapModeInfo = unpack('>16H', fin.read(32))
         self.tevSwapModeTable = unpack('>4H', fin.read(8))
         self.unknown6 = unpack('>12H', fin.read(24))
@@ -325,17 +325,28 @@ class Mat3(Section):
         count, pad = self.header.unpack(fin.read(4))
         offsets = unpack('>30L', fin.read(120))
 
+        lengths = computeSectionLengths(offsets, size)
+
+        fin.seek(start+offsets[0])
+        self.materials = [None]*count
+        for i in range(count):
+            m = Material()
+            m.read(fin)
+            self.materials[i] = m
+        
+        fin.seek(start+offsets[1])
+        self.indexToMatIndex = array('H') # remapTable
+        self.indexToMatIndex.fromfile(fin, count)
+        if sys.byteorder == 'little': self.indexToMatIndex.byteswap()
+        
         self.materialNames = readstringtable(start+offsets[2], fin)
         if count != len(self.materialNames):
             warn("mat3: number of strings (%d) doesn't match number of elements (%d)"%len(self.materialNames), count)
+        for m, n in zip(self.materials, self.materialNames):
+            m.name = n
 
-        lengths = computeSectionLengths(offsets, size)
-
-        fin.seek(start+offsets[1])
-        self.indexToMatIndex = array('H')
-        self.indexToMatIndex.fromfile(fin, count)
-        if sys.byteorder == 'little': self.indexToMatIndex.byteswap()
-        maxIndex = max(self.indexToMatIndex)
+        fin.seek(start+offsets[3]) # indirect
+        # TODO offset[3] indirect texturing blocks (always as many as count)
 
         fin.seek(start+offsets[4])
         self.cullModes = array('L')
@@ -343,7 +354,7 @@ class Mat3(Section):
         if sys.byteorder == 'little': self.cullModes.byteswap()
 
         fin.seek(start+offsets[5])
-        self.color1 = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
+        self.materialColor = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
 
         fin.seek(start+offsets[6])
         self.numChans = array('B')
@@ -353,10 +364,10 @@ class Mat3(Section):
         self.colorChanInfos = [ColorChanInfo(fin) for i in range(lengths[7]//8)]
 
         fin.seek(start+offsets[8])
-        self.color2 = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)]
+        self.ambientColor = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)] 
 
-        # TODO offset[3] indirect texturing blocks (always as many as count)
-
+        # 9 (LightInfo)
+        
         fin.seek(start+offsets[10])
         self.texGenCounts = array('B')
         self.texGenCounts.fromfile(fin, lengths[10])
@@ -364,8 +375,14 @@ class Mat3(Section):
         fin.seek(start+offsets[11])
         self.texGenInfos = [TexGenInfo(fin) for i in range(lengths[11]//4)]
 
+        # 12 (TexCoord2Info)
+        # postTexGen
+        
         fin.seek(start + offsets[13])
         self.texMtxInfos = [TexMtxInfo(fin) for i in range(lengths[13]//100)]
+        
+        # 14 (TexMtxInfo2)
+        # postTexMtx
         
         fin.seek(start+offsets[15])
         self.texStageIndexToTextureIndex = array('H')
@@ -376,8 +393,11 @@ class Mat3(Section):
         self.tevOrderInfos = [TevOrderInfo(fin) for i in range(lengths[16]//4)]
         
         # TODO offsets[17] (read colorS10)
+        fin.seek(start+offsets[17])
+        # colorRegister
         
         # TODO offsets[18] (color3)
+        # colorConstant
 
         fin.seek(start+offsets[19])
         self.tevCounts = array('B')
@@ -390,6 +410,8 @@ class Mat3(Section):
         
         # TODO offset[22] (TevSwapModeTable)
 
+        # 23 (FogInfo)        
+        
         fin.seek(start+offsets[24])
         self.alphaCompares = [AlphaCompare(fin) for i in range(lengths[24]//8)]
 
@@ -398,17 +420,10 @@ class Mat3(Section):
 
         fin.seek(start+offsets[26])
         self.zModes = [ZMode(fin) for i in range(lengths[26]//4)]
-
-        fin.seek(start+offsets[0])
-        self.materials = [None]*(maxIndex+1)
-        for i in range(maxIndex+1):
-            m = Material()
-            m.read(fin)
-            m.name = self.materialNames[i]
-            self.materials[i] = m
         
-        # missing: 9 (LightInfo), 12 (TexCoord2Info), 14 (TexMtxInfo2), 23 (FogInfo), 27 (MaterialData6), 28 (MaterialData7), 29 (NBTScaleInfo)
-
+        # 27 (MaterialData6)
+        # 28 (MaterialData7)
+        # 29 (NBTScaleInfo)
 
 
 class Index(Readable):
@@ -974,6 +989,39 @@ def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, in
         batch = bmd.shp1.batches[sg.index]
         drawBatch(bmd, sg.index, effP, matIndex, bmverts, bm, indent)
 
+class Column:
+    def __init__(self, x=0):
+        self.x = x
+        self.bottom = 0
+        self.maxWidth = 0
+
+class NodePlacer:
+    def __init__(self, tree):
+        self.tree = tree
+        self.columns = [Column()]
+        self.colIdx = 0
+        self.margin = 10
+    
+    def nextColumn(self):
+        if self.colIdx >= len(self.columns)-1:
+            self.columns.append(Column())
+        lastCol = self.columns[self.colIdx]
+        self.colIdx += 1
+        self.columns[self.colIdx].x = lastCol.x+lastCol.maxWidth+self.margin
+    
+    def previousColumn(self):
+        self.colIdx -= 1
+    
+    def addNode(self, type):
+        col = self.columns[self.colIdx]
+        node = self.tree.nodes.new(type)
+        node.location = (col.x, col.bottom)
+        node.select = False
+        node.hide = True
+        col.bottom -= node.bl_height_max+self.margin
+        if col.maxWidth < node.bl_width_default: col.maxWidth = node.bl_width_default
+        return node
+
 def importMesh(filePath, bmd, mesh, bm=None):
     print("Importing textures")
     btextures = []
@@ -1009,143 +1057,126 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 btex.image.name = texture.name
             btextures.append(btex)
 
-    #print("Importing materials")
-    if False and hasattr(bmd, "mat3"):
-        mesh.show_double_sided = bmd.mat3.cullModes[bmd.mat3.materials[0].cullIndex] != 2
+    print("Importing materials")
+    if hasattr(bmd, "mat3"):
         for i, mat in enumerate(bmd.mat3.materials):
             bmat = None
-            m = bmd.mat3.indexToMatIndex.index(i)
-            if bmd.mat3.materialNames[m] in bpy.data.materials:
+            m = i#bmd.mat3.indexToMatIndex.index(i) #XXX
+            if False and bmd.mat3.materialNames[m] in bpy.data.materials:
                 bmat = bpy.data.materials[bmd.mat3.materialNames[m]]
                 mesh.materials.append(bmat)
                 continue
             else:
                 bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
+            
+            #bmat.diffuse_color = bmd.mat3.materialColor[mat.materialColor[0]]
+            bmat.use_backface_culling = bmd.mat3.cullModes[mat.cullIndex] == 2
 
-            bmat.specular_intensity = 0.0
-            bmat.diffuse_intensity = 1.0
-            bmat.diffuse_color = (1,1,1)
-            bmat.alpha = 1.0
+            bmat.use_nodes = True
+            tree = bmat.node_tree
+            tree.nodes.clear()
+            
+            placer = NodePlacer(tree)
+            colorMatReg = []
+            for j, colorMatIndex in enumerate(mat.materialColor):
+                color = placer.addNode('ShaderNodeRGB')
+                color.outputs[0].default_value = [c/255 for c in bmd.mat3.materialColor[colorMatIndex]]
+                color.name = "Material color {}".format(j)
+                color.label = "Material index {}".format(colorMatIndex)
+                colorMatReg.append(color)
+            colorAmbReg = []
+            for j, colorAmbIndex in enumerate(mat.ambientColor):
+                color = placer.addNode('ShaderNodeRGB')
+                color.outputs[0].default_value = [c/255 for c in bmd.mat3.ambientColor[colorAmbIndex]]
+                color.name = "Ambient color {}".format(j)
+                color.label = "Ambient index {}".format(colorAmbIndex)
+                colorAmbReg.append(color)
+            colorVtxReg = []
+            for j in range(2):
+                reg = placer.addNode('ShaderNodeAttribute')
+                reg.attribute_name = str(j)
+                reg.name = "Vertex {}".format(j)
+                colorVtxReg.append(reg)
+            texGens = []
+            for j, texGenIndex in enumerate(mat.texGenInfos):
+                if texGenIndex < 0: continue
+                texGen = bmd.mat3.texGenInfos[texGenIndex]
+                node = None
+                out = None
+                if texGen.source == 0:
+                    node = placer.addNode('ShaderNodeGeometry')
+                    out = node.outputs['Position']
+                elif texGen.source == 1:
+                    node = placer.addNode('ShaderNodeGeometry')
+                    out = node.outputs['Normal']
+                elif texGen.source == 3:
+                    node = placer.addNode('ShaderNodeGeometry')
+                    out = node.outputs['Tangent']
+                elif texGen.source >= 4 and texGen.source <= 11:
+                    node = placer.addNode('ShaderNodeUVMap')
+                    out = node.outputs['UV']
+                    node.uv_map = str(texGen.source-4)
+                if node is not None:
+                    node.name = "Tex gen {}".format(j)
+                    node.label = "Tex gen index {}".format(texGenIndex)
+                texMtxIndex = mat.texMtxInfos[j]
+                if texMtxIndex >= 0:
+                    texMtx = bmd.mat3.texMtxInfos[texMtxIndex]
+                    placer.nextColumn()
+                    node = placer.addNode('ShaderNodeMapping')
+                    node.vector_type = 'POINT'
+                    node.translation = texMtx.translation+(0,)
+                    node.rotation.z = texMtx.rotation # TODO what units
+                    node.scale = texMtx.scale+(1,)
+                    tree.links.new(out, node.inputs[0])
+                    out = node.outputs[0]
+                    placer.previousColumn()
+                texGens.append(out)
+            
+            placer.nextColumn()
+            lightChannels = []
+            for j in range(bmd.mat3.numChans[mat.numChansIndex]):
+                colorChannel = bmd.mat3.colorChanInfos[mat.chanControls[j*2]]
+                #alphaChannel = bmd.mat3.colorChanInfos[mat.chanControls[j*2+1]]
+                matSource = [colorMatReg, colorVtxReg][colorChannel.matColorSource][j]
+                ambSource = [colorAmbReg, colorVtxReg][colorChannel.ambColorSource][j]
+                if colorChannel.lightingEnabled:
+                    if colorChannel.attenuationFunction in (0,2):
+                        attn = placer.addNode('ShaderNodeRGB')
+                        attn.outputs[0].default_value = (1.0,1.0,1.0,1.0)
+                    elif colorChannel.attenuationFunction == 1:
+                        attn = placer.addNode('ShaderNodeEeveeSpecular')
+                        tree.links.new(matSource.outputs['Color'], attn.inputs[0])
+                    elif colorChannel.attenuationFunction == 3:
+                        attn = placer.addNode('ShaderNodeBsdfDiffuse')
+                        tree.links.new(matSource.outputs['Color'], attn.inputs[0])
+                    placer.nextColumn()
+                    reg = placer.addNode('ShaderNodeAddShader')
+                    reg.name = "Color channel {}".format(j)
+                    reg.label = "Color channel index {}".format(mat.chanControls[j*2])
+                    tree.links.new(ambSource.outputs['Color'], reg.inputs[0])
+                    tree.links.new(attn.outputs[0], reg.inputs[1])
+                    lightChannels.append(reg)
+                    placer.previousColumn()
+            
+            placer.nextColumn()
+            for j, tevStageIndex in enumerate(mat.tevStageInfo):
+                if tevStageIndex < 0: continue
+                stage = bmd.mat3.tevStageInfos[tevStageIndex]
+            
+            placer.nextColumn()
+            if len(lightChannels) == 1:
+                shout = placer.addNode('ShaderNodeOutputMaterial')
+                tree.links.new(lightChannels[0].outputs['Shader'], shout.inputs[0])
+            elif len(lightChannels) == 2:
+                n = placer.addNode('ShaderNodeAddShader')
+                placer.nextColumn()
+                shout = placer.addNode('ShaderNodeOutputMaterial')
+                tree.links.new(lightChannels[0].outputs['Shader'], n.inputs[0])
+                tree.links.new(lightChannels[1].outputs['Shader'], n.inputs[1])
+                tree.links.new(n.outputs[0], shout.inputs[0])
 
-            # VERY rough approximation of the end results of the TEV pipeline.
-            # TODO: It should be possible to emulate the TEV in full with
-            # material/shader nodes
-
-            if mat.chanControls[0] >= len(bmd.mat3.colorChanInfos):
-                bmat.use_vertex_color_paint = True
-            else:
-                chanInfo = bmd.mat3.colorChanInfos[mat.chanControls[0]]
-                if chanInfo.matColorSource == 1:
-                    bmat.use_vertex_color_paint = True
-                else:
-                    c = bmd.mat3.color1[mat.color1[0]]
-                    bmat.diffuse_color = [x/255 for x in c[:3]]
-                    bmat.alpha = c[3]/255
-
-            bmat.invert_z = bmd.mat3.zModes[mat.zModeIndex].func in (4, 6)
-            bmat.use_transparency = bmd.mat3.alphaCompares[mat.alphaCompIndex].alphaOp == 0
-            bmat.game_settings.use_backface_culling = bmd.mat3.cullModes[mat.cullIndex] == 2
-            bi = bmd.mat3.blendInfos[mat.blendIndex]
-            if bi.blendMode in (0,1):
-                if bi.dstFactor == 1:
-                    bmat.game_settings.alpha_blend = 'ADD'
-
-            matTexures = [None]*8
-            for j, stage in enumerate(mat.texStages):
-                if stage != 0xffff:
-                    matTexures[j] = btextures[bmd.mat3.texStageIndexToTextureIndex[stage]]
-            texGens = [None]*8
-            for j in range(bmd.mat3.texGenCounts[mat.texGenCountIndex]):
-                texGens[j] = bmd.mat3.texGenInfos[mat.texGenInfos[j]]
-            for j in range(bmd.mat3.tevCounts[mat.tevCountIndex]):
-                order = bmd.mat3.tevOrderInfos[mat.tevOrderInfo[j]]
-                stage = bmd.mat3.tevStageInfos[mat.tevStageInfo[j]]
-                slot = bmat.texture_slots.add()
-                if order.texCoordId < 8:
-                    texGen = texGens[order.texCoordId]
-                    if texGen.texGenType in (0,1):
-                        if texGen.matrix == 0x3c:
-                            pass
-                        elif texGen.matrix >= 0x1e and texGen.matrix <= 0x39:
-                            pass
-                        else:
-                            warn("writeTexGen() type %d: unsupported matrix 0x%x", texGen.texGenType, texGen.matrix)
-
-                        if texGen.texGenSrc >= 4 and texGen.texGenSrc <= 11:
-                            slot.texture_coords = 'UV'
-                            slot.uv_layer = str(texGen.texGenSrc - 4)
-                        elif texGen.texGenSrc == 0:
-                            slot.texture_coords = 'GLOBAL'
-                        elif texGen.texGenSrc == 1:
-                            slot.texture_coords = 'NORMAL'
-                        elif texGen.texGenSrc == 3:
-                            slot.texture_coords = 'TANGENT'
-                        else:
-                            warn("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
-                        
-                        if mat.texMtxInfos[order.texCoordId] != 0xffff:
-                            tmi = bmd.mat3.texMtxInfos[mat.texMtxInfos[order.texCoordId]]
-                            slot.scale.x = tmi.scaleU
-                            slot.scale.y = tmi.scaleV
-                            slot.offset.x = tmi.scaleCenterX*(1 - tmi.scaleU)
-                            slot.offset.y = tmi.scaleCenterY*(1 - tmi.scaleV)
-                    elif texGen.texGenType == 0xa:
-                        if texGen.matrix != 0x3c:
-                            warn("writeTexGen() type 0xa: unexpected matrix 0x%x", texGen.matrix)
-                        if texGen.texGenSrc != 0x13:
-                            warn("writeTexGen() type 0xa: unexpected src 0x%x", texGen.texGenSrc)
-                        # TODO
-                        slot.texture_coords = 'NORMAL'
-                
-                if order.texMap < 8: slot.texture = matTexures[order.texMap]
-                
-                slot.use_map_color_diffuse = stage.colorRegId == 0
-                slot.diffuse_color_factor = [1, 2, 4, 0.5][stage.colorScale]
-                if stage.colorOp in (0,1) and stage.colorIn[3] == 0:
-                    slot.blend_type = ['ADD', 'SUBTRACT'][stage.colorOp]
-                    if 0:
-                        if stage.colorIn[2] == 12:
-                            slot.diffuse_color_factor = 1.0
-                        elif stage.colorIn[2] == 13:
-                            slot.diffuse_color_factor = 0.5
-                        elif stage.colorIn[2] == 14:
-                            if mat.constColorSel[j] <= 7:
-                                slot.diffuse_color_factor = 1.0-(mat.constColorSel[j]/8.0)
-                            elif mat.constColorSel[j] < 0xc:
-                                raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
-                            else:
-                                konst = mat.constColorSel[j]-0xc
-                                slot.diffuse_color_factor = bmd.mat3.color3[konst%4][konst//4]
-                        elif stage.colorIn[2] == 15:
-                            slot.diffuse_color_factor = 0.0
-                elif stage.colorOp in (8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf):
-                    slot.blend_type = 'SCREEN'
-                else:
-                    slot.blend_type = 'MULTIPLY'
-
-                slot.use_map_alpha = stage.alphaRegId == 0
-                slot.alpha_factor = [1, 2, 4, 0.5][stage.alphaScale]
-                slot.use_rgb_to_intensity = (stage.alphaIn[3]%2)==0
-                if 0:
-                    if stage.alphaOp in (0,1):
-                        if stage.alphaIn[2] == 12:
-                            slot.alpha_factor = 1.0
-                        elif stage.alphaIn[2] == 13:
-                            slot.alpha_factor = 0.5
-                        elif stage.alphaIn[2] == 14:
-                            if mat.constAlphaSel[j] <= 7:
-                                slot.alpha_factor = 1.0-(mat.constAlphaSel[j]/8.0)
-                            elif mat.constAlphaSel[j] < 0xc:
-                                raise Exception("unknown constColorSel %x"%mat.constColorSel[j])
-                            else:
-                                konst = mat.constAlphaSel[j]-0xc
-                                slot.alpha_factor = bmd.mat3.color3[konst%4][konst//4]
-                        elif stage.colorIn[2] == 15:
-                            slot.alpha_factor = 0.0
-                    else:
-                        slot.use_rgb_to_intensity = True
-
-            mesh.materials.append(bmat)
+            mesh.materials.append(bmat) # XXX
 
     print("Importing mesh")
     if bm is None: bm = bmesh.new()
@@ -1225,7 +1256,7 @@ def importFile(filepath):
 
     print("Importing armature")
     meshObject.parent = armObject
-    armObject.scale = Vector((1,1,1))/256
+    armObject.scale = Vector((1,1,1))/96
     armObject.rotation_euler = Vector((math.pi/2,0,math.pi/2))
     armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
     armMod.object = armObject
