@@ -4,7 +4,6 @@
 # It's quite a mess, but fairly capable. I need to decide if I should rewrite/refactor it or port/contribute to the other one
 
 # broken in Windows Media Player: k_manma, t_casino_fanf, t_chuboss, t_delfino, t_event, t_mechakuppa_, t_pinnapaco, t_select, t_shilena
-# broken in MuseScore: t_delfino, t_event, t_shilena
 
 import struct, sys, os
 from struct import unpack
@@ -13,6 +12,7 @@ import midi
 
 def handlePerf(type, value, duration, maxValue, track, tick):
   event2 = None
+  types = {2: 16, 4: 17, 9: 18, 10: 19}
   if type == 0:
     # volume
     event1 = midi.ControlChangeEvent(tick=tick)
@@ -43,7 +43,10 @@ def handlePerf(type, value, duration, maxValue, track, tick):
     event1.value = (value*0x7F)/maxValue
   else:
     warn("Unknown perf type %d"%type)
-    event1 = midi.TextMetaEvent(tick=tick, data=map(ord, "Perf %d (%d)"%(type, value)))
+    #event1 = midi.TextMetaEvent(tick=tick, data=map(ord, "Perf %d (%d)"%(type, value)))
+    event1 = midi.ControlChangeEvent(tick=tick)
+    event1.control = types[type]
+    event1.value = (value*0x7F)/maxValue
   track.append(event1)
   if event2 is not None: track.append(event2)
   if duration:
@@ -62,7 +65,10 @@ def handlePerf(type, value, duration, maxValue, track, tick):
       event.control = 10 # Pan
       event.value = 0x40
     else:
-      event = midi.TextMetaEvent(tick=duration, data=map(ord, "Perf %d (%d)"%(type, value)))
+      #event = midi.TextMetaEvent(tick=duration, data=map(ord, "Perf %d (%d)"%(type, value)))
+      event1 = midi.ControlChangeEvent(tick=duration)
+      event1.control = types[type]
+      event1.value = 0
     return event
 
 def handleBankProgram(which, selection, track, tick):
@@ -95,6 +101,9 @@ def handleBankProgram(which, selection, track, tick):
   elif which == 0x21:
     # program
     print "Program", selection
+    if selection >= 128:
+      warn("Program %d >= 128"%selection)
+      #selection -= 228
     event = midi.ProgramChangeEvent(tick=tick, value=selection%128)
     track.append(event)
   else:
@@ -105,11 +114,11 @@ def handleBankProgram(which, selection, track, tick):
 def handleSeek(type, mode, point, track, tick, voices):
   #print ("Call", "Ret", "Jump")[(type-0xC3)/2], mode, point
   if mode == 0: pass # always
-  elif mode == 1: pass # zero
-  elif mode == 2: pass # nonzero
-  elif mode == 3: pass # one
-  elif mode == 4: pass # greater than
-  elif mode == 5: pass # less than
+  #elif mode == 1: pass # zero
+  #elif mode == 2: pass # nonzero
+  #elif mode == 3: pass # one
+  #elif mode == 4: pass # greater than
+  #elif mode == 5: pass # less than
   else: warn("Unknown seek mode %d"%mode)
   # stop all notes before looping
   voicepairs = voices.items()
@@ -155,13 +164,19 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
     queuedEvents = []
   tracksToDo = []
   channel = (trackId)%16
-  if trackId == 15: channel = 9
+  if trackId >= 16: warn("Track ID %d >= 16"%trackId)
+  #if trackId == 15: channel = 9
+  bytePositionInTrack = {}
+  delayAtBytePosition = {}
   while True:
     #if fin.tell() >= maxpos and maxpos != -1:
       #warn("Passed track bounds")
       #break
     #print hex(fin.tell()),
     #print totalTime,
+    if pattern:
+      bytePositionInTrack[fin.tell()] = len(track)
+      delayAtBytePosition[fin.tell()] = delay
     c = fin.read(1)
     if c == '': break
     cmd = ord(c)
@@ -318,6 +333,10 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       if 1:#totalTime < endTime: fin.seek(point)
       #else:
         track.append(midi.TextMetaEvent(tick=delay, data=map(ord, "Jump to 0x%X"%(point))))
+        jumpToInTrack = bytePositionInTrack[point]
+        delay = delayAtBytePosition[point]
+        track.insert(jumpToInTrack, midi.TrackLoopEvent(tick=delay, data=[0]))
+        track[jumpToInTrack+1].tick -= delay
         delay = 0
         if mode == 0:
           print "Breaking out of loop"
@@ -331,6 +350,10 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       if 1:#totalTime < endTime: fin.seek(point)
       #else:
         track.append(midi.TextMetaEvent(tick=delay, data=map(ord, "Jump to 0x%X"%(point))))
+        jumpToInTrack = bytePositionInTrack[point]
+        delay = delayAtBytePosition[point]
+        track.insert(jumpToInTrack, midi.TrackLoopEvent(tick=delay, data=[0]))
+        track[jumpToInTrack+1].tick -= delay
         delay = 0
         if mode == 0:
           print "Breaking out of loop"
@@ -343,24 +366,24 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # loop end
       # cmdLoopE
       raise NotImplementedError("")
-    # 0xcb 0x8027eb54 cmdReadPort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xcc 0x8027ebac cmdWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xcd 0x8027ed80 cmdCheckPortImport__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xce 0x8027ed98 cmdCheckPortExport__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xcb 0x8027eb54 cmdReadPort
+    # 0xcc 0x8027ebac cmdWritePort
+    # 0xcd 0x8027ed80 cmdCheckPortImport
+    # 0xce 0x8027ed98 cmdCheckPortExport
     elif cmd == 0xCF:
       # delay
       # cmdWait
       raise NotImplementedError("")
-    # 0xD1 0x8027ebe0 cmdParentWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xD2 0x8027ec68 cmdChildWritePort__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xD1 0x8027ebe0 cmdParentWritePort
+    # 0xD2 0x8027ec68 cmdChildWritePort
     elif cmd == 0xD4:
       # prev note
       # cmdSetLastNote
       raise NotImplementedError("")
-    # 0xd5 0x8027ee44 cmdTimeRelate__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xd6 0x8027ee5c cmdSimpleOsc__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xd7 0x8027ee8c cmdSimpleEnv__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xd8 0x8027eec0 cmdSimpleADSR__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xd5 0x8027ee44 cmdTimeRelate
+    # 0xd6 0x8027ee5c cmdSimpleOsc
+    # 0xd7 0x8027ee8c cmdSimpleEnv
+    # 0xd8 0x8027eec0 cmdSimpleADSR
     elif cmd == 0xD8:
       ppqn, = unpack('>xH', fin.read(3))
       warn("Unknown D8, prob PPQN %s"%ppqn)
@@ -376,8 +399,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
     elif cmd == 0xDC:
       warn("Unknown DC")
       fin.seek(1,1)
-    # 0xdc 0x8027f02c cmdUpdateSync__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xdd 0x8027f058 cmdBusConnect__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xdc 0x8027f02c cmdUpdateSync
+    # 0xdd 0x8027f058 cmdBusConnect
     # TODO used by t_pinnapaco_m and k_kagemario
     elif cmd == 0xDD:
       warn("Unknown DD")
@@ -397,7 +420,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # unset dynamic
       # cmdDisInterrupt
       #idx, = unpack('>B', fin.read(1))
-	  #raise NotImplementedError("")
+      #raise NotImplementedError("")
       tempo, = unpack('>H', fin.read(2))
       warn("Unknown E0, prob Tempo", tempo)
       if pattern is not None: track.append(midi.SetTempoEvent(bpm=tempo, tick=delay))
@@ -406,16 +429,17 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # clear dynamic
       # cmdClrI
       #raise NotImplementedError("")
+      warn("Unknown E1")
       fin.seek(1,1)
-    # 0xe2 0x8027f124 cmdSetI__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xe2 0x8027f124 cmdSetI
     elif cmd == 0xE2:
       warn("Unknown E2")
       fin.seek(1,1)
-    # 0xe3 0x8027f134 cmdRetI__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xe3 0x8027f134 cmdRetI
     elif cmd == 0xE3:
       warn("Unknown E3")
       fin.seek(1,1)
-    # 0xe4 0x8027f178 cmdIntTimer__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xe4 0x8027f178 cmdIntTimer
     elif cmd == 0xE5:
       # add pool
       # cmdVibDepth
@@ -433,31 +457,31 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         raise Exception("Track was already initialized")
       else:
         trackWasInit = True
-    # 0xe8 0x8027f1ec cmdFlushAll__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xe9 0x8027f214 cmdFlushRelease__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xe8 0x8027f1ec cmdFlushAll
+    # 0xe9 0x8027f214 cmdFlushRelease
     elif cmd == 0xEA:
       # delay
       # cmdWait
       raise NotImplementedError("")
-    # 0xEB 0x8027f2ac cmdPanPowSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xEC 0x8027f544 cmdIIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xED 0x8027f330 cmdFIRSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xEE 0x8027f368 cmdEXTSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xEF? 0x8027f3bc cmdPanSwSet__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xEB 0x8027f2ac cmdPanPowSet
+    # 0xEC 0x8027f544 cmdIIRSet
+    # 0xED 0x8027f330 cmdFIRSet
+    # 0xEE 0x8027f368 cmdEXTSet
+    # 0xEF? 0x8027f3bc cmdPanSwSet
     # TODO used by t_pinnapaco_m and k_kagemario
     elif cmd == 0xEF:
       warn("Unknown EF")
       fin.seek(3, 1)
-    # 0xF0 0x8027f460 cmdOscRoute__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xF0 0x8027f460 cmdOscRoute
     elif cmd == 0xF0:
       warn("Unknown F0", hex(ord(fin.read(1))))
-    # 0xF1 0x8027f5c8 cmdIIRCutOff__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xF2 0x8027f65c cmdOscFull__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xF3 0x8027f098 cmdVolumeMode__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0x?? 0x8027f4fc cmdVibPitch__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xFA 0x8027f698 cmdCheckWave__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xFB 0x8027f6a8 cmdPrintf__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
-    # 0xFC 0x8027f2a4 cmdNop__Q28JASystem10TSeqParserFPQ28JASystem6TTrackPUl
+    # 0xF1 0x8027f5c8 cmdIIRCutOff
+    # 0xF2 0x8027f65c cmdOscFull
+    # 0xF3 0x8027f098 cmdVolumeMode
+    # 0x?? 0x8027f4fc cmdVibPitch
+    # 0xFA 0x8027f698 cmdCheckWave
+    # 0xFB 0x8027f6a8 cmdPrintf
+    # 0xFC 0x8027f2a4 cmdNop
     
     elif cmd == 0xF9:
       warn("Unknown F9")
@@ -507,6 +531,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         voiceId = flags&0x07
         flags &= 0xF8
         #print "Voice on", cmd, voiceId, velocity
+        if flags != 0:
+          warn("Unsupported flags 0x%x"%flags)
         if pattern is not None and flags == 0:
           if voiceId in voices:
             warn("Voice id %d already on!"%voiceId)
