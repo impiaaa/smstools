@@ -1,4 +1,5 @@
 import bpy, struct, os, bmesh
+from col import ColReader
 
 bl_info = {
     "name": "Import COL",
@@ -20,42 +21,29 @@ from bpy.types import Operator
 
 def importFile(fname):
     print("Reading", fname)
-    bm = bmesh.new()
     fin = open(fname, 'rb')
-    numCoords, coordsOffset, numGroups = struct.unpack('>III', fin.read(12))
-    print("numCoords =", numCoords, "coordsOffset =", coordsOffset, "numGroups =", numGroups)
-
-    fin.seek(coordsOffset)
-    #m.vertices.add(numCoords)
-    for i in range(numCoords):
-        x, y, z = struct.unpack('>fff', fin.read(12))
-        #m.vertices[i].co = (z, x, y)
-        bm.verts.new((z, x, y))
-    bm.verts.ensure_lookup_table()
-
-    fin.seek(12)
-    m = bpy.data.meshes.new(os.path.splitext(os.path.split(fname)[-1])[0])
-    for i in range(numGroups):
-        unknownOffset0, unknown2, numTriIndices, unknown3, indicesOffset, unknownOffset1, unknownOffset2 = struct.unpack(">IHHIIII", fin.read(24))
-        print("unknownOffset0 =", unknownOffset0, "unknown2 =", unknown2, "numTriIndices =", numTriIndices, "unknown3 =", unknown3, "indicesOffset =", indicesOffset, "unknownOffset1 =", unknownOffset1, "unknownOffset2 =", unknownOffset2)
-        # unknownOffset1 and unknownOffset2 are 1 byte/index (3/tri)
-        # unknownOffset0 is sometimes 0 or 16
-        mat = bpy.data.materials.new(str(i))
-        m.materials.append(mat)
-        t = fin.tell()
-        fin.seek(indicesOffset)
-        #baseTriIndex = len(bm.faces)
-        for j in range(numTriIndices):
-            try: face = bm.faces.new([bm.verts[idx] for idx in struct.unpack('>HHH', fin.read(6))])
-            except ValueError: continue
-            face.material_index = i
-        fin.seek(t)
-    o = bpy.data.objects.new(m.name, m)
-    bm.to_mesh(m)
-    bm.free()
-    #m.update()
+    col = ColReader()
+    col.read(fin)
     fin.close()
-    bpy.context.scene.collection.objects.link(o)
+
+    for groupidx, group in enumerate(col.groups):
+        bm = bmesh.new()
+        for x, y, z in zip(col.vertexBuffer[0::3], col.vertexBuffer[1::3], col.vertexBuffer[2::3]):
+            bm.verts.new((z, x, y))
+        bm.verts.ensure_lookup_table()
+
+        m = bpy.data.meshes.new(os.path.splitext(os.path.split(fname)[-1])[0])
+        if 1:
+            mat = bpy.data.materials.new(str(groupidx))
+            m.materials.append(mat)
+            for triIndices in zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]):
+                try: face = bm.faces.new([bm.verts[vIdx] for vIdx in triIndices])
+                except ValueError: pass # duplicate faces for some reason?
+                #face.material_index = groupidx
+        o = bpy.data.objects.new(m.name, m)
+        bm.to_mesh(m)
+        bm.free()
+        bpy.context.scene.collection.objects.link(o)
 
 class ImportCOL(Operator, ImportHelper):
     bl_idname = "import_scene.col"  # important since its how bpy.ops.import_test.some_data is constructed
