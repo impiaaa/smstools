@@ -25,6 +25,8 @@ def importFile(fname):
     col = ColReader()
     col.read(fin)
     fin.close()
+    
+    nameBase = os.path.splitext(os.path.split(fname)[-1])[0]
 
     for groupidx, group in enumerate(col.groups):
         bm = bmesh.new()
@@ -32,14 +34,17 @@ def importFile(fname):
             bm.verts.new((z, x, y))
         bm.verts.ensure_lookup_table()
 
-        m = bpy.data.meshes.new(os.path.splitext(os.path.split(fname)[-1])[0])
-        if 1:
-            mat = bpy.data.materials.new(str(groupidx))
+        if 0:
+            mat = bpy.data.materials.new(str(group.surfaceId))
             m.materials.append(mat)
-            for triIndices in zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]):
-                try: face = bm.faces.new([bm.verts[vIdx] for vIdx in triIndices])
-                except ValueError: pass # duplicate faces for some reason?
-                #face.material_index = groupidx
+        else:
+            m = bpy.data.meshes.new('%s-%04x'%(nameBase, group.surfaceId))
+        
+        for triIndices in zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]):
+            try: face = bm.faces.new([bm.verts[vIdx] for vIdx in triIndices])
+            except ValueError: pass # duplicate faces for some reason?
+            #face.material_index = groupidx
+        
         o = bpy.data.objects.new(m.name, m)
         bm.to_mesh(m)
         bm.free()

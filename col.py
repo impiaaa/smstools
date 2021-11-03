@@ -2,46 +2,44 @@ import struct, array, sys
 
 class ColGroup:
     def readHeader(self, fin):
-        self.unknown2, self.numTriIndices, self.unknown3, self.indicesOffset, self.unknownOffset1, self.unknownOffset2, self.unknownOffset3 = struct.unpack(">HHIIIII", fin.read(24))
+        self.surfaceId, self.numTriIndices, self.flags, self.unknown3, self.indicesOffset, self.terrainTypesOffset, self.unknownOffset2, self.unknownOffset3 = struct.unpack(">HHHHIIII", fin.read(24))
         self.indexBuffer = array.array('H')
-        self.tribuf1 = array.array('B')
+        self.terrainTypes = array.array('B')
         self.tribuf2 = array.array('B')
-        self.tribuf3 = array.array('H')
+        self.tribuf3 = array.array('h')
     
     def readBuffers(self, fin):
         fin.seek(self.indicesOffset)
         self.indexBuffer.fromfile(fin, self.numTriIndices*3)
         if sys.byteorder != 'big': self.indexBuffer.byteswap()
         
-        fin.seek(self.unknownOffset1)
-        self.tribuf1.fromfile(fin, self.numTriIndices)
+        fin.seek(self.terrainTypesOffset)
+        self.terrainTypes.fromfile(fin, self.numTriIndices)
     
         fin.seek(self.unknownOffset2)
         self.tribuf2.fromfile(fin, self.numTriIndices)
         
-        if self.unknownOffset3 > 0:
+        if self.unknownOffset3 != 0:
             fin.seek(self.unknownOffset3)
             self.tribuf3.fromfile(fin, self.numTriIndices)
             if sys.byteorder != 'big': self.tribuf3.byteswap()
         
     def __repr__(self):
-        return "ntri=%d, unknown2 = %x, unknown3 = %x"%(len(self.indexBuffer)/3, self.unknown2, self.unknown3)
+        return "surfaceId=%x, ntri=%d, flags=%d"%(self.surfaceId, len(self.indexBuffer)//3, self.flags)
 
 class ColReader:
     def read(self, fin):
-        numCoords, coordsOffset, numGroups, self.unknown0 = struct.unpack('>IIII', fin.read(16))
-        assert self.unknown0 == 16
+        numCoords, coordsOffset, numGroups, groupsOffset = struct.unpack('>IIII', fin.read(16))
         
+        assert fin.tell() == groupsOffset
+        fin.seek(groupsOffset)
         self.groups = [ColGroup() for i in range(numGroups)]
         for group in self.groups:
             group.readHeader(fin)
         
-        for i in range(len(self.groups)-1):
-            assert self.groups[i+1].unknownOffset1 - self.groups[i].unknownOffset1 == self.groups[i].numTriIndices
-            assert self.groups[i+1].unknownOffset2 - self.groups[i].unknownOffset2 == self.groups[i].numTriIndices
+        assert len({group.surfaceId for group in self.groups}) == len(self.groups)
         
         assert fin.tell() == coordsOffset
-        
         fin.seek(coordsOffset)
         self.vertexBuffer = array.array('f')
         self.vertexBuffer.fromfile(fin, numCoords*3)
