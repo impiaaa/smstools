@@ -9,6 +9,17 @@ class Readable(object):
         super(Readable, self)
         if fin is not None: self.read(fin)
 
+class ReadableStruct(Readable): # name???
+    def read(self, fin):
+        for field, value in zip(self.fields, self.header.unpack(fin.read(self.header.size))):
+            if isinstance(field, str):
+                setattr(self, field, value)
+            else:
+                fieldName, fieldType = field
+                setattr(self, fieldName, fieldType(value))
+    def __repr__(self):
+        return self.__class__.__name__ + " " + " ".join([field+"="+repr(getattr(self, field)) for field in self.fields])
+
 class Section(object):
     def read(self, fin, start, size):
         pass
