@@ -22,22 +22,35 @@ def writeNativeMeta(name, mainObjectFileID, outputFolderLocation):
 
 def exportCol(col, outputFolderLocation, physNameBase):
     for groupIdx, group in enumerate(col.groups):
-        triangles = list(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]))
+        if len(group.tribuf3):
+            triangles = list(zip(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]), group.terrainTypes, group.tribuf2, group.tribuf3))
+        else:
+            triangles = list(zip(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]), group.terrainTypes, group.tribuf2, [None]*group.numTriIndices))
         connectedPieces = []
         while len(triangles) > 0:
-            connectedTris = [triangles.pop(0)]
-            connectedIndices = set(connectedTris[0])
+            connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3 = triangles.pop(0)
+            connectedTris = [connectedTriIndices]
+            connectedIndices = set(connectedTriIndices)
             i = 0
             while i < len(triangles):
-                if len(connectedIndices.intersection(triangles[i])) > 0 and triangles[i] not in connectedTris:
-                    connectedTris.append(triangles.pop(i))
-                    connectedIndices.update(connectedTris[-1])
+                triIndices, terrainType, unk2, unk3 = triangles[i]
+                
+                if len(connectedIndices.intersection(triIndices)) > 0 and \
+                   terrainType == connectedTerrainType and \
+                   unk2 == connectedUnk2 and \
+                   unk3 == connectedUnk3:
+                    
+                    del triangles[i]
+                    connectedTris.append(triIndices)
+                    connectedIndices.update(triIndices)
                     i = 0
+                
                 else:
                     i += 1
-            connectedPieces.append(connectedTris)
+            
+            connectedPieces.append((connectedTris, connectedTerrainType, connectedUnk2, connectedUnk3))
         
-        for connectedIdx, oldTriangles in enumerate(connectedPieces):
+        for connectedIdx, (oldTriangles, terrainType, unk2, unk3) in enumerate(connectedPieces):
             usedIndices = list({i for tri in oldTriangles for i in tri})
             usedIndices.sort() # keep original order - optimal?
             newVertexBuffer = array.array('f', [col.vertexBuffer[i*3+j] for i in usedIndices for j in range(3)])
@@ -47,7 +60,10 @@ def exportCol(col, outputFolderLocation, physNameBase):
             #newVertexBuffer = col.vertexBuffer
             #newIndexBuffer = group.indexBuffer
             
-            physName = '%s-%04x.%d'%(physNameBase, group.surfaceId, connectedIdx)
+            if unk3 is None:
+                physName = '%s-%04x-%d-%d.%d'%(physNameBase, group.surfaceId, terrainType, unk2, connectedIdx)
+            else:
+                physName = '%s-%04x-%d-%d-%d.%d'%(physNameBase, group.surfaceId, terrainType, unk2, unk3, connectedIdx)
 
             mesh = Mesh(str(4300000), '')
             asset = unityparser.UnityDocument([mesh])

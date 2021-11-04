@@ -34,16 +34,17 @@ def importFile(fname):
             bm.verts.new((z, x, y))
         bm.verts.ensure_lookup_table()
 
-        if 0:
-            mat = bpy.data.materials.new(str(group.surfaceId))
+        m = bpy.data.meshes.new('%s-%04x'%(nameBase, group.surfaceId))
+        terrainSlots = {}
+        for i in sorted(set(group.terrainTypes)):
+            mat = bpy.data.materials.get("terrain"+str(i), None) or bpy.data.materials.new("terrain"+str(i))
+            terrainSlots[i] = len(m.materials)
             m.materials.append(mat)
-        else:
-            m = bpy.data.meshes.new('%s-%04x'%(nameBase, group.surfaceId))
         
-        for triIndices in zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]):
+        for triIndices, terrainType in zip(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]), group.terrainTypes):
             try: face = bm.faces.new([bm.verts[vIdx] for vIdx in triIndices])
-            except ValueError: pass # duplicate faces for some reason?
-            #face.material_index = groupidx
+            except ValueError: pass # duplicate faces, probably different terrainType
+            face.material_index = terrainSlots[terrainType]
         
         o = bpy.data.objects.new(m.name, m)
         bm.to_mesh(m)
