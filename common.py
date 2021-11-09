@@ -10,6 +10,13 @@ class Readable(object):
         if fin is not None: self.read(fin)
 
 class ReadableStruct(Readable): # name???
+    @classmethod
+    def try_make(cls, fin):
+        #try:
+        x = cls(fin)
+        #except ValueError:
+        #    x = None
+        return x
     def read(self, fin):
         for field, value in zip(self.fields, self.header.unpack(fin.read(self.header.size))):
             if isinstance(field, str):
@@ -17,8 +24,10 @@ class ReadableStruct(Readable): # name???
             else:
                 fieldName, fieldType = field
                 setattr(self, fieldName, fieldType(value))
+    def write(self, fout):
+        fout.write(self.header.pack([getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields]))
     def __repr__(self):
-        return self.__class__.__name__ + " " + " ".join([field+"="+repr(getattr(self, field)) for field in self.fields])
+        return self.__class__.__name__ + " " + " ".join([(field if isinstance(field, str) else field[0])+"="+repr(getattr(self, (field if isinstance(field, str) else field[0]))) for field in self.fields])
 
 class Section(object):
     def read(self, fin, start, size):

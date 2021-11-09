@@ -10,14 +10,16 @@ if len(sys.argv) != 2:
 
 fin = open(sys.argv[1], 'rb')
 
-format, width, height, wrapS, wrapT, paletteFormat, paletteNumEntries, paletteOffset, minFilter, magFilter, mipmapCount, dataOffset = unpack('>BxHHBBxBHL4xBB2xBx2xL', fin.read(32))
+format, width, height, wrapS, wrapT, paletteFormat, paletteNumEntries, paletteOffset, minFilter, magFilter, minLod, maxLod, mipmapCount, lodBias, dataOffset = unpack('>BxHHBBxBHL4xBBBBBxHL', fin.read(32))
+format = TF(format)
+paletteFormat = TL(paletteFormat)
 
 mipmapCount = max(mipmapCount, 1)
 
-print("%dx%d, fmt=%d, mips=%d, pfmt=%d" % (width, height, format, mipmapCount, paletteFormat))
+print("%dx%d, fmt=%s, mips=%d, pfmt=%s" % (width, height, format, mipmapCount, paletteFormat))
 
 palette = None
-if format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
+if format in (TF.C4, TF.C8, TF.C14X2):
     fin.seek(paletteOffset)
     palette = readPaletteData(fin, paletteFormat, paletteNumEntries)
 

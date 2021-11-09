@@ -4,10 +4,11 @@ from warnings import warn
 from array import array
 import os.path
 import math
-import bpy, bmesh
-from mathutils import *
+from enum import Enum, IntEnum
 from common import *
 from texture import *
+import bpy, bmesh
+from mathutils import *
 
 bbStruct = Struct('>fff')
 
@@ -49,7 +50,7 @@ class Drw1(Section):
 
 
 class Evp1(Section):
-    header = Struct('>HH4L')
+    header = Struct('>HH4I')
     def read(self, fin, start, size):
         count, pad, boneCountOffset, weightedIndicesOffset, boneWeightsTableOffset, matrixTableOffset = self.header.unpack(fin.read(20))
 
@@ -80,15 +81,14 @@ class Evp1(Section):
 
 
 
-class Node(Readable):
+class Node(ReadableStruct):
     header = Struct('>HH')
-    def read(self, fin):
-        self.type, self.index = self.header.unpack(fin.read(4))
+    fields = ["type", "index"]
 
 class Inf1(Section):
-    header = Struct('>H2xLLL')
+    header = Struct('>H2xIII')
     def read(self, fin, start, size):
-        unknown1, unknown2, self.vertexCount, offsetToEntries = self.header.unpack(fin.read(16))
+        loadFlags, mtxGroupCount, self.vertexCount, offsetToEntries = self.header.unpack(fin.read(16))
         fin.seek(start+offsetToEntries)
         self.scenegraph = []
         n = Node()
@@ -113,7 +113,7 @@ class SceneGraph(object):
                 d['frame'] = bmd.jnt1.frames[self.index]
             elif self.type == 0x11:
                 # material
-                d['material'] = bmd.mat3.materials[bmd.mat3.indexToMatIndex[self.index]]
+                d['material'] = bmd.mat3.materials[self.index]
             elif self.type == 0x12:
                 # shape
                 d['batch'] = bmd.shp1.batches[self.index]
@@ -150,7 +150,7 @@ def buildSceneGraph(inf1, sg, j=0):
 
 
 class Jnt1(Section):
-    header = Struct('>H2xLLL')
+    header = Struct('>H2xIII')
     def read(self, fin, start, size):
         count, jntEntryOffset, unknownOffset, stringTableOffset = self.header.unpack(fin.read(16))
         boneNames = readstringtable(start+stringTableOffset, fin)
@@ -192,152 +192,425 @@ class Jnt1Entry(Readable):
         return "{}({}, {}, {}, {})".format(__class__.__name__, repr(self.name), self.scale, self.rotation, self.translation)
 
 
-class ColorChanInfo(Readable):
+class ColorSrc(Enum):
+    REG = 0
+    VTX = 1
+
+class DiffuseFunction(Enum):
+    NONE = 0
+    SIGN = 1
+    CLAMP = 2
+
+class ColorChanInfo(ReadableStruct):
     header = Struct('>BBBBBB2x')
-    def read(self, fin):
-        self.lightingEnabled, self.matColorSource, self.litMask, \
-            self.diffuseFunction, self.attenuationFunction, \
-            self.ambColorSource = self.header.unpack(fin.read(8))
+    fields = [
+        "lightingEnabled",
+        ("matColorSource", ColorSrc),
+        "litMask",
+        ("diffuseFunction", DiffuseFunction),
+        "attenuationFunction",
+        ("ambColorSource", ColorSrc)
+    ]
 
-class TexGenInfo(Readable):
+class TexGenType(IntEnum):
+    MTX3x4 = 0
+    MTX2x4 = 1
+    BUMP0 = 2
+    BUMP1 = 3
+    BUMP2 = 4
+    BUMP3 = 5
+    BUMP4 = 6
+    BUMP5 = 7
+    BUMP6 = 8
+    BUMP7 = 9
+    SRTG = 10
+
+class TexGenSrc(IntEnum):
+    POS = 0
+    NRM = 1
+    BINRM = 2
+    TANGENT = 3
+    TEX0 = 4
+    TEX1 = 5
+    TEX2 = 6
+    TEX3 = 7
+    TEX4 = 8
+    TEX5 = 9
+    TEX6 = 10
+    TEX7 = 11
+    TEXCOORD0 = 12
+    TEXCOORD1 = 13
+    TEXCOORD2 = 14
+    TEXCOORD3 = 15
+    TEXCOORD4 = 16
+    TEXCOORD5 = 17
+    TEXCOORD6 = 18
+    COLOR0 = 19
+    COLOR1 = 20
+
+class TexGenMatrix(IntEnum):
+    IDENTITY = 60
+    TEXMTX0 = 30
+    TEXMTX1 = 33
+    TEXMTX2 = 36
+    TEXMTX3 = 39
+    TEXMTX4 = 42
+    TEXMTX5 = 45
+    TEXMTX6 = 48
+    TEXMTX7 = 51
+    TEXMTX8 = 54
+    TEXMTX9 = 57
+    PNMTX0 = 0
+    PNMTX1 = 3
+    PNMTX2 = 6
+    PNMTX3 = 9
+    PNMTX4 = 12
+    PNMTX5 = 15
+    PNMTX6 = 18
+    PNMTX7 = 21
+    PNMTX8 = 24
+    PNMTX9 = 27
+
+class TexGenInfo(ReadableStruct):
     header = Struct('>BBBx')
-    def read(self, fin):
-        self.type, self.source, self.matrix = self.header.unpack(fin.read(4))
-    def __repr__(self):
-        return "TexGenInfo texGenType=%x, texGenSrc=%x, matrix=%x"%(self.type, self.source, self.matrix)
+    fields = [
+        ("type", TexGenType),
+        ("source", TexGenSrc),
+        ("matrix", TexGenMatrix)
+    ]
 
-class TexMtxInfo(Readable):
+class TexMtxProjection(Enum):
+    MTX3x4 = 0
+    MTX2x4 = 1
+
+class TexMtxInfo(ReadableStruct):
     header = Struct('>BB2x')
+    fields = [
+        ("projection", TexMtxProjection),
+        "info"
+    ]
     def read(self, fin):
-        self.projection, self.info = self.header.unpack(fin.read(4))
+        super().read(fin)
         self.center = unpack('>3f', fin.read(12))
         self.scale = unpack('>2f', fin.read(8))
         self.rotation = unpack('>h2x', fin.read(4))[0]/0x7FFF
         self.translation = unpack('>2f', fin.read(8))
         self.effectMatrix = unpack('>16f', fin.read(64))
-
-def safeindex(ls,index):
-    if index < len(ls) and index > 0: return ls[index]
-    else: return hex(index)
-
-colorids = ['COLOR0', 'COLOR1', 'ALPHA0', 'ALPHA1', 'COLOR0A0', 'COLOR1A1', 'COLORZERO', 'BUMP ', 'BUMPN', 'COLORNULL']
-class TevOrderInfo(Readable):
-    header = Struct('>BBBx')
-    def read(self, fin):
-        self.texCoordId, self.texMap, self.chanId = self.header.unpack(fin.read(4))
     def __repr__(self):
-        return "TevOrderInfo texCoordId=%x, texMap=%x, chanId=%s"%(self.texCoordId, self.texMap, safeindex(colorids,self.chanId))
+        return super().__repr__()+", center=%s, scale=%s, rotation=%s, translation=%s, effectMatrix=%s"% \
+            (self.center, self.scale, self.rotation, self.translation, self.effectMatrix)
 
-class TevSwapModeInfo(Readable): pass
-class TevSwapModeTable(Readable): pass
+class ColorChannelID(Enum):
+    COLOR0 = 0
+    COLOR1 = 1
+    ALPHA0 = 2
+    ALPHA1 = 3
+    COLOR0A0 = 4
+    COLOR1A1 = 5
+    COLOR_ZERO = 6
+    ALPHA_BUMP = 7
+    ALPHA_BUMP_N = 8
+    COLOR_NULL = 0xFF
 
-class AlphaCompare(Readable):
+class TevOrderInfo(ReadableStruct):
+    header = Struct('>BBBx')
+    fields = [
+        "texCoordId",
+        "texMap",
+        ("chanId", ColorChannelID)
+    ]
+
+class CompareType(Enum):
+    NEVER = 0
+    LESS = 1
+    EQUAL = 2
+    LEQUAL = 3
+    GREATER = 4
+    NEQUAL = 5
+    GEQUAL = 6
+    ALWAYS = 7
+
+class AlphaOp(Enum):
+    AND = 0
+    OR = 1
+    XOR = 2
+    XNOR = 3
+
+class AlphaCompare(ReadableStruct):
     header = Struct('>BBBBB3x')
-    def read(self, fin):
-        self.comp0, self.ref0, self.alphaOp, self.comp1, self.ref1 = self.header.unpack(fin.read(8))
+    fields = [
+        ("comp0", CompareType),
+        "ref0",
+        ("op", AlphaOp),
+        ("comp1", CompareType),
+        "ref1"
+    ]
 
-class BlendInfo(Readable):
+class BlendMode(Enum):
+    NONE = 0
+    BLEND = 1
+    LOGIC = 2
+    SUBTRACT = 3
+
+class BlendFactor(Enum):
+    ZERO = 0
+    ONE = 1
+    SRCCLR = 2
+    INVSRCCLR = 3
+    SRCALPHA = 4
+    INVSRCALPHA = 5
+    DSTALPHA = 6
+    INVDSTALPHA = 7
+
+class LogicOp(Enum):
+    CLEAR = 0
+    AND = 1
+    REVAND = 2
+    COPY = 3
+    INVAND = 4
+    NOOP = 5
+    XOR = 6
+    OR = 7
+    NOR = 8
+    EQUIV = 9
+    INV = 10
+    REVOR = 11
+    INVCOPY = 12
+    INVOR = 13
+    NAND = 14
+    SET = 15
+
+class BlendInfo(ReadableStruct):
     header = Struct('>BBBB')
-    def read(self, fin):
-        self.blendMode, self.srcFactor, self.dstFactor, self.logicOp = self.header.unpack(fin.read(4))
+    fields = [
+        ("blendMode", BlendMode),
+        ("srcFactor", BlendFactor),
+        ("dstFactor", BlendFactor),
+        ("logicOp", LogicOp)
+    ]
 
-class ZMode(Readable):
+class ZMode(ReadableStruct):
     header = Struct('>BBBx')
-    def read(self, fin):
-        self.enable, self.func, self.updateEnable = self.header.unpack(fin.read(4))
-    def __repr__(self):
-        return "ZMode enable=%x, func=%x, updateEnable=%x"%(self.enable, self.func, self.updateEnable)
+    fields = [
+        ("enable", bool),
+        ("func", CompareType),
+        ("write", bool)
+    ]
 
-srcregs = ["CPREV", "APREV", "C0", "A0", "C1", "A1", "C2", "A2", \
-"TEXC", "TEXA", "RASC", "RASA", "ONE", "HALF", "KONST", "ZERO"]
-ops = ["ADD", "SUB", None, None, None, None, None, None, \
-"COMP_R8_GT", "COMP_R8_EQ", \
-"COMP_GR16_GT", "COMP_GR16_EQ", \
-"COMP_BGR24_GT", "COMP_BGR24_EQ", \
-"COMP_RGB8_GT", "COMP_RGB8_EQ"]
-biases = ["ZERO", "ADDHALF", "SUBHALF"]
-scales = ["SCALE_1", "SCALE_2", "SCALE_4", "DIVIDE_2"]
-destregs = ["PREV", "REG0", "REG1", "REG2"]
-def fmtsrcreg(x): return safeindex(srcregs, x)
-def fmtsrcregs(l): return "("+(", ".join(tuple(map(fmtsrcreg, l))))+")"
-class TevStageInfo(Readable):
-    colorInStruct = Struct('>x4B')
-    colorInfoStruct = Struct('>BBBBB')
-    alphaInStruct = Struct('>4B')
-    alphaInfoStruct = Struct('BBBBBx')
-    def read(self, fin):
-        self.colorIn = self.colorInStruct.unpack(fin.read(5))
-        self.colorOp, self.colorBias, self.colorScale, self.colorClamp, self.colorRegId = self.colorInfoStruct.unpack(fin.read(5))
-        self.alphaIn = self.alphaInStruct.unpack(fin.read(4))
-        self.alphaOp, self.alphaBias, self.alphaScale, self.alphaClamp, self.alphaRegId = self.alphaInfoStruct.unpack(fin.read(6))
-    def __repr__(self):
-        return "TevStageInfo colorIn=%s, colorOp=%s, colorBias=%s, colorScale=%s, colorClamp=%x, colorRegId=%s, \
-alphaIn=%s, alphaOp=%s, alphaBias=%s, alphaScale=%s, alphaClamp=%x, alphaRegId=%s"%(\
-fmtsrcregs(self.colorIn), safeindex(ops,self.colorOp), safeindex(biases,self.colorBias), safeindex(scales,self.colorScale), self.colorClamp, safeindex(destregs,self.colorRegId), \
-fmtsrcregs(self.alphaIn), safeindex(ops,self.alphaOp), safeindex(biases,self.alphaBias), safeindex(scales,self.alphaScale), self.alphaClamp, safeindex(destregs,self.alphaRegId))
+class CC(Enum):
+    CPREV = 0 # Use the color value from previous TEV stage
+    APREV = 1 # Use the alpha value from previous TEV stage
+    C0 = 2 # Use the color value from the color/output register 0
+    A0 = 3 # Use the alpha value from the color/output register 0
+    C1 = 4 # Use the color value from the color/output register 1
+    A1 = 5 # Use the alpha value from the color/output register 1
+    C2 = 6 # Use the color value from the color/output register 2
+    A2 = 7 # Use the alpha value from the color/output register 2
+    TEXC = 8 # Use the color value from texture
+    TEXA = 9 # Use the alpha value from texture
+    RASC = 10 # Use the color value from rasterizer
+    RASA = 11 # Use the alpha value from rasterizer
+    ONE = 12
+    HALF = 13
+    KONST = 14
+    ZERO = 15 # Use to pass zero value
 
-class Material(Readable):
+class TevOp(Enum):
+    ADD = 0
+    SUB = 1
+    COMP_R8_GT = 8
+    COMP_R8_EQ = 9
+    COMP_GR16_GT = 10
+    COMP_GR16_EQ = 11
+    COMP_BGR24_GT = 12
+    COMP_BGR24_EQ = 13
+    COMP_RGB8_GT = 14
+    COMP_RGB8_EQ = 15
+
+class TevBias(Enum):
+    ZERO = 0
+    ADDHALF = 1
+    SUBHALF = 2
+    _HWB_COMPARE = 3
+
+class TevScale(Enum):
+    SCALE_1 = 0
+    SCALE_2 = 1
+    SCALE_4 = 2
+    DIVIDE_2 = 3
+
+class Register(IntEnum):
+    PREV = 0
+    REG0 = 1
+    REG1 = 2
+    REG2 = 3
+
+class CA(Enum):
+    APREV = 0 # Use the alpha value from previous TEV stage
+    A0 = 1 # Use the alpha value from the color/output register 0
+    A1 = 2 # Use the alpha value from the color/output register 1
+    A2 = 3 # Use the alpha value from the color/output register 2
+    TEXA = 4 # Use the alpha value from texture
+    RASA = 5 # Use the alpha value from rasterizer
+    KONST = 6
+    ZERO = 7 # Use to pass zero value
+
+class TevStageInfo(ReadableStruct):
+    header = Struct('>x4BBBBBB4BBBBBBx')
+    fields = [
+        ("colorInA", CC),
+        ("colorInB", CC),
+        ("colorInC", CC),
+        ("colorInD", CC),
+        ("colorOp", TevOp),
+        ("colorBias", TevBias),
+        ("colorScale", TevScale),
+        ("colorClamp", bool),
+        ("colorRegId", Register),
+
+        ("alphaInA", CA),
+        ("alphaInB", CA),
+        ("alphaInC", CA),
+        ("alphaInD", CA),
+        ("alphaOp", TevOp),
+        ("alphaBias", TevBias),
+        ("alphaScale", TevScale),
+        ("alphaClamp", bool),
+        ("alphaRegId", Register)
+    ]
+
+class TevSwapMode(ReadableStruct):
+    header = Struct('>BB2x')
+    fields = ["rasSel", "texSel"]
+
+class TevSwapModeTable(ReadableStruct):
+    header = Struct('>BBBB')
+    fields = ["rSel", "gSel", "bSel", "aSel"]
+
+def safeGet(arr, idx):
+    if idx >= 0 and idx < len(arr):
+        return arr[idx]
+    else:
+        return None
+
+class Material(ReadableStruct):
     header = Struct('>BBBBBxBx')
+    fields = ["flag", "cullModeIndex", "lightChanCountIndex", "texGenCountIndex",
+        "tevStageCountIndex", "zModeIndex"]
     def read(self, fin):
-        self.flag, self.cullIndex, self.numChansIndex, self.texGenCountIndex, \
-            self.tevCountIndex, self.zModeIndex = self.header.unpack(fin.read(8))
-        self.materialColor = unpack('>2H', fin.read(4))
-        self.chanControls = unpack('>4H', fin.read(8))
+        super().read(fin)
+        # 0x08
+        self.matColorIndices = unpack('>2H', fin.read(4))
+        # 0x0C
+        self.lightChanIndices = unpack('>4H', fin.read(8))
 
-        self.ambientColor = unpack('>2H', fin.read(4))
-        self.lights = unpack('>8H', fin.read(16))
+        # 0x14
+        self.ambientColorIndices = unpack('>2H', fin.read(4))
+        # 0x18
+        self.lightIndices = unpack('>8H', fin.read(16))
 
-        self.texGenInfos = unpack('>8h', fin.read(16)) # postTexGen
-        self.texGenInfos2 = unpack('>8H', fin.read(16))
-        self.texMtxInfos = unpack('>10h', fin.read(20))
-        self.dttMatrices = unpack('>20H', fin.read(40))
-        self.texStages = unpack('>8H', fin.read(16))
-        self.color3 = unpack('>4H', fin.read(8))
-        self.constColorSel = unpack('>16B', fin.read(16))
-        self.constAlphaSel = unpack('>16B', fin.read(16))
-        self.tevOrderInfo = unpack('>16H', fin.read(32))
-        self.colorS10 = unpack('>4H', fin.read(8))
-        self.tevStageInfo = unpack('>16h', fin.read(32))
-        self.tevSwapModeInfo = unpack('>16H', fin.read(32))
-        self.tevSwapModeTable = unpack('>4H', fin.read(8))
-        self.unknown6 = unpack('>12H', fin.read(24))
-        self.alphaCompIndex, self.blendIndex = unpack('>2xHH2x', fin.read(8))
-
-    def debug(self, mat3):
-        print("\tflag =", self.flag)
-        print("\tcull =", mat3.cullModes[self.cullIndex])
-        print("\tnumChans =", mat3.numChans[self.numChansIndex])
-        print("\ttexGenCount =", mat3.texGenCounts[self.texGenCountIndex])
-        print("\ttevCount =", mat3.tevCounts[self.tevCountIndex])
-        print("\tzMode =", mat3.zModes[self.zModeIndex])
-        for j in range(mat3.tevCounts[self.tevCountIndex]):
-            print("\tOrder", j)
-            print("\t\t", mat3.tevOrderInfos[self.tevOrderInfo[j]])
-            print("\tStage", j)
-            print("\t\t", mat3.tevStageInfos[self.tevStageInfo[j]])
+        # 0x28
+        self.texGenIndices = unpack('>8H', fin.read(16))
+        # 0x38
+        self.postTexGenIndices = unpack('>8H', fin.read(16))
+        # 0x48
+        self.texMtxIndices = unpack('>10H', fin.read(20))
+        # 0x5C
+        self.postTexMtxIndices = unpack('>20H', fin.read(40))
+        # 0x84
+        self.texStageIndices = unpack('>8H', fin.read(16))
+        # 0x94
+        self.constColorIndices = unpack('>4H', fin.read(8))
+        # 0x9C
+        self.constColorSelIndices = unpack('>16B', fin.read(16))
+        # 0xAC
+        self.constAlphaSelIndices = unpack('>16B', fin.read(16))
+        # 0xBC
+        self.tevOrderIndices = unpack('>16H', fin.read(32))
+        # 0xDC
+        self.colorIndices = unpack('>4H', fin.read(8))
+        # 0xE4
+        self.tevStageIndices = unpack('>16H', fin.read(32))
+        # 0x104
+        self.tevSwapModeIndices = unpack('>16H', fin.read(32))
+        # 0x124
+        self.tevSwapModeTableIndices = unpack('>4H', fin.read(8))
+        # 0x12C
+        self.unknownIndices6 = unpack('>12H', fin.read(24))
+        # 0x144
+        self.fogIndex, self.alphaCompIndex, self.blendIndex = unpack('>HHH2x', fin.read(8))
     
-    def __repr__(self):
-        return "{}({})".format(__class__.__name__, repr(self.name))
+    def resolve(self, mat3):
+        self.cullMode = safeGet(mat3.cullModeArray, self.cullModeIndex)
+        self.lightChanCount = safeGet(mat3.lightChanCountArray, self.lightChanCountIndex)
+        self.texGenCount = safeGet(mat3.texGenCountArray, self.texGenCountIndex)
+        #self.tevStageCount = safeGet(mat3.tevStageCountArray, self.tevStageCountIndex)
+        self.zMode = safeGet(mat3.zModeArray, self.zModeIndex)
+        self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
+        self.lightChanInfos = [safeGet(mat3.lightChanInfoArray, i) for i in self.lightChanIndices]
+        self.ambientColors = [safeGet(mat3.ambientColorArray, i) for i in self.ambientColorIndices]
+        self.texGenInfos = [safeGet(mat3.texGenInfoArray, i) for i in self.texGenIndices]
+        #self.postTexGenInfos = [safeGet(mat3.postTexGenInfoArray, i) for i in self.postTexGenIndices]
+        self.texMtxInfos = [safeGet(mat3.texMtxInfoArray, i) for i in self.texMtxIndices]
+        #self.postTexMtxInfos = [safeGet(mat3.postTexMtxInfoArray, i) for i in self.postTexMtxIndices]
+        self.textureIndexes = [safeGet(mat3.textureIndexArray, i) for i in self.texStageIndices]
+        self.constColors = [safeGet(mat3.constColorArray, i) for i in self.constColorIndices]
+        self.tevOrderInfos = [safeGet(mat3.tevOrderInfoArray, i) for i in self.tevOrderIndices]
+        self.colors = [safeGet(mat3.colorArray, i) for i in self.colorIndices]
+        self.tevStageInfos = [safeGet(mat3.tevStageInfoArray, i) for i in self.tevStageIndices]
+        self.tevSwapModeInfos = [safeGet(mat3.tevSwapModeInfoArray, i) for i in self.tevSwapModeIndices]
+        self.tevSwapModeTables = [safeGet(mat3.tevSwapModeTableArray, i) for i in self.tevSwapModeTableIndices]
+        #self.fogInfo = safeGet(mat3.blendInfoArray, self.fogIndex)
+        self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
+        self.blendInfo = safeGet(mat3.blendInfoArray, self.blendIndex)
+        
+    def debug(self):
+        print(self.name)
+        print("flag =", self.flag)
+        print("cullMode =", self.cullMode)
+        print("lightChanCount =", self.lightChanCount)
+        print("texGenCount =", self.texGenCount)
+        print("zMode =", self.zMode)
+        print("matColors =", self.matColors)
+        print("lightChanInfos =", self.lightChanInfos)
+        print("ambientColors =", self.ambientColors)
+        print("texGenInfos =", self.texGenInfos)
+        #print("postTexGenInfos =", self.postTexGenInfos)
+        print("texMtxInfos =", self.texMtxInfos)
+        #print("postTexMtxInfos =", self.postTexMtxInfos)
+        print("textureIndexes =", self.textureIndexes)
+        print("constColors =", self.constColors)
+        print("tevOrderInfos =", self.tevOrderInfos)
+        print("colors =", self.colors)
+        print("tevStageInfos =", self.tevStageInfos)
+        print("tevSwapModeInfos =", self.tevSwapModeInfos)
+        print("tevSwapModeTables =", self.tevSwapModeTables)
+        print("alphaComp =", self.alphaComp)
+        print("blendInfo =", self.blendInfo)
 
 class Mat3(Section):
-    header = Struct('>HH')
+    header = Struct('>H2x')
     def read(self, fin, start, size):
-        count, pad = self.header.unpack(fin.read(4))
+        count, = self.header.unpack(fin.read(4))
         offsets = unpack('>30L', fin.read(120))
 
         lengths = computeSectionLengths(offsets, size)
 
         fin.seek(start+offsets[0])
-        self.materials = [None]*count
+        orderedMaterials = [None]*count
         for i in range(count):
             m = Material()
             m.read(fin)
-            self.materials[i] = m
+            orderedMaterials[i] = m
         
         fin.seek(start+offsets[1])
         self.indexToMatIndex = array('H') # remapTable
         self.indexToMatIndex.fromfile(fin, count)
         if sys.byteorder == 'little': self.indexToMatIndex.byteswap()
+        
+        self.materials = [None]*count
+        for i in range(count):
+            self.materials[i] = orderedMaterials[self.indexToMatIndex[i]]
         
         self.materialNames = readstringtable(start+offsets[2], fin)
         if count != len(self.materialNames):
@@ -345,85 +618,89 @@ class Mat3(Section):
         for m, n in zip(self.materials, self.materialNames):
             m.name = n
 
-        fin.seek(start+offsets[3]) # indirect
-        # TODO offset[3] indirect texturing blocks (always as many as count)
+        # 3 (IndirectTexturing)
 
         fin.seek(start+offsets[4])
-        self.cullModes = array('L')
-        self.cullModes.fromfile(fin, lengths[4])
-        if sys.byteorder == 'little': self.cullModes.byteswap()
+        self.cullModeArray = array('I')
+        self.cullModeArray.fromfile(fin, lengths[4]//4)
+        if sys.byteorder == 'little': self.cullModeArray.byteswap()
 
         fin.seek(start+offsets[5])
-        self.materialColor = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
+        self.matColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
 
         fin.seek(start+offsets[6])
-        self.numChans = array('B')
-        self.numChans.fromfile(fin, lengths[6])
+        self.lightChanCountArray = array('B')
+        self.lightChanCountArray.fromfile(fin, lengths[6])
 
         fin.seek(start+offsets[7])
-        self.colorChanInfos = [ColorChanInfo(fin) for i in range(lengths[7]//8)]
+        self.lightChanInfoArray = [ColorChanInfo.try_make(fin) for i in range(lengths[7]//ColorChanInfo.header.size)]
 
         fin.seek(start+offsets[8])
-        self.ambientColor = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)] 
+        self.ambientColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)] 
 
         # 9 (LightInfo)
         
         fin.seek(start+offsets[10])
-        self.texGenCounts = array('B')
-        self.texGenCounts.fromfile(fin, lengths[10])
+        self.texGenCountArray = array('B')
+        self.texGenCountArray.fromfile(fin, lengths[10])
 
         fin.seek(start+offsets[11])
-        self.texGenInfos = [TexGenInfo(fin) for i in range(lengths[11]//4)]
+        self.texGenInfoArray = [TexGenInfo.try_make(fin) for i in range(lengths[11]//TexGenInfo.header.size)]
 
         # 12 (TexCoord2Info)
         # postTexGen
         
         fin.seek(start + offsets[13])
-        self.texMtxInfos = [TexMtxInfo(fin) for i in range(lengths[13]//100)]
+        self.texMtxInfoArray = [TexMtxInfo.try_make(fin) for i in range(lengths[13]//100)]
         
         # 14 (TexMtxInfo2)
         # postTexMtx
         
         fin.seek(start+offsets[15])
-        self.texStageIndexToTextureIndex = array('H')
-        self.texStageIndexToTextureIndex.fromfile(fin, lengths[15]//2)
-        if sys.byteorder == 'little': self.texStageIndexToTextureIndex.byteswap()
+        self.textureIndexArray = array('H')
+        self.textureIndexArray.fromfile(fin, lengths[15]//2)
+        if sys.byteorder == 'little': self.textureIndexArray.byteswap()
 
         fin.seek(start+offsets[16])
-        self.tevOrderInfos = [TevOrderInfo(fin) for i in range(lengths[16]//4)]
+        self.tevOrderInfoArray = [TevOrderInfo.try_make(fin) for i in range(lengths[16]//TevOrderInfo.header.size)]
         
-        # TODO offsets[17] (read colorS10)
         fin.seek(start+offsets[17])
-        # colorRegister
+        self.colorArray = [unpack('>hhhh', fin.read(8)) for i in range(lengths[17]//8)] 
         
-        # TODO offsets[18] (color3)
-        # colorConstant
+        fin.seek(start+offsets[18])
+        self.constColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[18]//4)] 
 
         fin.seek(start+offsets[19])
-        self.tevCounts = array('B')
-        self.tevCounts.fromfile(fin, lengths[19])
+        self.tevCountArray = array('B')
+        self.tevCountArray.fromfile(fin, lengths[19])
 
         fin.seek(start+offsets[20])
-        self.tevStageInfos = [TevStageInfo(fin) for i in range(lengths[20]//20)]
+        self.tevStageInfoArray = [TevStageInfo.try_make(fin) for i in range(lengths[20]//TevStageInfo.header.size)]
         
-        # TODO offset[21] (TevSwapModeInfos)
+        fin.seek(start+offsets[21])
+        self.tevSwapModeInfoArray = [TevSwapMode.try_make(fin) for i in range(lengths[21]//TevSwapMode.header.size)]
         
-        # TODO offset[22] (TevSwapModeTable)
+        fin.seek(start+offsets[22])
+        self.tevSwapModeTableArray = [TevSwapModeTable.try_make(fin) for i in range(lengths[22]//TevSwapModeTable.header.size)]
 
-        # 23 (FogInfo)        
+        # 23 (FogInfo)
         
         fin.seek(start+offsets[24])
-        self.alphaCompares = [AlphaCompare(fin) for i in range(lengths[24]//8)]
+        self.alphaCompArray = [AlphaCompare.try_make(fin) for i in range(lengths[24]//AlphaCompare.header.size)]
 
         fin.seek(start+offsets[25])
-        self.blendInfos = [BlendInfo(fin) for i in range(lengths[25]//4)]
+        self.blendInfoArray = [BlendInfo.try_make(fin) for i in range(lengths[25]//BlendInfo.header.size)]
 
         fin.seek(start+offsets[26])
-        self.zModes = [ZMode(fin) for i in range(lengths[26]//4)]
+        self.zModeArray = [ZMode.try_make(fin) for i in range(lengths[26]//ZMode.header.size)]
         
         # 27 (MaterialData6)
         # 28 (MaterialData7)
         # 29 (NBTScaleInfo)
+        
+        for m in self.materials:
+            m.resolve(self)
+            m.debug()
 
 
 class Index(Readable):
@@ -460,21 +737,22 @@ class Index(Readable):
 
                 pass #ignore unknown types, it's enough to warn() in dumpBatch
 
-class Primitive(Readable):
+class Primitive(ReadableStruct):
     header = Struct('>BH')
+    fields = ["type", "count"]
     def read(self, fin, attribs):
-        self.type, count = self.header.unpack(fin.read(3))
+        super().read(fin)
         if self.type == 0: return
 
-        self.points = [Index() for jkl in range(count)]
+        self.points = [Index() for jkl in range(self.count)]
 
-        for j in range(count):
+        for j in range(self.count):
             currPoint = self.points[j]
             currPoint.read(fin, attribs)
 
 class Packet(Readable):
-    locationHeader = Struct('>LL')
-    matrixInfoHeader = Struct('>2xHL')
+    locationHeader = Struct('>II')
+    matrixInfoHeader = Struct('>2xHI')
     def read(self, fin, baseOffset, offsetData, offsetToMatrixData, \
             firstMatrixData, packetIndex, offsetToMatrixTable, attribs):
         locationSize, locationOffset = self.locationHeader.unpack(fin.read(8))
@@ -491,15 +769,15 @@ class Packet(Readable):
         self.matrixTable.fromfile(fin, count)
         if sys.byteorder == 'little': self.matrixTable.byteswap()
 
-class BatchAttrib(Readable):
-    header = Struct('>LL')
-    def read(self, fin):
-        self.attrib, self.dataType = self.header.unpack(fin.read(8))
+class BatchAttrib(ReadableStruct):
+    header = Struct('>II')
+    fields = ["attrib", "dataType"]
 
-class Batch(Readable):
+class Batch(ReadableStruct):
     header = Struct('>BxHHHH6x')
+    fields = ["matrixType", "packetCount", "offsetToAttribs", "firstMatrixData", "firstPacketLocation"]
     def read(self, fin):
-        self.matrixType, self.packetCount, self.offsetToAttribs, self.firstMatrixData, self.firstPacketLocation = self.header.unpack(fin.read(16))
+        super().read(fin)
         self.bbMin = bbStruct.unpack(fin.read(12))
         self.bbMax = bbStruct.unpack(fin.read(12))
 
@@ -545,11 +823,8 @@ class Batch(Readable):
                 self.firstMatrixData, j, offsetToMatrixTable, self.attribs)
             self.packets.append(p)
 
-    def __repr__(self):
-        return "{}()".format(__class__.__name__)
-
 class Shp1(Section):
-    header = Struct('>H2xLL4xLLLLL')
+    header = Struct('>H2xII4xIIIII')
     def read(self, fin, start, size):
         # header
         batchCount, offsetToBatches, offsetUnknown, offsetToBatchAttribs, \
@@ -581,30 +856,50 @@ def dumpPacketPrimitives(attribs, dataSize, fin):
 
 
 
-class Image(Readable):
-    header = Struct('>BxHHBBxBHL4xBB2xBx2xL')
+class Image(ReadableStruct):
+    header = Struct('>BxHHBBxBHI4xBB2xBx2xI')
+    fields = [
+        ("format", TF),
+        "width",
+        "height",
+        "wrapS",
+        "wrapT",
+        ("paletteFormat", TL),
+        "paletteNumEntries",
+        "paletteOffset",
+        "minFilter",
+        "magFilter",
+        "mipmapCount",
+        "dataOffset"
+    ]
     def read(self, fin, start=None, textureHeaderOffset=None, texIndex=None):
-        self.format, self.width, self.height, self.wrapS, self.wrapT, self.paletteFormat, \
-            paletteNumEntries, paletteOffset, self.minFilter, self.magFilter, \
-            self.mipmapCount, dataOffset = self.header.unpack(fin.read(32))
+        super().read(fin)
         self.mipmapCount = max(self.mipmapCount, 1)
-        if self.format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
-            self.hasAlpha = self.paletteFormat in (GX_TL_IA8, GX_TL_RGB5A3)
+        if self.format in (TF.C4, TF.C8, TF.C14X2):
+            self.hasAlpha = self.paletteFormat in (TL.IA8, TL.RGB5A3)
         else:
-            self.hasAlpha = self.format in (GX_TF_IA4, GX_TF_IA8, GX_TF_RGB5A3, GX_TF_RGBA8)
+            self.hasAlpha = self.format in (TF.IA4, TF.IA8, TF.RGB5A3, TF.RGBA8)
         if start is not None:
             nextHeader = fin.tell()
             
-            fin.seek(start+textureHeaderOffset+dataOffset+0x20*texIndex)
+            self.fullDataOffset = start+textureHeaderOffset+self.dataOffset+0x20*texIndex
+            fin.seek(self.fullDataOffset)
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
-            if self.format in (GX_TF_C4, GX_TF_C8, GX_TF_C14X2):
-                fin.seek(start+textureHeaderOffset+paletteOffset+0x20*texIndex)
-                self.palette = readPaletteData(fin, self.paletteFormat, paletteNumEntries)
+            if self.format in (TF.C4, TF.C8, TF.C14X2):
+                self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
+                fin.seek(self.fullPaletteOffset)
+                self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
             else:
                 self.palette = None
             
             fin.seek(nextHeader)
+    
+    def getDataName(self, bmd):
+        s = bmd.name+"@"+hex(self.fullDataOffset)
+        if self.format in (TF.C4, TF.C8, TF.C14X2):
+            s += "p"+hex(self.fullPaletteOffset)
+        return s
     
     def export(self, imageName):
         #im = bpy.data.images.new(self.name, self.width, self.height, alpha=self.hasAlpha)
@@ -615,12 +910,9 @@ class Image(Readable):
         im.pack()
         return im
 
-    def __repr__(self):
-        return "%s: %dx%d, fmt=%d, mips=%d" % (self.name, self.width, self.height, self.format, self.mipmapCount)
-
 class Tex1(Section):
     headerCount = Struct('>H2x')
-    headerOffsets = Struct('>LL')
+    headerOffsets = Struct('>II')
     def read(self, fin, start, length):
         texCount, = self.headerCount.unpack(fin.read(self.headerCount.size))
         if texCount == 0:
@@ -754,11 +1046,9 @@ class Vtx1(Section):
 
             j += 1
 
-class ArrayFormat(Readable):
-    header = Struct('>LLLBBH')
-    def read(self, fin):
-        self.arrayType, self.componentCount, self.dataType, self.decimalPoint, self.unknown3, self.unknown4 = self.header.unpack(fin.read(16))
-
+class ArrayFormat(ReadableStruct):
+    header = Struct('>IIIBBH')
+    fields = ["arrayType", "componentCount", "dataType", "decimalPoint", "unknown3", "unknown4"]
 
 
 def computeSectionLengths(offsets, sizeOfSection):
@@ -767,10 +1057,9 @@ def computeSectionLengths(offsets, sizeOfSection):
         length = 0
         if offsets[i] != 0:
             next = sizeOfSection
-            for j in range(i + 1, 30):
-                if offsets[j] != 0:
+            for j in range(30):
+                if offsets[j] > offsets[i] and offsets[j] < next:
                     next = offsets[j]
-                    break
             length = next - offsets[i]
         lengths[i] = length
     return lengths
@@ -852,6 +1141,24 @@ def updateMatrixTable(bmd, currPacket, matrixTable):
 def flipY(vec):
     return Vector((vec.x, 1.0-vec.y))
 
+def srgbToLinearrgb(c):
+    """
+    >>> round(srgbToLinearrgb(0.019607843), 6)
+    0.001518
+    >>> round(srgbToLinearrgb(0.749019608), 6)
+    0.520996
+    """
+    if c < 0.04045:
+        return 0.0 if c < 0.0 else (c * (1.0 / 12.92))
+    else:
+        return ((c + 0.055) * (1.0 / 1.055)) ** 2.4
+
+def color8ToLinear(c):
+    res = srgbToLinearrgb(c[0]/255), srgbToLinearrgb(c[1]/255), srgbToLinearrgb(c[2]/255)
+    if len(c) == 4:
+        res += (c[3]/255,)
+    return res
+
 def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
     batch = bmd.shp1.batches[index]
     assert batch.hasPositions
@@ -905,13 +1212,13 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
 
                 if f is not None:
                     f.smooth = batch.hasNormals
-                    f.material_index = bmd.mat3.indexToMatIndex[matIndex]
+                    f.material_index = matIndex
                     for j, hasColorLayer in enumerate(batch.hasColors):
                         if hasColorLayer:
                             layer = bm.loops.layers.color[str(j)]
-                            f.loops[0][layer] = [c/255 for c in bmd.vtx1.colors[j][pa.colorIndex[j]]]
-                            f.loops[1][layer] = [c/255 for c in bmd.vtx1.colors[j][pb.colorIndex[j]]]
-                            f.loops[2][layer] = [c/255 for c in bmd.vtx1.colors[j][pc.colorIndex[j]]]
+                            f.loops[0][layer] = color8ToLinear(bmd.vtx1.colors[j][pa.colorIndex[j]])
+                            f.loops[1][layer] = color8ToLinear(bmd.vtx1.colors[j][pb.colorIndex[j]])
+                            f.loops[2][layer] = color8ToLinear(bmd.vtx1.colors[j][pc.colorIndex[j]])
                     for j, hasTexLayer in enumerate(batch.hasTexCoords):
                         if hasTexLayer:
                             layer = bm.loops.layers.uv[str(j)]
@@ -975,7 +1282,7 @@ def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, in
     elif sg.type == 0x11:
         # material
         matIndex = sg.index
-        mat = bmd.mat3.materials[bmd.mat3.indexToMatIndex[sg.index]]
+        mat = bmd.mat3.materials[sg.index]
         onDown = mat.flag == 1
     elif sg.type == 0x12 and onDown:
         # shape
@@ -1023,141 +1330,158 @@ class NodePlacer:
         return node
 
 def importMesh(filePath, bmd, mesh, bm=None):
-    print("Importing textures")
     btextures = []
     if hasattr(bmd, "tex1"):
+        print("Importing textures")
         for texture in bmd.tex1.textures:
-            btex = bpy.data.textures.new(texture.name, 'IMAGE')
-            if texture.wrapS == 0: btex.extension = 'EXTEND'
-            elif texture.wrapS == 1: btex.extension = 'REPEAT'
-            elif texture.wrapS == 2: btex.extension = 'CHECKER'
-            btex.use_interpolation = texture.magFilter%2 == 1
-            btex.filter_type = 'BOX'
-            btex.use_mipmap = texture.magFilter >= 2
-            btex.use_mipmap_gauss = texture.magFilter >= 4
-            if texture.name in bpy.data.images:
-                btex.image = bpy.data.images[texture.name]
+            imageName = texture.getDataName(bmd)
+            if imageName in bpy.data.images:
+                image = bpy.data.images[imageName]
             else:
-                # look for a texture exported from bmdview
-                imageName = filePath+"_tex"+texture.name+".tga"
+                fileName = "/tmp/" + imageName + ".png"
                 try:
-                    btex.image = bpy.data.images.load(imageName)
+                    image = bpy.data.images.load(fileName)
                 except RuntimeError as e:
-                    pass
-                if not btex.image:
-                    dirName = "/tmp/" + bmd.name
-                    imageName = dirName + "/" + texture.name + ".png"
-                    try:
-                        btex.image = bpy.data.images.load(imageName)
-                    except RuntimeError as e:
-                        pass
-                    if not btex.image:
-                        if not os.path.isdir(dirName): os.mkdir(dirName)
-                        btex.image = texture.export(imageName)
-                btex.image.name = texture.name
-            btextures.append(btex)
+                    image = texture.export(fileName)
+                image.name = imageName
+            btextures.append(image)
 
-    print("Importing materials")
     if hasattr(bmd, "mat3"):
+        print("Importing materials")
         for i, mat in enumerate(bmd.mat3.materials):
             bmat = None
-            m = i#bmd.mat3.indexToMatIndex.index(i) #XXX
-            if False and bmd.mat3.materialNames[m] in bpy.data.materials:
-                bmat = bpy.data.materials[bmd.mat3.materialNames[m]]
+            if False and mat.name in bpy.data.materials:
+                bmat = bpy.data.materials[mat.name]
                 mesh.materials.append(bmat)
                 continue
             else:
-                bmat = bpy.data.materials.new(bmd.mat3.materialNames[m])
+                bmat = bpy.data.materials.new(mat.name)
+            mesh.materials.append(bmat)
             
-            #bmat.diffuse_color = bmd.mat3.materialColor[mat.materialColor[0]]
-            bmat.use_backface_culling = bmd.mat3.cullModes[mat.cullIndex] == 2
-
+            if len(mat.colors) > 0 and mat.colors[0] is not None:
+                bmat.diffuse_color = color8ToLinear(mat.colors[0])
+            if mat.cullMode is not None:
+                bmat.use_backface_culling = mat.cullMode == 2
+            
             bmat.use_nodes = True
             tree = bmat.node_tree
             tree.nodes.clear()
             
             placer = NodePlacer(tree)
-            colorMatReg = []
-            for j, colorMatIndex in enumerate(mat.materialColor):
-                color = placer.addNode('ShaderNodeRGB')
-                color.outputs[0].default_value = [c/255 for c in bmd.mat3.materialColor[colorMatIndex]]
-                color.name = "Material color {}".format(j)
-                color.label = "Material index {}".format(colorMatIndex)
-                colorMatReg.append(color)
-            colorAmbReg = []
-            for j, colorAmbIndex in enumerate(mat.ambientColor):
-                color = placer.addNode('ShaderNodeRGB')
-                color.outputs[0].default_value = [c/255 for c in bmd.mat3.ambientColor[colorAmbIndex]]
-                color.name = "Ambient color {}".format(j)
-                color.label = "Ambient index {}".format(colorAmbIndex)
-                colorAmbReg.append(color)
-            colorVtxReg = []
-            for j in range(2):
-                reg = placer.addNode('ShaderNodeAttribute')
-                reg.attribute_name = str(j)
-                reg.name = "Vertex {}".format(j)
-                colorVtxReg.append(reg)
+            
+            # Texgen stages
             texGens = []
-            for j, texGenIndex in enumerate(mat.texGenInfos):
-                if texGenIndex < 0: continue
-                texGen = bmd.mat3.texGenInfos[texGenIndex]
-                node = None
-                out = None
-                if texGen.source == 0:
-                    node = placer.addNode('ShaderNodeGeometry')
+            for texGen in mat.texGenInfos[:mat.texGenCount]:
+                if texGen.source == TexGenSrc.POS:
+                    node = placer.addNode('ShaderNodeNewGeometry')
                     out = node.outputs['Position']
-                elif texGen.source == 1:
-                    node = placer.addNode('ShaderNodeGeometry')
+                elif texGen.source == TexGenSrc.NRM:
+                    node = placer.addNode('ShaderNodeNewGeometry')
                     out = node.outputs['Normal']
-                elif texGen.source == 3:
-                    node = placer.addNode('ShaderNodeGeometry')
+                elif texGen.source == TexGenSrc.BINRM:
+                    node1 = placer.addNode('ShaderNodeNewGeometry')
+                    placer.nextColumn()
+                    node = placer.addNode('ShaderNodeVectorMath')
+                    placer.previousColumn()
+                    tree.links.new(node1.outputs['Normal'], node.inputs[0])
+                    tree.links.new(node1.outputs['Tangent'], node.inputs[1])
+                    out = node.outputs['Vector']
+                elif texGen.source == TexGenSrc.TANGENT:
+                    node = placer.addNode('ShaderNodeNewGeometry')
                     out = node.outputs['Tangent']
-                elif texGen.source >= 4 and texGen.source <= 11:
+                elif texGen.source >= TexGenSrc.TEX0 and texGen.source <= TexGenSrc.TEX7:
                     node = placer.addNode('ShaderNodeUVMap')
                     out = node.outputs['UV']
-                    node.uv_map = str(texGen.source-4)
-                if node is not None:
-                    node.name = "Tex gen {}".format(j)
-                    node.label = "Tex gen index {}".format(texGenIndex)
-                texMtxIndex = mat.texMtxInfos[j]
-                if texMtxIndex >= 0:
-                    texMtx = bmd.mat3.texMtxInfos[texMtxIndex]
+                    node.uv_map = str(texGen.source-TexGenSrc.TEX0)
+                elif texGen.source >= TexGenSrc.TEXCOORD0 and texGen.source <= TexGenSrc.TEXCOORD6:
+                    node = placer.addNode('NodeReroute')
+                    out = node.outputs[0]
+                    tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
+                elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
+                    node = placer.addNode('ShaderNodeVertexColor')
+                    out = node.outputs['Color']
+                    node.layer_name = str(texGen.source-TexGenSrc.COLOR0)
+                if texGen.type == TexGenType.MTX3x4 or texGen.type == TexGenType.MTX2x4:
                     placer.nextColumn()
                     node = placer.addNode('ShaderNodeMapping')
                     node.vector_type = 'POINT'
-                    node.translation = texMtx.translation+(0,)
-                    node.rotation.z = texMtx.rotation # TODO what units
-                    node.scale = texMtx.scale+(1,)
+                    if texGen.matrix >= TexGenMatrix.TEXMTX0 and texGen.matrix <= TexGenMatrix.TEXMTX9 and mat.texMtxInfos[texGen.matrix-TexGenMatrix.TEXMTX0] is not None:
+                        texMtx = mat.texMtxInfos[texGen.matrix-TexGenMatrix.TEXMTX0]
+                        node.inputs['Location'].default_value = texMtx.translation+(0,)
+                        node.inputs['Rotation'].default_value = (0,0,texMtx.rotation) # TODO what units
+                        node.inputs['Scale'].default_value = texMtx.scale+(1,)
                     tree.links.new(out, node.inputs[0])
                     out = node.outputs[0]
                     placer.previousColumn()
                 texGens.append(out)
+            placer.nextColumn()
             
+            # Shader variables
+            placer.nextColumn()
+            colorMatReg = []
+            colorAmbReg = []
+            konstColorReg = []
+            colorReg = []
+            for values, out in [
+                (mat.matColors, colorMatReg),
+                (mat.ambientColors, colorAmbReg),
+                (mat.constColors, konstColorReg),
+                (mat.colors, colorReg)
+            ]:
+                for color in values:
+                    node = placer.addNode('ShaderNodeRGB')
+                    node.outputs[0].default_value = color8ToLinear(color)
+                    out.append(node)
+            
+            continue
+
+            colorVtxReg = []
+            for j in range(2):
+                reg = placer.addNode('ShaderNodeVertexColor')
+                reg.layer_name = str(j)
+                colorVtxReg.append(reg)
+            for texture in []:#bmd.tex1.textures:
+                reg = placer.addNode('ShaderNodeTexImage')
+                if texture.wrapS == 0: reg.extension = 'EXTEND'
+                elif texture.wrapS == 1: reg.extension = 'REPEAT'
+                elif texture.wrapS == 2: reg.extension = 'CHECKER'
+                reg.interpolation = 'Linear' if texture.magFilter%2 == 1 else 'Closest'
+                reg.image = bpy.data.images[texture.getDataName(bmd)]
+                reg.label = texture.name
+            
+            # Light channels
             placer.nextColumn()
             lightChannels = []
             for j in range(bmd.mat3.numChans[mat.numChansIndex]):
-                colorChannel = bmd.mat3.colorChanInfos[mat.chanControls[j*2]]
-                #alphaChannel = bmd.mat3.colorChanInfos[mat.chanControls[j*2+1]]
-                matSource = [colorMatReg, colorVtxReg][colorChannel.matColorSource][j]
-                ambSource = [colorAmbReg, colorVtxReg][colorChannel.ambColorSource][j]
+                colorChannel = bmd.mat3.lightChanInfos[mat.chanControls[j*2]]
+                #alphaChannel = bmd.mat3.lightChanInfos[mat.chanControls[j*2+1]]
+                matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
+                ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
                 if colorChannel.lightingEnabled:
-                    if colorChannel.attenuationFunction in (0,2):
-                        attn = placer.addNode('ShaderNodeRGB')
-                        attn.outputs[0].default_value = (1.0,1.0,1.0,1.0)
-                    elif colorChannel.attenuationFunction == 1:
-                        attn = placer.addNode('ShaderNodeEeveeSpecular')
-                        tree.links.new(matSource.outputs['Color'], attn.inputs[0])
-                    elif colorChannel.attenuationFunction == 3:
-                        attn = placer.addNode('ShaderNodeBsdfDiffuse')
-                        tree.links.new(matSource.outputs['Color'], attn.inputs[0])
-                    placer.nextColumn()
-                    reg = placer.addNode('ShaderNodeAddShader')
-                    reg.name = "Color channel {}".format(j)
-                    reg.label = "Color channel index {}".format(mat.chanControls[j*2])
-                    tree.links.new(ambSource.outputs['Color'], reg.inputs[0])
-                    tree.links.new(attn.outputs[0], reg.inputs[1])
+                    if colorChannel.attenuationFunction in (1, 3):
+                        node = placer.addNode('ShaderNodeEeveeSpecular')
+                        tree.links.new(matSource.outputs['Color'], node.inputs['Specular'])
+                        tree.links.new(ambSource.outputs['Color'], node.inputs['Emissive Color'])
+                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                            node.inputs['Base Color'].default_value = (0,0,0,0)
+                        else:
+                            tree.links.new(matSource.outputs['Color'], node.inputs['Base Color'])
+                        reg = node
+                    else:
+                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                            node = matSource
+                        else:
+                            node = placer.addNode('ShaderNodeBsdfDiffuse')
+                            tree.links.new(matSource.outputs['Color'], node.inputs['Color'])
+                        placer.nextColumn()
+                        reg = placer.addNode('ShaderNodeAddShader')
+                        tree.links.new(ambSource.outputs['Color'], reg.inputs[0])
+                        tree.links.new(node.outputs[0], reg.inputs[1])
+                        placer.previousColumn()
+                    reg.label = "Color channel {}".format(mat.chanControls[j*2])
                     lightChannels.append(reg)
-                    placer.previousColumn()
+                else:
+                    lightChannels.append(matSource)
             
             placer.nextColumn()
             for j, tevStageIndex in enumerate(mat.tevStageInfo):
@@ -1165,18 +1489,15 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 stage = bmd.mat3.tevStageInfos[tevStageIndex]
             
             placer.nextColumn()
-            if len(lightChannels) == 1:
-                shout = placer.addNode('ShaderNodeOutputMaterial')
-                tree.links.new(lightChannels[0].outputs['Shader'], shout.inputs[0])
-            elif len(lightChannels) == 2:
+            lastOut = lightChannels[0] # XXX
+            for j in range(1, len(lightChannels)):
                 n = placer.addNode('ShaderNodeAddShader')
+                tree.links.new(lastOut.outputs[0], n.inputs[0])
+                tree.links.new(lightChannels[i].outputs[0], n.inputs[1])
                 placer.nextColumn()
-                shout = placer.addNode('ShaderNodeOutputMaterial')
-                tree.links.new(lightChannels[0].outputs['Shader'], n.inputs[0])
-                tree.links.new(lightChannels[1].outputs['Shader'], n.inputs[1])
-                tree.links.new(n.outputs[0], shout.inputs[0])
-
-            mesh.materials.append(bmat) # XXX
+                lastOut = n
+            shout = placer.addNode('ShaderNodeOutputMaterial')
+            tree.links.new(lastOut.outputs[0], shout.inputs[0])
 
     print("Importing mesh")
     if bm is None: bm = bmesh.new()
@@ -1198,6 +1519,9 @@ def importMesh(filePath, bmd, mesh, bm=None):
     bm.to_mesh(mesh)
     return mesh
 
+from functools import reduce
+import operator
+
 def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
     if p is None: p = Matrix.Identity(4)
     effP = p
@@ -1207,8 +1531,16 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
         effP = updateMatrix(f, p)
         bone = arm.edit_bones[f.name]
         bone.head = Vector((0,0,0))
-        bone.tail = Vector((0,0,8))
-        bone.matrix = effP
+        if len(sg.children) == 0:
+            bone.tail = Vector((0,0,8))
+        else:
+            ts = [bmd.jnt1.frames[node.index].translation for node in sg.children if node.index < len(bmd.jnt1.frames)]
+            if len(ts) == 0:
+                bone.tail = Vector((0,0,8))
+            else:
+                bone.tail = reduce(operator.add, ts)/len(sg.children)
+        bone.matrix = effP@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
+        #Matrix(((0,1,0,0),(-1,0,0,0),(0,0,1,0),(0,0,0,1)))
         if parent is not None:
             bone.parent = parent
         bone['_bmd_rest_scale'] = ','.join([repr(x) for x in f.scale])
@@ -1256,8 +1588,8 @@ def importFile(filepath):
 
     print("Importing armature")
     meshObject.parent = armObject
-    armObject.scale = Vector((1,1,1))/96
-    armObject.rotation_euler = Vector((math.pi/2,0,math.pi/2))
+    armObject.scale = Vector((1,1,1))/100 # approximate, according to mario's height
+    armObject.rotation_euler = Vector((math.pi/2,0,0))
     armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
     armMod.object = armObject
     bpy.context.scene.collection.objects.link(meshObject)
@@ -1322,8 +1654,8 @@ def importFile(filepath):
         bpy.context.scene.collection.objects.link(meshObject)
 
 class ImportBMD(Operator, ImportHelper):
-    files = CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
-    directory = StringProperty(maxlen=1024, subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
+    files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
+    directory: StringProperty(maxlen=1024, subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
 
     bl_idname = "import_scene.bmd"  # important since its how bpy.ops.import_test.some_data is constructed
     bl_label = "Import BMD/BDL"
@@ -1364,4 +1696,12 @@ if __name__ == "__main__":
 
     # test call
     #bpy.ops.import_scene.bmd('INVOKE_DEFAULT')
+
+elif 0:
+    import sys
+    fin = open(sys.argv[1], 'rb')
+    bmd = BModel()
+    bmd.name = os.path.splitext(os.path.split(sys.argv[1])[-1])[0]
+    bmd.read(fin)
+    fin.close()
 
