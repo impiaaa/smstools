@@ -204,7 +204,7 @@ class DiffuseFunction(Enum):
 class ColorChanInfo(ReadableStruct):
     header = Struct('>BBBBBB2x')
     fields = [
-        "lightingEnabled",
+        ("lightingEnabled", bool),
         ("matColorSource", ColorSrc),
         "litMask",
         ("diffuseFunction", DiffuseFunction),
@@ -397,7 +397,7 @@ class ZMode(ReadableStruct):
         ("write", bool)
     ]
 
-class CC(Enum):
+class TevColorArg(Enum):
     CPREV = 0 # Use the color value from previous TEV stage
     APREV = 1 # Use the alpha value from previous TEV stage
     C0 = 2 # Use the color value from the color/output register 0
@@ -445,7 +445,7 @@ class Register(IntEnum):
     REG1 = 2
     REG2 = 3
 
-class CA(Enum):
+class TevAlphaArg(Enum):
     APREV = 0 # Use the alpha value from previous TEV stage
     A0 = 1 # Use the alpha value from the color/output register 0
     A1 = 2 # Use the alpha value from the color/output register 1
@@ -458,26 +458,56 @@ class CA(Enum):
 class TevStageInfo(ReadableStruct):
     header = Struct('>x4BBBBBB4BBBBBBx')
     fields = [
-        ("colorInA", CC),
-        ("colorInB", CC),
-        ("colorInC", CC),
-        ("colorInD", CC),
+        ("colorInA", TevColorArg),
+        ("colorInB", TevColorArg),
+        ("colorInC", TevColorArg),
+        ("colorInD", TevColorArg),
         ("colorOp", TevOp),
         ("colorBias", TevBias),
         ("colorScale", TevScale),
         ("colorClamp", bool),
         ("colorRegId", Register),
 
-        ("alphaInA", CA),
-        ("alphaInB", CA),
-        ("alphaInC", CA),
-        ("alphaInD", CA),
+        ("alphaInA", TevAlphaArg),
+        ("alphaInB", TevAlphaArg),
+        ("alphaInC", TevAlphaArg),
+        ("alphaInD", TevAlphaArg),
         ("alphaOp", TevOp),
         ("alphaBias", TevBias),
         ("alphaScale", TevScale),
         ("alphaClamp", bool),
         ("alphaRegId", Register)
     ]
+
+class TevKColorSel(IntEnum):
+    CONST_1 = 0x00 # constant 1.0
+    CONST_7_8 = 0x01 # constant 7/8
+    CONST_3_4 = 0x02 # constant 3/4
+    CONST_5_8 = 0x03 # constant 5/8
+    CONST_1_2 = 0x04 # constant 1/2
+    CONST_3_8 = 0x05 # constant 3/8
+    CONST_1_4 = 0x06 # constant 1/4
+    CONST_1_8 = 0x07 # constant 1/8
+    K0 = 0x0C # K0[RGB] register
+    K1 = 0x0D # K1[RGB] register
+    K2 = 0x0E # K2[RGB] register
+    K3 = 0x0F # K3[RGB] register
+    K0_R = 0x10 # K0[RRR] register
+    K1_R = 0x11 # K1[RRR] register
+    K2_R = 0x12 # K2[RRR] register
+    K3_R = 0x13 # K3[RRR] register
+    K0_G = 0x14 # K0[GGG] register
+    K1_G = 0x15 # K1[GGG] register
+    K2_G = 0x16 # K2[GGG] register
+    K3_G = 0x17 # K3[GGG] register
+    K0_B = 0x18 # K0[BBB] register
+    K1_B = 0x19 # K1[BBB] register
+    K2_B = 0x1A # K2[BBB] register
+    K3_B = 0x1B # K3[RBB] register
+    K0_A = 0x1C # K0[AAA] register
+    K1_A = 0x1D # K1[AAA] register
+    K2_A = 0x1E # K2[AAA] register
+    K3_A = 0x1F # K3[AAA] register
 
 class TevSwapMode(ReadableStruct):
     header = Struct('>BB2x')
@@ -496,7 +526,7 @@ def safeGet(arr, idx):
 class Material(ReadableStruct):
     header = Struct('>BBBBBxBx')
     fields = ["flag", "cullModeIndex", "lightChanCountIndex", "texGenCountIndex",
-        "tevStageCountIndex", "zModeIndex"]
+        "tevCountIndex", "zModeIndex"]
     def read(self, fin):
         super().read(fin)
         # 0x08
@@ -522,9 +552,9 @@ class Material(ReadableStruct):
         # 0x94
         self.constColorIndices = unpack('>4H', fin.read(8))
         # 0x9C
-        self.constColorSelIndices = unpack('>16B', fin.read(16))
+        self.constColorSels = list(map(TevKColorSel, unpack('>16B', fin.read(16))))
         # 0xAC
-        self.constAlphaSelIndices = unpack('>16B', fin.read(16))
+        self.constAlphaSels = unpack('>16B', fin.read(16))
         # 0xBC
         self.tevOrderIndices = unpack('>16H', fin.read(32))
         # 0xDC
@@ -544,7 +574,7 @@ class Material(ReadableStruct):
         self.cullMode = safeGet(mat3.cullModeArray, self.cullModeIndex)
         self.lightChanCount = safeGet(mat3.lightChanCountArray, self.lightChanCountIndex)
         self.texGenCount = safeGet(mat3.texGenCountArray, self.texGenCountIndex)
-        #self.tevStageCount = safeGet(mat3.tevStageCountArray, self.tevStageCountIndex)
+        self.tevStageCount = safeGet(mat3.tevCountArray, self.tevCountIndex)
         self.zMode = safeGet(mat3.zModeArray, self.zModeIndex)
         self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
         self.lightChanInfos = [safeGet(mat3.lightChanInfoArray, i) for i in self.lightChanIndices]
@@ -1334,7 +1364,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
     if hasattr(bmd, "tex1"):
         print("Importing textures")
         for texture in bmd.tex1.textures:
-            imageName = texture.getDataName(bmd)
+            imageName = texture.name#getDataName(bmd)
             if imageName in bpy.data.images:
                 image = bpy.data.images[imageName]
             else:
@@ -1358,10 +1388,14 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 bmat = bpy.data.materials.new(mat.name)
             mesh.materials.append(bmat)
             
-            if len(mat.colors) > 0 and mat.colors[0] is not None:
-                bmat.diffuse_color = color8ToLinear(mat.colors[0])
             if mat.cullMode is not None:
                 bmat.use_backface_culling = mat.cullMode == 2
+            if mat.blendInfo == BlendMode.NONE:
+                bmat.blend_method = 'OPAQUE'
+            elif mat.blendInfo == BlendMode.BLEND:
+                bmat.blend_method = 'BLEND'
+            if len(mat.colors) > 0 and mat.colors[0] is not None:
+                bmat.diffuse_color = color8ToLinear(mat.colors[0])
             
             bmat.use_nodes = True
             tree = bmat.node_tree
@@ -1369,9 +1403,68 @@ def importMesh(filePath, bmd, mesh, bm=None):
             
             placer = NodePlacer(tree)
             
+            # Shader variables
+            colorMatReg = []
+            colorAmbReg = []
+            konstColorReg = []
+            colorReg = []
+            for values, name, out in [
+                (mat.matColors, "Material", colorMatReg),
+                (mat.ambientColors, "Ambient", colorAmbReg),
+                (mat.constColors, "Constant", konstColorReg),
+                (mat.colors, "Base", colorReg)
+            ]:
+                for j, color in enumerate(values):
+                    node = placer.addNode('ShaderNodeRGB')
+                    node.outputs[0].default_value = color8ToLinear(color)
+                    node.label = name + ' ' + str(j)
+                    out.append(node.outputs[0])
+            colorVtxReg = []
+            for j in range(mat.lightChanCount):
+                node = placer.addNode('ShaderNodeVertexColor')
+                node.layer_name = str(j)
+                colorVtxReg.append(node.outputs['Color']) # TODO alpha
+            placer.nextColumn()
+            
+            # Light channels
+            colorChannels = []
+            for j in range(mat.lightChanCount):
+                colorChannel = safeGet(mat.lightChanInfos, j*2)
+                #alphaChannel = safeGet(mat.lightChanInfos, j*2+1)
+                matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
+                ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
+                if colorChannel.lightingEnabled and colorChannel.litMask != 0:
+                    if colorChannel.attenuationFunction in (1, 3):
+                        node = placer.addNode('ShaderNodeEeveeSpecular')
+                        tree.links.new(matSource, node.inputs['Specular'])
+                        tree.links.new(ambSource, node.inputs['Emissive Color'])
+                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                            node.inputs['Base Color'].default_value = (0,0,0,0)
+                        else:
+                            tree.links.new(matSource, node.inputs['Base Color'])
+                        out = node.outputs['BSDF']
+                    else:
+                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                            out = matSource
+                        else:
+                            node = placer.addNode('ShaderNodeBsdfDiffuse')
+                            tree.links.new(matSource, node.inputs['Color'])
+                            out = node.outputs['BSDF']
+                        placer.nextColumn()
+                        node = placer.addNode('ShaderNodeAddShader')
+                        tree.links.new(ambSource, node.inputs[0])
+                        tree.links.new(out, node.inputs[1])
+                        placer.previousColumn()
+                        out = node.outputs['Shader']
+                    node.label = "Light channel %d"%j
+                    colorChannels.append(out)
+                else:
+                    colorChannels.append(matSource) # TODO add ambient?
+            placer.nextColumn()
+            
             # Texgen stages
             texGens = []
-            for texGen in mat.texGenInfos[:mat.texGenCount]:
+            for j, texGen in enumerate(mat.texGenInfos[:mat.texGenCount]):
                 if texGen.source == TexGenSrc.POS:
                     node = placer.addNode('ShaderNodeNewGeometry')
                     out = node.outputs['Position']
@@ -1398,11 +1491,12 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     out = node.outputs[0]
                     tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
                 elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
-                    node = placer.addNode('ShaderNodeVertexColor')
-                    out = node.outputs['Color']
-                    node.layer_name = str(texGen.source-TexGenSrc.COLOR0)
+                    node = placer.addNode('NodeReroute')
+                    out = node.outputs[0]
+                    tree.links.new(colorChannels[texGen.source-TexGenSrc.COLOR0], node.inputs[0])
+                node.label = "Texture coordinate generation source %d"%j
+                placer.nextColumn()
                 if texGen.type == TexGenType.MTX3x4 or texGen.type == TexGenType.MTX2x4:
-                    placer.nextColumn()
                     node = placer.addNode('ShaderNodeMapping')
                     node.vector_type = 'POINT'
                     if texGen.matrix >= TexGenMatrix.TEXMTX0 and texGen.matrix <= TexGenMatrix.TEXMTX9 and mat.texMtxInfos[texGen.matrix-TexGenMatrix.TEXMTX0] is not None:
@@ -1412,92 +1506,99 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         node.inputs['Scale'].default_value = texMtx.scale+(1,)
                     tree.links.new(out, node.inputs[0])
                     out = node.outputs[0]
-                    placer.previousColumn()
+                elif texGen.type == TexGenType.SRTG:
+                    node = placer.addNode('ShaderNodeShaderToRGB')
+                    out = node.outputs[0]
+                placer.previousColumn()
                 texGens.append(out)
             placer.nextColumn()
-            
-            # Shader variables
             placer.nextColumn()
-            colorMatReg = []
-            colorAmbReg = []
-            konstColorReg = []
-            colorReg = []
-            for values, out in [
-                (mat.matColors, colorMatReg),
-                (mat.ambientColors, colorAmbReg),
-                (mat.constColors, konstColorReg),
-                (mat.colors, colorReg)
-            ]:
-                for color in values:
-                    node = placer.addNode('ShaderNodeRGB')
-                    node.outputs[0].default_value = color8ToLinear(color)
-                    out.append(node)
             
-            continue
-
-            colorVtxReg = []
-            for j in range(2):
-                reg = placer.addNode('ShaderNodeVertexColor')
-                reg.layer_name = str(j)
-                colorVtxReg.append(reg)
-            for texture in []:#bmd.tex1.textures:
-                reg = placer.addNode('ShaderNodeTexImage')
-                if texture.wrapS == 0: reg.extension = 'EXTEND'
-                elif texture.wrapS == 1: reg.extension = 'REPEAT'
-                elif texture.wrapS == 2: reg.extension = 'CHECKER'
-                reg.interpolation = 'Linear' if texture.magFilter%2 == 1 else 'Closest'
-                reg.image = bpy.data.images[texture.getDataName(bmd)]
-                reg.label = texture.name
-            
-            # Light channels
-            placer.nextColumn()
-            lightChannels = []
-            for j in range(bmd.mat3.numChans[mat.numChansIndex]):
-                colorChannel = bmd.mat3.lightChanInfos[mat.chanControls[j*2]]
-                #alphaChannel = bmd.mat3.lightChanInfos[mat.chanControls[j*2+1]]
-                matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
-                ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
-                if colorChannel.lightingEnabled:
-                    if colorChannel.attenuationFunction in (1, 3):
-                        node = placer.addNode('ShaderNodeEeveeSpecular')
-                        tree.links.new(matSource.outputs['Color'], node.inputs['Specular'])
-                        tree.links.new(ambSource.outputs['Color'], node.inputs['Emissive Color'])
-                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-                            node.inputs['Base Color'].default_value = (0,0,0,0)
+            for j in range(mat.tevStageCount):
+                tevOrderInfo = mat.tevOrderInfos[j]
+                tevStage = mat.tevStageInfos[j]
+                
+                colorSources = []
+                for colorSrc in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD):
+                    if colorSrc in (TevColorArg.CPREV, TevColorArg.C0, TevColorArg.C1, TevColorArg.C2):
+                        colorSources.append(colorReg[colorSrc.value//2])
+                    elif colorSrc in (TevColorArg.TEXC, TevColorArg.TEXA):
+                        texture = bmd.tex1.textures[mat.textureIndexes[tevOrderInfo.texMap]]
+                        node = placer.addNode('ShaderNodeTexImage')
+                        if texture.wrapS == 0: node.extension = 'EXTEND'
+                        elif texture.wrapS == 1: node.extension = 'REPEAT'
+                        elif texture.wrapS == 2: node.extension = 'CHECKER'
+                        node.interpolation = 'Linear' if texture.magFilter%2 == 1 else 'Closest'
+                        node.image = bpy.data.images[texture.name]#getDataName(bmd)
+                        tree.links.new(texGens[tevOrderInfo.texCoordId], node.inputs[0])
+                        if colorSrc == TevColorArg.TEXC:
+                            colorSources.append(node.outputs[0])
                         else:
-                            tree.links.new(matSource.outputs['Color'], node.inputs['Base Color'])
-                        reg = node
+                            colorSources.append(node.outputs[1])
+                    elif colorSrc == TevColorArg.ONE:
+                        colorSources.append(1)
+                    elif colorSrc == TevColorArg.HALF:
+                        colorSources.append(0.5)
+                    elif colorSrc == TevColorArg.KONST:
+                        constColorSel = mat.constColorSels[j]
+                        if constColorSel == TevKColorSel.CONST_1:
+                            colorSources.append(1.0)
+                        elif constColorSel == TevKColorSel.CONST_7_8:
+                            colorSources.append(7/8)
+                        elif constColorSel == TevKColorSel.CONST_3_4:
+                            colorSources.append(3/4)
+                        elif constColorSel == TevKColorSel.CONST_5_8:
+                            colorSources.append(5/8)
+                        elif constColorSel == TevKColorSel.CONST_1_2:
+                            colorSources.append(1/2)
+                        elif constColorSel == TevKColorSel.CONST_3_8:
+                            colorSources.append(3/8)
+                        elif constColorSel == TevKColorSel.CONST_1_4:
+                            colorSources.append(1/4)
+                        elif constColorSel == TevKColorSel.CONST_1_8:
+                            colorSources.append(1/8)
+                        elif constColorSel >= TevKColorSel.K0 and constColorSel <= TevKColorSel.K1:
+                            colorSources.append(konstColorReg[constColorSel-TevKColorSel.K0])
+                    elif colorSrc == TevColorArg.ZERO:
+                        colorSources.append(0.0)
                     else:
-                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-                            node = matSource
-                        else:
-                            node = placer.addNode('ShaderNodeBsdfDiffuse')
-                            tree.links.new(matSource.outputs['Color'], node.inputs['Color'])
-                        placer.nextColumn()
-                        reg = placer.addNode('ShaderNodeAddShader')
-                        tree.links.new(ambSource.outputs['Color'], reg.inputs[0])
-                        tree.links.new(node.outputs[0], reg.inputs[1])
-                        placer.previousColumn()
-                    reg.label = "Color channel {}".format(mat.chanControls[j*2])
-                    lightChannels.append(reg)
-                else:
-                    lightChannels.append(matSource)
-            
-            placer.nextColumn()
-            for j, tevStageIndex in enumerate(mat.tevStageInfo):
-                if tevStageIndex < 0: continue
-                stage = bmd.mat3.tevStageInfos[tevStageIndex]
-            
-            placer.nextColumn()
-            lastOut = lightChannels[0] # XXX
-            for j in range(1, len(lightChannels)):
-                n = placer.addNode('ShaderNodeAddShader')
-                tree.links.new(lastOut.outputs[0], n.inputs[0])
-                tree.links.new(lightChannels[i].outputs[0], n.inputs[1])
+                        assert False, colorSrc
+                        colorSources.append(None)
+                
                 placer.nextColumn()
-                lastOut = n
+                if tevStage.colorOp in (TevOp.ADD, TevOp.SUB):
+                    node = placer.addNode('ShaderNodeMixRGB')
+                    node.blend_type = 'MIX'
+                    if isinstance(colorSources[2], float):
+                        node.inputs['Fac'].default_value = colorSources[2]
+                    else:
+                        tree.links.new(colorSources[2], node.inputs['Fac'])
+                    if isinstance(colorSources[0], float):
+                        node.inputs[1].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
+                    else:
+                        tree.links.new(colorSources[0], node.inputs[1])
+                    if isinstance(colorSources[1], float):
+                        node.inputs[2].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
+                    else:
+                        tree.links.new(colorSources[1], node.inputs[2])
+                    
+                    placer.nextColumn()
+                    node2 = placer.addNode('ShaderNodeMixRGB')
+                    node2.blend_type = 'ADD' if tevStage.colorOp == TevOp.ADD else 'SUBTRACT'
+                    node2.inputs['Fac'].default_value = 1.0
+                    tree.links.new(node.outputs[0], node2.inputs[1])
+                    if isinstance(colorSources[3], float):
+                        node2.inputs[2].default_value = (colorSources[3],colorSources[3],colorSources[3],1)
+                    else:
+                        tree.links.new(colorSources[3], node2.inputs[2])
+                    placer.previousColumn()
+                    colorReg[0] = node2.outputs[0]
+                placer.nextColumn()
+                placer.nextColumn()
+                
+
             shout = placer.addNode('ShaderNodeOutputMaterial')
-            tree.links.new(lastOut.outputs[0], shout.inputs[0])
+            tree.links.new(colorReg[0], shout.inputs[0])
 
     print("Importing mesh")
     if bm is None: bm = bmesh.new()
