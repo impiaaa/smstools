@@ -27,9 +27,14 @@ fin.seek(dataOffset)
 data = readTextureData(fin, format, width, height, mipmapCount)
 fin.close()
 
-images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
+#images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
+#images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
 
 fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
 decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
 fout.close()
+
+#fout = open(os.path.splitext(sys.argv[1])[0]+".ktx", 'wb')
+#decodeTextureKTX(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+#fout.close()
+

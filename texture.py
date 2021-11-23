@@ -312,6 +312,8 @@ def convertPalette(paletteData, paletteFormat):
         elif paletteFormat == TL.RGB5A3:
             palette[i] = unpackRGB5A3(x)
 
+## PIL
+
 formatImageTypes = {
 TF.I4:     'L',
 TF.I8:     'L',
@@ -346,6 +348,8 @@ def decodeTexturePIL(data, format, width, height, paletteFormat=None, paletteDat
             imgs[arrayIdx][mipIdx] = im
     return imgs
 
+## BPY
+
 def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
     # Note: REALLY slow.
     # Like, EXTREMELY SLOW.
@@ -373,6 +377,8 @@ def decodeTextureBPY(im, data, format, width, height, paletteFormat=None, palett
             dataIdx = decodeBlock(format, data, dataIdx, width, height, x, y, putpixelbpy, palette)
     im.update()
 
+## DDS
+
 class DDSD(Flag):
     CAPS = 0x00000001
     HEIGHT = 0x00000002
@@ -394,20 +400,19 @@ class DDSCAPS(Flag):
     MIPMAP = 0x00400000
 
 ddsFormats = {
-    TF.I4:     (DDPF.LUMINANCE,                  b'',      8,       0xFF,          0,          0,          0),
-    TF.I8:     (DDPF.LUMINANCE,                  b'',      8,       0xFF,          0,          0,          0),
-    TF.IA4:    (DDPF.ALPHAPIXELS|DDPF.LUMINANCE, b'',      8,       0xF0,          0,          0,       0x0F),
-    TF.IA8:    (DDPF.ALPHAPIXELS|DDPF.LUMINANCE, b'',     16,     0x00FF,          0,          0,     0xFF00),
+    TF.I4:     (DDPF.RGB,                        b'',     24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000),
+    TF.I8:     (DDPF.RGB,                        b'',     24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000),
+    TF.IA4:    (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
+    TF.IA8:    (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     TF.RGB565: (DDPF.RGB,                        b'',     16,     0xF800,     0x07E0,     0x001F,          0),
-#    TF.RGB5A3: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
     TF.RGB5A3: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     TF.RGBA8:  (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
     TF.CMPR:   (DDPF.ALPHAPIXELS|DDPF.FOURCC,    b'DXT1',  0,          0,          0,          0,          0)
 }
 ddsPaletteFormats = {
-    TL.IA8:    (DDPF.ALPHAPIXELS|DDPF.LUMINANCE, b'',     16,     0x00FF,          0,          0,     0xFF00),
+    TL.IA8:    (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     TL.RGB565: (DDPF.RGB,                        b'',     16,     0xF800,     0x07E0,     0x001F,          0),
-    TL.RGB5A3: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
+    TL.RGB5A3: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
 }
 
 def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=1):
@@ -418,17 +423,11 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         pitchOrLinearSize = len(data)
     else:
         flags |= DDSD.PITCH
-        if format == TF.RGB5A3: bytesPerPixel = 4
-        elif format == TF.I4: bytesPerPixel = 1
-        elif format in (TF.C4, TF.C8, TF.C14X2): 
-            if paletteFormat == TL.RGB5A3: bytesPerPixel = 4
-            else: bytesPerPixel = 2
-        else: bytesPerPixel = formatBytesPerPixel[format]
-        #bytesPerPixel = 2
+        bytesPerPixel = ddsFormats[format][2]//8
         pitchOrLinearSize = int(width*bytesPerPixel)
     if mipmapCount > 1:
         flags |= DDSD.MIPMAPCOUNT
-    fout.write(struct.pack('<IIIIIII44x', 124, flags.value, height, width, pitchOrLinearSize, 0, mipmapCount))
+    fout.write(struct.pack('<IIIIIII44x', 124, flags.value, height, width, pitchOrLinearSize, 1, mipmapCount))
     if format in ddsFormats:
         flags, fourCC, rgbBitCount, rBitMask, gBitMask, bBitMask, aBitMask = ddsFormats[format]
     else:
@@ -444,6 +443,99 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     mipSize = int(calcTextureSize(format, width, height)/data.itemsize)
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
+    if format in (TF.I4, TF.I8): componentsIn = 1
+    elif format in (TF.IA4, TF.IA8): componentsIn = 2
+    elif format == TF.RGB565: componentsIn = 3
+    elif format in (TF.RGB5A3, TF.RGBA8, TF.CMPR): componentsIn = 4
+    elif format in (TF.C4, TF.C8, TF.C14X2):
+        if paletteFormat == TL.IA8: componentsIn = 2
+        elif paletteFormat == TL.RGB565: componentsIn = 3
+        elif paletteFormat == TL.RGB5A3: componentsIn = 4
+    if format in (TF.IA4, TF.IA8): componentsOut = 4
+    else: componentsOut = max(3, componentsIn)
+
+    for arrayIdx in range(arrayCount):
+        for mipIdx in range(mipmapCount):
+            mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
+            dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
+            if format in (TF.I4, TF.I8, TF.IA4, TF.IA8, TF.RGB5A3, TF.C4, TF.C8, TF.C14X2):
+                dest = array('B', (0,)*mipWidth*mipHeight*componentsOut)
+                if componentsIn == 1:
+                    def putpixelarray(dx, dy, c):
+                        offset = (mipWidth*dy + dx)*componentsOut
+                        dest[offset:offset + componentsOut] = array('B', [c]*componentsOut)
+                else:
+                    def putpixelarray(dx, dy, c):
+                        offset = (mipWidth*dy + dx)*componentsOut
+                        dest[offset:offset + componentsOut] = array('B', [c[2], c[1], c[0], c[3]])
+                for y in range(0, mipHeight, formatBlockHeight[format]):
+                    for x in range(0, mipWidth, formatBlockWidth[format]):
+                        dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
+                dest.tofile(fout)
+            else:
+                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                if sys.byteorder == 'big': deblocked.byteswap()
+                deblocked.tofile(fout)
+
+## KTX
+
+class GL:
+    UNSIGNED_BYTE                 = 0x1401
+    RED                           = 0x1903
+    RGB                           = 0x1907
+    RGBA                          = 0x1908
+    RGBA8                         = 0x8058
+    RG                            = 0x8227
+    R8                            = 0x8229
+    RG8                           = 0x822B
+    UNSIGNED_SHORT_5_6_5          = 0x8363
+    COMPRESSED_RGB_S3TC_DXT1_EXT  = 0x83F0
+    RGB565                        = 0x8D62
+
+#              glType                    glFormat glInternalFormat                  glBaseInternalFormat
+glFormats = {
+    TF.I4:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                            GL.RED),
+    TF.I8:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                            GL.RED),
+    TF.IA4:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
+    TF.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
+    TF.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                        GL.RGB),
+    TF.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
+    TF.RGBA8:  (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
+    TF.CMPR:   (                      0,       0, GL.COMPRESSED_RGB_S3TC_DXT1_EXT,  GL.RGB)
+}
+glPaletteFormats = {
+    TL.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
+    TL.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                        GL.RGB),
+    TL.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
+}
+
+def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=0):
+    fout.write(bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]))
+    if format in glFormats:
+        glType, glFormat, glInternalFormat, glBaseInternalFormat = glFormats[format]
+    else:
+        glType, glFormat, glInternalFormat, glBaseInternalFormat = glPaletteFormats[paletteFormat]
+    fout.write(struct.pack('IIIIIIIIIIIII',
+        0x04030201,
+        glType,
+        1, # glTypeSize
+        glFormat,
+        glInternalFormat,
+        glBaseInternalFormat,
+        width,
+        height,
+        0, # depth
+        arrayCount,
+        1, # face count
+        mipmapCount,
+        28)) # key-value length
+    
+    fout.write(struct.pack('I', 23))
+    fout.write(b'KTXorientation\0S=r,T=d\0\0')
+
+    mipSize = int(calcTextureSize(format, width, height)/data.itemsize)
+    sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
+    palette = convertPalette(paletteData, paletteFormat)
     if format in (TF.I4, TF.I8): components = 1
     elif format in (TF.IA4, TF.IA8): components = 2
     elif format == TF.RGB565: components = 3
@@ -453,24 +545,29 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         elif paletteFormat == TL.RGB565: components = 3
         elif paletteFormat == TL.RGB5A3: components = 4
 
-    for arrayIdx in range(arrayCount):
-        for mipIdx in range(mipmapCount):
+    for mipIdx in range(mipmapCount):
+        for arrayIdx in range(max(1, arrayCount)):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
-            if format in (TF.I4, TF.RGB5A3, TF.C4, TF.C8, TF.C14X2):
-                dest = array('B', (0,)*mipWidth*mipHeight*components)
-                if format == TF.I4:
+            if format in (TF.I4, TF.IA4, TF.RGB5A3) or (format in (TF.C4, TF.C8, TF.C14X2) and paletteFormat in (TL.IA8, TL.RGB5A3)):
+                pixelData = array('B', (0,)*mipWidth*mipHeight*components)
+                if components == 1:
                     def putpixelarray(dx, dy, c):
-                        dest[mipWidth*dy + dx] = c
+                        pixelData[mipWidth*dy + dx] = c
                 else:
                     def putpixelarray(dx, dy, c):
                         offset = (mipWidth*dy + dx)*components
-                        dest[offset:offset + components] = array('B', [c[2], c[1], c[0], c[3]])
+                        pixelData[offset:offset + components] = array('B', c)
                 for y in range(0, mipHeight, formatBlockHeight[format]):
                     for x in range(0, mipWidth, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
-                dest.tofile(fout)
+            elif format in (TF.C4, TF.C8, TF.C14X2) and paletteFormat == TL.RGB565:
+                pixelData = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                if sys.byteorder == 'big': pixelData.byteswap()
+                pixelData = array('H', [paletteData[px] for px in deblocked])
             else:
-                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
-                if sys.byteorder == 'big': deblocked.byteswap()
-                deblocked.tofile(fout)
+                pixelData = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                if sys.byteorder == 'big': pixelData.byteswap()
+            fout.write(struct.pack('I', len(pixelData)*pixelData.itemsize))
+            pixelData.tofile(fout)
+
