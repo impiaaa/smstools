@@ -4,12 +4,12 @@ from struct import Struct, unpack
 from common import getString, Readable, ReadableStruct
 
 class Keyframe(ReadableStruct):
-    header = Struct('>hhhhhhhhhh')
-    fields = ["x", "y", "z", "unk1", "unk2", "unk3", "pitch", "yaw", "roll", "speed"]
+    header = Struct('>hhhh2xhhhhh')
+    fields = ["x", "y", "z", "connectionCount", "unk3", "pitch", "yaw", "roll", "speed"]
     def read(self, fin):
         super().read(fin)
-        self.connections = unpack('>8h', fin.read(8*2))
-        self.periods = unpack('>8f', fin.read(8*4))
+        self.connections = unpack('>8h', fin.read(8*2))[:self.connectionCount]
+        self.periods = unpack('>8f', fin.read(8*4))[:self.connectionCount]
     def __repr__(self):
         return super().__repr__()+' connections='+repr(self.connections)+' periods='+repr(self.periods)
 

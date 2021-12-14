@@ -10,13 +10,12 @@ if len(sys.argv) != 2:
 
 fin = open(sys.argv[1], 'rb')
 
-nRegions, zero1, eight = unpack('>HHI', fin.read(8))
+nRegions, zero1, dataOffset = unpack('>HHI', fin.read(8))
 
-if eight != 8:
-	sys.stderr.write("Not a YMP (8=%d)\n"%eight)
-	exit(1)
+assert dataOffset == 8
+assert zero1 == 0
 
-assert zero1 == 0, hex(fin.tell())
+fin.seek(dataOffset)
 
 print("%d regions"%nRegions)
 

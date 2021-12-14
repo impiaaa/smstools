@@ -5,18 +5,17 @@ import struct
 import warnings
 
 class Readable(object):
-    def __init__(self, fin=None):
+    def __init__(self, fin=None, pos=None):
         super(Readable, self)
-        if fin is not None: self.read(fin)
+        if fin is not None:
+            if pos is not None:
+                fin.seek(pos)
+            self.read(fin)
 
 class ReadableStruct(Readable): # name???
     @classmethod
-    def try_make(cls, fin):
-        #try:
-        x = cls(fin)
-        #except ValueError:
-        #    x = None
-        return x
+    def try_make(cls, fin, pos=None):
+        return cls(fin=fin, pos=pos)
     def read(self, fin):
         for field, value in zip(self.fields, self.header.unpack(fin.read(self.header.size))):
             if isinstance(field, str):
