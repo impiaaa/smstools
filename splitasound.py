@@ -5,6 +5,10 @@ def dumpsection(name, fin, offset, size):
     fin.seek(offset)
     open(name, 'wb').write(fin.read(size))
     fin.seek(oldpos)
+    
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <aaf>\n"%sys.argv[0])
+    exit(1)
 
 fin = open(sys.argv[1], 'rb')
 

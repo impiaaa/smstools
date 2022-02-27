@@ -52,6 +52,10 @@ class ColReader:
     def __repr__(self):
         return hex(self.unknown0)+'|'+repr(self.groups)
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <col>\n"%sys.argv[0])
+    exit(1)
+
 if 0:
     import os
     for dirpath, dirnames, filenames in os.walk("."):

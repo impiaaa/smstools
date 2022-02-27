@@ -159,6 +159,10 @@ def exportCol(col, outputFolderLocation, physNameBase):
             asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
             yield writeNativeMeta(assetName, 4300000, outputFolderLocation)
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s <col>\n"%sys.argv[0])
+    exit(1)
+
 if __name__ == '__main__':
     import re
     # for whatever reason, unityparser adds explicit type markers to floats with no

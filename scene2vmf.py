@@ -4,6 +4,10 @@ import sys, pathlib
 def bmd2vmfcoords(x, y, z, rx, ry, rz):
     return -x, z, y, -rx, rz, ry
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s scene.bin\n"%sys.argv[0])
+    exit(1)
+    
 argpath = pathlib.Path(sys.argv[1])
 if argpath.is_dir():
     if argpath.name == "map":

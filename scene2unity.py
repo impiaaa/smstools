@@ -69,6 +69,9 @@ def setup3d(objXfm, o):
     objXfm.m_LocalRotation = dict(zip('wxyz', transforms3d.euler.euler2quat(radians(o.rx), radians(o.ry), radians(o.rz)).tolist()))
     objXfm.m_LocalScale = {'x': SCALE*o.sx, 'y': SCALE*o.sy, 'z': -1*SCALE*o.sz}
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s scene.bin\n"%sys.argv[0])
+    exit(1)
 
 scenedirpath = pathlib.Path(sys.argv[1])
 assert scenedirpath.is_dir()

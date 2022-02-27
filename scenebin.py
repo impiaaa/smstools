@@ -57,6 +57,10 @@ def readsection(fin):
 
 import classes
 
+if len(sys.argv) != 2:
+    sys.stderr.write("Usage: %s scene.bin\n"%sys.argv[0])
+    exit(1)
+
 if __name__ == "__main__":
     def printobj(o, i=0):
         print('  '*i, o)
