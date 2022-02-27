@@ -74,7 +74,7 @@ def handlePerf(type, value, duration, maxValue, track, tick):
 def handleBankProgram(which, selection, track, tick):
   if which == 7:
     # pitch
-    print "Pitch", selection
+    print("Pitch", selection)
     event = midi.ControlChangeEvent(tick=tick)
     event.control = 101 # RPN MSB
     event.value = 0
@@ -93,14 +93,14 @@ def handleBankProgram(which, selection, track, tick):
     track.append(event)
   elif which == 0x20:
     # bank
-    print "Bank", selection
+    print("Bank", selection)
     event = midi.ControlChangeEvent(tick=tick)
     event.control = 32 # Bank Select
     event.value = selection
     track.append(event)
   elif which == 0x21:
     # program
-    print "Program", selection
+    print("Program", selection)
     if selection >= 128:
       warn("Program %d >= 128"%selection)
       #selection -= 228
@@ -267,8 +267,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       which, selection = unpack('>BB', fin.read(2))
       if pattern is not None: handleBankProgram(which, selection, track, delay)
       else:
-        if which == 0x20: print "Bank", selection
-        elif which == 0x21: print "Program", selection
+        if which == 0x20: print("Bank", selection)
+        elif which == 0x21: print("Program", selection)
         else: warn("Unknown bank/program %x (%d)"%(which, selection))
       if which == 0x21 and selection > 127:
         channel = 9
@@ -277,8 +277,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       which, selection = unpack('>BH', fin.read(3))
       if pattern is not None: handleBankProgram(which, selection, track, delay)
       else:
-        if which == 0x20: print "Bank", selection
-        elif which == 0x21: print "Program", selection
+        if which == 0x20:print("Bank", selection)
+        elif which == 0x21:print("Program", selection)
         else: warn("Unknown bank/program %x (%d)"%(which, selection))
       if which == 0x21 and selection > 127:
         channel = 9
@@ -294,7 +294,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # cmdOpenTrack
       childTrackId, tmp, trackPos = unpack('>BBH', fin.read(4))
       trackPos |= tmp<<16
-      print "New track", childTrackId, "at", hex(trackPos), "delay", delay
+      print("New track", childTrackId, "at", hex(trackPos), "delay", delay)
       tracksToDo.append((trackPos, childTrackId, delay))
     elif cmd == 0xC2:
       # sibling track
@@ -339,7 +339,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         track[jumpToInTrack+1].tick -= delay
         delay = 0
         if mode == 0:
-          print "Breaking out of loop"
+          print("Breaking out of loop")
           break
     elif cmd == 0xC8:
       # seek ex
@@ -356,7 +356,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         track[jumpToInTrack+1].tick -= delay
         delay = 0
         if mode == 0:
-          print "Breaking out of loop"
+          print("Breaking out of loop")
           break
     elif cmd == 0xC9:
       # loop begin
@@ -490,20 +490,20 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # tempo
       # cmdTempo
       tempo, = unpack('>H', fin.read(2))
-      print "Tempo", tempo
+      print("Tempo", tempo)
       if pattern is not None: track.append(midi.SetTempoEvent(bpm=tempo, tick=delay))
       delay = 0
     elif cmd == 0xFE:
       # PPQN (pulses per quarter note)
       # cmdTimeBase
       ppqn, = unpack('>H', fin.read(2))
-      print "PPQN", ppqn
+      print("PPQN", ppqn)
       if pattern is not None:
         pattern.resolution = ppqn
     elif cmd == 0xFF:
       # end track
       # cmdFinish
-      print "End track"
+      print("End track")
       if pattern is not None: track.append(midi.EndOfTrackEvent(tick=delay))
       delay = 0
       break
@@ -547,7 +547,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
           delay = 0
     else:
       warn("Unknown command %x@%x"%(cmd,fin.tell()))
-      print hex(fin.tell())
+      print(hex(fin.tell()))
       break
   if pattern is not None:
     if len(track) > 0 and not isinstance(track[-1], midi.EndOfTrackEvent):
@@ -557,7 +557,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       event.channel = channel
   for i, (trackPos, childTrackId, delay) in enumerate(tracksToDo):
     #if childTrackId == 15: continue
-    print "Track", childTrackId
+    print("Track", childTrackId)
     fin.seek(trackPos)
     readTrack(fin, pattern, childTrackId, delay, totalTime, tracksToDo[i+1][0] if i+1 < len(tracksToDo) else maxpos)
 
@@ -566,7 +566,7 @@ if len(sys.argv) > 1: files = sys.argv[1:]
 else: files = os.listdir('.')
 for fname in files:
   if fname.endswith(".com") or fname.endswith(".bms") or len(sys.argv) > 1:
-    print fname
+    print(fname)
     fin = open(fname, 'rb')
     pattern = midi.Pattern()
     fin.seek(0,2)
@@ -574,9 +574,9 @@ for fname in files:
     fin.seek(0,0)
     try: readTrack(fin, pattern, maxpos=maxpos)
     except Exception, e:
-      print e
+      print(e)
       continue
-    finally: print hex(fin.tell())
+    finally: print(hex(fin.tell()))
     #print pattern
     if pattern is not None: midi.write_midifile(os.path.splitext(fname)[0]+".mid", pattern)
     fin.close()

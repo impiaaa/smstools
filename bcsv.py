@@ -8,7 +8,7 @@ from common import getString
 
 def printHex(s):
     for i in range(0, len(s), 4):
-        print ''.join(['%02X'%ord(x) for x in s[i:min(i+4, len(s))]]),
+        print(''.join(['%02X'%ord(x) for x in s[i:min(i+4, len(s))]]),)
 
 fin = open(sys.argv[1], 'rb')
 fin.seek(0, 2)
@@ -23,7 +23,7 @@ if isBMT:
     count = 1
     itemLen = 4*fieldCount
 
-print fieldCount, "fields"
+print(fieldCount, "fields")
 fields = []
 rowStructFmt = '>'
 fieldTypeFormats = ['I', 'I', 'f', 'i', 'h', 'b', 'I', 'I']
@@ -39,7 +39,7 @@ fields.sort(key=lambda a: a[1])
 currentFieldOffset = 0
 for (fieldId, fieldOffset, fieldType) in fields:
     assert currentFieldOffset == fieldOffset
-    print hex(fieldId), fieldType
+    print(hex(fieldId), fieldType)
     rowStructFmt += fieldTypeFormats[fieldType]
     currentFieldOffset += fieldTypeSizes[fieldType]
 assert fin.tell() <= offset
@@ -52,9 +52,9 @@ if isBMT:
     strTableOffset = 0
 else:
     strTableOffset = offset+(count*itemLen)
-print "string table is at 0x%X"%strTableOffset
+print("string table is at 0x%X"%strTableOffset)
 
-print count, "items,", itemLen, "bytes each"
+print(count, "items,", itemLen, "bytes each")
 fin.seek(offset)
 for i in range(count):
     row = rowStruct.unpack(fin.read(itemLen))
@@ -67,8 +67,8 @@ for i in range(count):
                 val = getString(val+strTableOffset, fin)
         elif fieldType in (1, 7):
             val = None
-        print repr(val)+",",
-    print
+        print(repr(val)+",",)
+    print()
     fin.seek(nextEntry)
 
 fin.close()
