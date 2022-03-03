@@ -7,7 +7,6 @@ import math
 from enum import Enum, IntEnum
 from common import *
 from texture import *
-import bpy, bmesh
 from mathutils import *
 
 bbStruct = Struct('>fff')
@@ -728,22 +727,27 @@ class Mat3(Section):
         # 28 (MaterialData7)
         # 29 (NBTScaleInfo)
         
-        for m in self.materials:
-            m.resolve(self)
-            m.debug()
+        #for m in self.materials:
+        #    m.resolve(self)
+        #    m.debug()
 
 
 class Index(Readable):
     sizeStructs = {1: Struct('>B'), 3: Struct('>H')}
     def __init__(self):
         super().__init__()
+        self.matrixIndex = -1
+        self.posIndex = -1
+        self.normalIndex = -1
         self.colorIndex = [-1]*2
         self.texCoordIndex = [-1]*8
+        self.attrIndices = []
     def read(self, fin, attribs):
         for attrib in attribs:
             #get value
             s = self.sizeStructs[attrib.dataType]
             val, = s.unpack(fin.read(s.size))
+            self.attrIndices.append(val)
 
             #set appropriate index
             if attrib.attrib == 0:
@@ -767,12 +771,26 @@ class Index(Readable):
 
                 pass #ignore unknown types, it's enough to warn() in dumpBatch
 
+class PrimitiveType(Enum):
+    NONE          = 0
+    POINTS        = 0xB8 # Draws a series of points. Each vertex is a single point.
+    LINES         = 0xA8 # Draws a series of unconnected line segments. Each pair of vertices makes a line.
+    LINESTRIP     = 0xB0 # Draws a series of lines. Each vertex (besides the first) makes a line between it and the previous.
+    TRIANGLES     = 0x90 # Draws a series of unconnected triangles. Three vertices make a single triangle.
+    TRIANGLESTRIP = 0x98 # Draws a series of triangles. Each triangle (besides the first) shares a side with the previous triangle.
+                         # Each vertex (besides the first two) completes a triangle.
+    TRIANGLEFAN   = 0xA0 # Draws a single triangle fan. The first vertex is the "centerpoint". The second and third vertex complete
+                         # the first triangle. Each subsequent vertex completes another triangle which shares a side with the previous
+                         # triangle (except the first triangle) and has the centerpoint vertex as one of the vertices.
+    QUADS         = 0x80 # Draws a series of unconnected quads. Every four vertices completes a quad. Internally, each quad is
+                         # translated into a pair of triangles.
+
 class Primitive(ReadableStruct):
     header = Struct('>BH')
-    fields = ["type", "count"]
+    fields = [("type", PrimitiveType), "count"]
     def read(self, fin, attribs):
         super().read(fin)
-        if self.type == 0: return
+        if self.type == PrimitiveType.NONE: return
 
         self.points = [Index() for jkl in range(self.count)]
 
@@ -878,7 +896,7 @@ def dumpPacketPrimitives(attribs, dataSize, fin):
     while fin.tell()-start < dataSize:
         currPrimitive = Primitive()
         currPrimitive.read(fin, attribs)
-        if currPrimitive.type == 0:
+        if currPrimitive.type == PrimitiveType.NONE:
             break
         primitives.append(currPrimitive)
 
@@ -931,15 +949,6 @@ class Image(ReadableStruct):
             s += "p"+hex(self.fullPaletteOffset)
         return s
     
-    def export(self, imageName):
-        #im = bpy.data.images.new(self.name, self.width, self.height, alpha=self.hasAlpha)
-        #decodeTextureBPY(im, self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
-        imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
-        imgs[0][0].save(imageName)
-        im = bpy.data.images.load(imageName)
-        im.pack()
-        return im
-
 class Tex1(Section):
     headerCount = Struct('>H2x')
     headerOffsets = Struct('>II')
@@ -952,7 +961,7 @@ class Tex1(Section):
                 textureNames = []
                 textureHeaderOffset = 0
             else:
-                textureNames = [name.decode('shift-jis').strip("\0")]
+                textureNames = [name.decode('shift-jis').rstrip("\0")]
                 textureHeaderOffset = 0x20
         else:
             textureHeaderOffset, stringTableOffset = self.headerOffsets.unpack(fin.read(self.headerOffsets.size))
@@ -978,11 +987,13 @@ class Vtx1(Section):
         for i in range(13):
             if offsets[i] != 0: numArrays += 1
         fin.seek(start+arrayFormatOffset)
-        formats = [ArrayFormat(fin) for i in range(numArrays)]
+        self.formats = [ArrayFormat(fin) for i in range(numArrays)]
+        self.originalData = []
+        self.asFloat = []
         j = 0
         for i in range(13):
             if offsets[i] == 0: continue
-            currFormat = formats[j]
+            currFormat = self.formats[j]
             startOffset = offsets[i]
             length = size-startOffset
             for k in range(i+1, 13):
@@ -994,91 +1005,144 @@ class Vtx1(Section):
             fin.seek(offset)
             #convert array to float (so we have n + m cases, not n*m)
             data = array('f')
-            if currFormat.dataType == 3: #s16 fixed point
+            if currFormat.arrayType not in (VtxAttr.CLR0, VtxAttr.CLR1) and currFormat.dataType == CompSize.S16:
                 tmp = array('h')
                 tmp.fromfile(fin, length//2)
                 if sys.byteorder == 'little': tmp.byteswap()
+                self.originalData.append(tmp)
                 scale = .5**currFormat.decimalPoint
                 data.extend([tmp[k]*scale for k in range(0, length//2)])
-            elif currFormat.dataType == 4: #f32
+            elif currFormat.arrayType not in (VtxAttr.CLR0, VtxAttr.CLR1) and currFormat.dataType == CompSize.F32:
                 data.fromfile(fin, length//4)
                 if sys.byteorder == 'little': data.byteswap()
-            elif currFormat.dataType == 5: #rgb(a)
+                self.originalData.append(data)
+            elif currFormat.arrayType in (VtxAttr.CLR0, VtxAttr.CLR1) and currFormat.dataType == CompSize.RGBA8:
                 tmp = array('B')
                 tmp.fromfile(fin, length)
+                self.originalData.append(tmp)
                 data.extend([float(tmp[k]) for k in range(0, length)])
             else:
-                warn("vtx1: unknown array data type %d"%dataType)
+                warn("vtx1: unknown array data type %s"%dataType)
                 j += 1
+                self.originalData.append(None)
+                self.asFloat.append(None)
                 continue
+            self.asFloat.append(data)
 
             #stuff floats into appropriate vertex array
-            if currFormat.arrayType == 9: #positions
-                if currFormat.componentCount == 0: #xy
+            if currFormat.arrayType == VtxAttr.POS:
+                if currFormat.componentCount == CompType.POS_XY:
                     self.positions = [None for i in range(len(data)/2)]
                     k = 0
                     for l in range(0, len(self.positions)):
                         self.positions[l] = Vector((data[k], data[k + 1], 0))
                         k += 2
-                elif currFormat.componentCount == 1: #xyz
+                elif currFormat.componentCount == CompType.POS_XYZ:
                     self.positions = [None for i in range(len(data)//3)]
                     k = 0
                     for l in range(0, len(self.positions)):
                         self.positions[l] = Vector((data[k], data[k + 1], data[k + 2]))
                         k += 3
                 else:
-                    warn("vtx1: unsupported componentCount for positions array: %d"%currFormat["componentCount"])
+                    warn("vtx1: unsupported componentCount for positions array: %s"%currFormat.componentCount)
                     self.positions = []
-            elif currFormat.arrayType == 0xa: #normals
-                if currFormat.componentCount == 0: #xyz
+            elif currFormat.arrayType == VtxAttr.NRM:
+                if currFormat.componentCount == CompType.NRM_XYZ:
                     self.normals = [None for i in range(len(data)//3)]
                     k = 0
                     for l in range(0, len(self.normals)):
                         self.normals[l] = Vector((data[k], data[k + 1], data[k + 2]))
                         k += 3
                 else:
-                    warn("vtx1: unsupported componentCount for normals array: %d"%currFormat["componentCount"])
-            elif currFormat.arrayType in (0xb, 0xc): #color0,color1
-                index = currFormat.arrayType-0xb
-                if currFormat.componentCount == 0: #rgb
+                    warn("vtx1: unsupported componentCount for normals array: %s"%currFormat.componentCount)
+            elif currFormat.arrayType in (VtxAttr.CLR0, VtxAttr.CLR1):
+                index = currFormat.arrayType.value-0xb
+                if currFormat.componentCount == CompType.CLR_RGB:
                     self.colors[index] = [None for i in range(len(data)//3)]
                     k = 0
                     for l in range(len(self.colors[index])):
                         self.colors[index][l] = (data[k], data[k + 1], data[k + 2])
                         k += 3
-                elif currFormat.componentCount == 1: #rgba
+                elif currFormat.componentCount == CompType.CLR_RGBA:
                     self.colors[index] = [None for i in range(len(data)//4)]
                     k = 0
                     for l in range(len(self.colors[index])):
                         self.colors[index][l] = (data[k], data[k + 1], data[k + 2], data[k + 3])
                         k += 4
                 else:
-                    warn("vtx1: unsupported componentCount for colors array %d: %d"%
+                    warn("vtx1: unsupported componentCount for colors array %d: %s"%
                         index, currFormat.componentCount)
-            #texcoords 0 - 7
-            elif currFormat.arrayType in (0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14):
-                index = currFormat.arrayType - 0xd
-                if currFormat.componentCount == 0: #s
+            elif currFormat.arrayType in (VtxAttr.TEX0, VtxAttr.TEX1, VtxAttr.TEX2, VtxAttr.TEX3, VtxAttr.TEX4, VtxAttr.TEX5, VtxAttr.TEX6, VtxAttr.TEX7):
+                index = currFormat.arrayType.value - 0xd
+                if currFormat.componentCount == CompType.TEX_S:
                     self.texCoords[index] = [None for i in range(len(data))]
                     for l in range(0, len(self.texCoords[index])):
                         self.texCoords[index][l] = Vector((data[l], 0))
-                elif currFormat.componentCount == 1: #st
+                elif currFormat.componentCount == CompType.TEX_ST:
                     self.texCoords[index] = [None for i in range(len(data)//2)]
                     k = 0
                     for l in range(0, len(self.texCoords[index])):
                         self.texCoords[index][l] = Vector((data[k], data[k + 1]))
                         k += 2
                 else:
-                    warn("vtx1: unsupported componentCount for texcoords array %d: %d"%index, currFormat.componentCount)
+                    warn("vtx1: unsupported componentCount for texcoords array %d: %s"%index, currFormat.componentCount)
 
             else:
-                warn("vtx1: unknown array type %d"%currFormat.arrayType)
+                warn("vtx1: unknown array type %s"%currFormat.arrayType)
 
             j += 1
 
+
+class VtxAttr(Enum):
+    PTNMTXIDX  =  0
+    TEX0MTXIDX =  1
+    TEX1MTXIDX =  2
+    TEX2MTXIDX =  3
+    TEX3MTXIDX =  4
+    TEX4MTXIDX =  5
+    TEX5MTXIDX =  6
+    TEX6MTXIDX =  7
+    TEX7MTXIDX =  8
+    POS        =  9
+    NRM        = 10
+    CLR0       = 11
+    CLR1       = 12
+    TEX0       = 13
+    TEX1       = 14
+    TEX2       = 15
+    TEX3       = 16
+    TEX4       = 17
+    TEX5       = 18
+    TEX6       = 19
+    TEX7       = 20
+
+class CompType(Enum):
+    POS_XY   = 0  # X,Y position
+    POS_XYZ  = 1  # X,Y,Z position
+    NRM_XYZ  = 0  # X,Y,Z normal
+    NRM_NBT  = 1
+    NRM_NBT3 = 2
+    CLR_RGB  = 0  # RGB color
+    CLR_RGBA = 1  # RGBA color
+    TEX_S    = 0  # One texture dimension
+    TEX_ST   = 1  # Two texture dimensions
+
+class CompSize(Enum):
+    U8     = 0 # Unsigned 8-bit integer
+    S8     = 1 # Signed 8-bit integer
+    U16    = 2 # Unsigned 16-bit integer
+    S16    = 3 # Signed 16-bit integer
+    F32    = 4 # 32-bit floating-point
+    RGB565 = 0 # 16-bit RGB
+    RGB8   = 1 # 24-bit RGB
+    RGBX8  = 2 # 32-bit RGBX
+    RGBA4  = 3 # 16-bit RGBA
+    RGBA6  = 4 # 24-bit RGBA
+    RGBA8  = 5 # 32-bit RGBA
+
 class ArrayFormat(ReadableStruct):
     header = Struct('>IIIBBH')
-    fields = ["arrayType", "componentCount", "dataType", "decimalPoint", "unknown3", "unknown4"]
+    fields = [("arrayType", VtxAttr), ("componentCount", CompType), ("dataType", CompSize), "decimalPoint", "unknown3", "unknown4"]
 
 
 def computeSectionLengths(offsets, sizeOfSection):
@@ -1131,7 +1195,6 @@ class BModel(BFile):
         buildMatrices(self.scenegraph, self)
 
 
-
 def localMatrix(i, bm):
     s = Matrix()
     for j in range(3):
@@ -1167,6 +1230,41 @@ def updateMatrixTable(bmd, currPacket, matrixTable):
                 mmi = [bmd.drw1.data[index]]
                 mmw = [1.0]
                 matrixTable[n] = (bmd.jnt1.matrices[bmd.drw1.data[index]], mmi, mmw)
+
+def frameMatrix(f):
+    t = Matrix.Translation(f.translation).to_4x4()
+    r = f.rotation.to_matrix().to_4x4()
+    s = Matrix()
+    s[0][0] = f.scale.x
+    s[1][1] = f.scale.y
+    s[2][2] = f.scale.z
+    return t@r@s
+
+def updateMatrix(f, effP):
+    return effP@frameMatrix(f)
+
+def printMatrix(m, indent=0):
+    for i in range(4):
+        print((' '*indent)+("%.1f %.1f %.1f %.1f"%m[i][:]))
+
+def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
+    if p is None: p = Matrix.Identity(4)
+    effP = p
+
+    if sg.type == 2:
+        raise Exception("Unexpected exit node!")
+    elif sg.type == 0x10:
+        # joint
+        f = bmd.jnt1.frames[sg.index]
+        bmd.jnt1.matrices[sg.index] = updateMatrix(f, effP)
+        effP = bmd.jnt1.matrices[sg.index]
+
+    for node in sg.children:
+        buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
+
+
+import bpy, bmesh
+
 
 def flipY(vec):
     return Vector((vec.x, 1.0-vec.y))
@@ -1256,46 +1354,15 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
                             f.loops[1][layer].uv = flipY(bmd.vtx1.texCoords[j][pb.texCoordIndex[j]])
                             f.loops[2][layer].uv = flipY(bmd.vtx1.texCoords[j][pc.texCoordIndex[j]])
 
-                if curr.type == 0x98:
+                if curr.type == PrimitiveType.TRIANGLESTRIP:
                     flip = not flip
                     a = b
                     b = c
-                elif curr.type == 0xa0:
+                elif curr.type == PrimitiveType.TRIANGLEFAN:
                     b = c
                 else:
                     warn("Unknown primitive type %d"%curr.type)
                     continue
-
-def frameMatrix(f):
-    t = Matrix.Translation(f.translation).to_4x4()
-    r = f.rotation.to_matrix().to_4x4()
-    s = Matrix()
-    s[0][0] = f.scale.x
-    s[1][1] = f.scale.y
-    s[2][2] = f.scale.z
-    return t@r@s
-
-def updateMatrix(f, effP):
-    return effP@frameMatrix(f)
-
-def printMatrix(m, indent=0):
-    for i in range(4):
-        print((' '*indent)+("%.1f %.1f %.1f %.1f"%m[i][:]))
-
-def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
-    if p is None: p = Matrix.Identity(4)
-    effP = p
-
-    if sg.type == 2:
-        raise Exception("Unexpected exit node!")
-    elif sg.type == 0x10:
-        # joint
-        f = bmd.jnt1.frames[sg.index]
-        bmd.jnt1.matrices[sg.index] = updateMatrix(f, effP)
-        effP = bmd.jnt1.matrices[sg.index]
-
-    for node in sg.children:
-        buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
 
 def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, indent=0):
     if p is None: p = Matrix.Identity(4)
@@ -1372,7 +1439,10 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 try:
                     image = bpy.data.images.load(fileName)
                 except RuntimeError as e:
-                    image = texture.export(fileName)
+                    imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+                    imgs[0][0].save(fileName)
+                    image = bpy.data.images.load(fileName)
+                    image.pack()
                 image.name = imageName
             btextures.append(image)
 
@@ -1535,8 +1605,20 @@ def importMesh(filePath, bmd, mesh, bm=None):
                             colorSources.append(node.outputs[0])
                         else:
                             colorSources.append(node.outputs[1])
+                    elif colorSrc == TevColorArg.RASC:
+                        if tevOrderInfo.chanId == ColorChannelID.COLOR0:
+                            colorSources.append(colorChannels[0])
+                        elif tevOrderInfo.chanId == ColorChannelID.COLOR1:
+                            colorSources.append(colorChannels[0])
+                        elif tevOrderInfo.chanId == ColorChannelID.COLOR0A0:
+                            colorSources.append(colorChannels[0])
+                        elif tevOrderInfo.chanId == ColorChannelID.COLOR1A1:
+                            colorSources.append(colorChannels[0])
+                        else:
+                            assert False, tevOrderInfo.chanId
+                            colorSources.append(None)
                     elif colorSrc == TevColorArg.ONE:
-                        colorSources.append(1)
+                        colorSources.append(1.0)
                     elif colorSrc == TevColorArg.HALF:
                         colorSources.append(0.5)
                     elif colorSrc == TevColorArg.KONST:
@@ -1559,11 +1641,17 @@ def importMesh(filePath, bmd, mesh, bm=None):
                             colorSources.append(1/8)
                         elif constColorSel >= TevKColorSel.K0 and constColorSel <= TevKColorSel.K1:
                             colorSources.append(konstColorReg[constColorSel-TevKColorSel.K0])
+                        else:
+                            #sep = placer.addNode('ShaderNodeSeparateRGB')
+                            #tree.links.new(konstColorReg[constColorSel.value%4], sep.inputs[0])
+                            #colorSources.append(sep.outputs[(constColorSel.value-0x10)//4])
+                            colorSources.append(konstColorReg[constColorSel.value%4])
                     elif colorSrc == TevColorArg.ZERO:
                         colorSources.append(0.0)
                     else:
                         assert False, colorSrc
                         colorSources.append(None)
+                assert len(colorSources) == 4, (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD, colorSources)
                 
                 placer.nextColumn()
                 if tevStage.colorOp in (TevOp.ADD, TevOp.SUB):
