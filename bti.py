@@ -1,40 +1,77 @@
 #!/usr/bin/env python
 
 import sys, os
-from struct import unpack
+from struct import Struct, unpack
 from texture import *
+from common import *
 
-if len(sys.argv) != 2:
-    sys.stderr.write("Usage: %s <bti>\n"%sys.argv[0])
-    exit(1)
+class Image(ReadableStruct):
+    header = Struct('>BxHHBBxBHI4xBBBBBxHI')
+    fields = [
+        ("format", TF),
+        "width",
+        "height",
+        "wrapS",
+        "wrapT",
+        ("paletteFormat", TL),
+        "paletteNumEntries",
+        "paletteOffset",
+        "minFilter",
+        "magFilter",
+        "minLod",
+        "maxLod",
+        "mipmapCount",
+        "lodBias",
+        "dataOffset"
+    ]
+    def read(self, fin, start=None, textureHeaderOffset=None, texIndex=None):
+        super().read(fin)
+        self.mipmapCount = max(self.mipmapCount, 1)
+        if self.format in (TF.C4, TF.C8, TF.C14X2):
+            self.hasAlpha = self.paletteFormat in (TL.IA8, TL.RGB5A3)
+        else:
+            self.hasAlpha = self.format in (TF.IA4, TF.IA8, TF.RGB5A3, TF.RGBA8)
+        if start is not None:
+            nextHeader = fin.tell()
+            
+            self.fullDataOffset = start+textureHeaderOffset+self.dataOffset+0x20*texIndex
+            fin.seek(self.fullDataOffset)
+            self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
+            
+            if self.format in (TF.C4, TF.C8, TF.C14X2):
+                self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
+                fin.seek(self.fullPaletteOffset)
+                self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
+            else:
+                self.palette = None
+            
+            fin.seek(nextHeader)
+    
+    def getDataName(self, bmd):
+        s = bmd.name+"@"+hex(self.fullDataOffset)
+        if self.format in (TF.C4, TF.C8, TF.C14X2):
+            s += "p"+hex(self.fullPaletteOffset)
+        return s
 
-fin = open(sys.argv[1], 'rb')
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.stderr.write("Usage: %s <bti>\n"%sys.argv[0])
+        exit(1)
 
-format, width, height, wrapS, wrapT, paletteFormat, paletteNumEntries, paletteOffset, minFilter, magFilter, minLod, maxLod, mipmapCount, lodBias, dataOffset = unpack('>BxHHBBxBHL4xBBBBBxHL', fin.read(32))
-format = TF(format)
-paletteFormat = TL(paletteFormat)
+    img = Image()
+    fin = open(sys.argv[1], 'rb')
+    img.read(fin, 0, 0, 0)
+    fin.close()
+    print("%dx%d, fmt=%s, mips=%d, pfmt=%s" % (img.width, img.height, img.format, img.mipmapCount, img.paletteFormat))
 
-mipmapCount = max(mipmapCount, 1)
+    #images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
+    #images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
 
-print("%dx%d, fmt=%s, mips=%d, pfmt=%s" % (width, height, format, mipmapCount, paletteFormat))
+    fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
+    decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+    fout.close()
 
-palette = None
-if format in (TF.C4, TF.C8, TF.C14X2):
-    fin.seek(paletteOffset)
-    palette = readPaletteData(fin, paletteFormat, paletteNumEntries)
-
-fin.seek(dataOffset)
-data = readTextureData(fin, format, width, height, mipmapCount)
-fin.close()
-
-#images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-#images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
-
-fout = open(os.path.splitext(sys.argv[1])[0]+".dds", 'wb')
-decodeTextureDDS(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
-fout.close()
-
-#fout = open(os.path.splitext(sys.argv[1])[0]+".ktx", 'wb')
-#decodeTextureKTX(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
-#fout.close()
+    #fout = open(os.path.splitext(sys.argv[1])[0]+".ktx", 'wb')
+    #decodeTextureKTX(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
+    #fout.close()
 

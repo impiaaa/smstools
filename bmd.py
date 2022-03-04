@@ -7,6 +7,7 @@ from enum import Enum, IntEnum
 from common import *
 from texture import *
 from mathutils import *
+from bti import Image
 
 bbStruct = Struct('>fff')
 
@@ -117,6 +118,8 @@ class SceneGraph(object):
                 d['batch'] = bmd.shp1.batches[self.index]
         return d
 
+INVALID_INDEX = 0xFFFF
+
 def buildSceneGraph(inf1, sg, j=0):
     i = j
     while i < len(inf1.scenegraph):
@@ -140,7 +143,7 @@ def buildSceneGraph(inf1, sg, j=0):
     if len(sg.children) == 1:
         sg = sg.children[0]
     else:
-        sg.type = sg.index = -1
+        sg.type = sg.index = INVALID_INDEX
         warn("buildSceneGraph(): Unexpected size %d"%len(sg.children))
 
     return 0
@@ -735,40 +738,41 @@ class Index(Readable):
     sizeStructs = {1: Struct('>B'), 3: Struct('>H')}
     def __init__(self):
         super().__init__()
-        self.matrixIndex = -1
-        self.posIndex = -1
-        self.normalIndex = -1
-        self.colorIndex = [-1]*2
-        self.texCoordIndex = [-1]*8
-        self.attrIndices = []
+        self.indices = [INVALID_INDEX]*21
     def read(self, fin, attribs):
         for attrib in attribs:
             #get value
             s = self.sizeStructs[attrib.dataType]
             val, = s.unpack(fin.read(s.size))
-            self.attrIndices.append(val)
-
-            #set appropriate index
-            if attrib.attrib == 0:
-                self.matrixIndex = val
-
-            elif attrib.attrib == 9:
-                self.posIndex = val
-
-            elif attrib.attrib == 0xa:
-                self.normalIndex = val
-
-            elif attrib.attrib in (0xb,  0xc):
-                self.colorIndex[attrib.attrib - 0xb] = val
-
-            elif attrib.attrib in (0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14):
-                self.texCoordIndex[attrib.attrib - 0xd] = val
-
+            
+            if attrib.attrib < len(self.indices):
+                self.indices[attrib.attrib] = val
             else:
                 #assert(false && "shp1: got invalid attrib in packet. should never happen because "
                 #"dumpBatch() should check this before calling dumpPacket()")
 
                 pass #ignore unknown types, it's enough to warn() in dumpBatch
+        self.indices = tuple(self.indices)
+
+    @property
+    def matrixIndex(self):
+        return self.indices[0]
+
+    @property
+    def posIndex(self):
+        return self.indices[9]
+
+    @property
+    def normalIndex(self):
+        return self.indices[0xa]
+
+    @property
+    def colorIndex(self):
+        return self.indices[0xb:0xd]
+
+    @property
+    def texCoordIndex(self):
+        return self.indices[0xd:0x15]
 
 class PrimitiveType(Enum):
     NONE          = 0
@@ -816,6 +820,43 @@ class Packet(Readable):
         self.matrixTable.fromfile(fin, count)
         if sys.byteorder == 'little': self.matrixTable.byteswap()
 
+class VtxAttr(Enum):
+    PTNMTXIDX  =  0
+    TEX0MTXIDX =  1
+    TEX1MTXIDX =  2
+    TEX2MTXIDX =  3
+    TEX3MTXIDX =  4
+    TEX4MTXIDX =  5
+    TEX5MTXIDX =  6
+    TEX6MTXIDX =  7
+    TEX7MTXIDX =  8
+    POS        =  9
+    NRM        = 10
+    CLR0       = 11
+    CLR1       = 12
+    TEX0       = 13
+    TEX1       = 14
+    TEX2       = 15
+    TEX3       = 16
+    TEX4       = 17
+    TEX5       = 18
+    TEX6       = 19
+    TEX7       = 20
+    NONE       = 0xFF
+
+class CompSize(Enum):
+    U8     = 0 # Unsigned 8-bit integer
+    S8     = 1 # Signed 8-bit integer
+    U16    = 2 # Unsigned 16-bit integer
+    S16    = 3 # Signed 16-bit integer
+    F32    = 4 # 32-bit floating-point
+    RGB565 = 0 # 16-bit RGB
+    RGB8   = 1 # 24-bit RGB
+    RGBX8  = 2 # 32-bit RGBX
+    RGBA4  = 3 # 16-bit RGBA
+    RGBA6  = 4 # 24-bit RGBA
+    RGBA8  = 5 # 32-bit RGBA
+
 class BatchAttrib(ReadableStruct):
     header = Struct('>II')
     fields = ["attrib", "dataType"]
@@ -847,7 +888,7 @@ class Batch(ReadableStruct):
         self.hasTexCoords = [False]*8
         for a in self.attribs:
             if a.dataType != 1 and a.dataType != 3:
-                warn("shp1, dumpBatch(): unknown attrib data type %d, skipping batch" % attribs[i].dataType)
+                warn("shp1, dumpBatch(): unknown attrib data type %s, skipping batch" % a.dataType)
                 return
             if a.attrib == 0:
                 self.hasMatrixIndices = True
@@ -902,52 +943,6 @@ def dumpPacketPrimitives(attribs, dataSize, fin):
     return primitives
 
 
-
-class Image(ReadableStruct):
-    header = Struct('>BxHHBBxBHI4xBB2xBx2xI')
-    fields = [
-        ("format", TF),
-        "width",
-        "height",
-        "wrapS",
-        "wrapT",
-        ("paletteFormat", TL),
-        "paletteNumEntries",
-        "paletteOffset",
-        "minFilter",
-        "magFilter",
-        "mipmapCount",
-        "dataOffset"
-    ]
-    def read(self, fin, start=None, textureHeaderOffset=None, texIndex=None):
-        super().read(fin)
-        self.mipmapCount = max(self.mipmapCount, 1)
-        if self.format in (TF.C4, TF.C8, TF.C14X2):
-            self.hasAlpha = self.paletteFormat in (TL.IA8, TL.RGB5A3)
-        else:
-            self.hasAlpha = self.format in (TF.IA4, TF.IA8, TF.RGB5A3, TF.RGBA8)
-        if start is not None:
-            nextHeader = fin.tell()
-            
-            self.fullDataOffset = start+textureHeaderOffset+self.dataOffset+0x20*texIndex
-            fin.seek(self.fullDataOffset)
-            self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
-            
-            if self.format in (TF.C4, TF.C8, TF.C14X2):
-                self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
-                fin.seek(self.fullPaletteOffset)
-                self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
-            else:
-                self.palette = None
-            
-            fin.seek(nextHeader)
-    
-    def getDataName(self, bmd):
-        s = bmd.name+"@"+hex(self.fullDataOffset)
-        if self.format in (TF.C4, TF.C8, TF.C14X2):
-            s += "p"+hex(self.fullPaletteOffset)
-        return s
-    
 class Tex1(Section):
     headerCount = Struct('>H2x')
     headerOffsets = Struct('>II')
@@ -1092,29 +1087,6 @@ class Vtx1(Section):
             j += 1
 
 
-class VtxAttr(Enum):
-    PTNMTXIDX  =  0
-    TEX0MTXIDX =  1
-    TEX1MTXIDX =  2
-    TEX2MTXIDX =  3
-    TEX3MTXIDX =  4
-    TEX4MTXIDX =  5
-    TEX5MTXIDX =  6
-    TEX6MTXIDX =  7
-    TEX7MTXIDX =  8
-    POS        =  9
-    NRM        = 10
-    CLR0       = 11
-    CLR1       = 12
-    TEX0       = 13
-    TEX1       = 14
-    TEX2       = 15
-    TEX3       = 16
-    TEX4       = 17
-    TEX5       = 18
-    TEX6       = 19
-    TEX7       = 20
-
 class CompType(Enum):
     POS_XY   = 0  # X,Y position
     POS_XYZ  = 1  # X,Y,Z position
@@ -1125,19 +1097,6 @@ class CompType(Enum):
     CLR_RGBA = 1  # RGBA color
     TEX_S    = 0  # One texture dimension
     TEX_ST   = 1  # Two texture dimensions
-
-class CompSize(Enum):
-    U8     = 0 # Unsigned 8-bit integer
-    S8     = 1 # Signed 8-bit integer
-    U16    = 2 # Unsigned 16-bit integer
-    S16    = 3 # Signed 16-bit integer
-    F32    = 4 # 32-bit floating-point
-    RGB565 = 0 # 16-bit RGB
-    RGB8   = 1 # 24-bit RGB
-    RGBX8  = 2 # 32-bit RGBX
-    RGBA4  = 3 # 16-bit RGBA
-    RGBA6  = 4 # 24-bit RGBA
-    RGBA8  = 5 # 32-bit RGBA
 
 class ArrayFormat(ReadableStruct):
     header = Struct('>IIIBBH')
