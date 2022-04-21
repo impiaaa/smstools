@@ -1,24 +1,8 @@
-import unityparser, sys, os.path, uuid, array, yaml
+import unityparser, sys, os.path, array
 from col import ColReader
+from unityassets import *
 
 Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
-
-def writeMeta(name, importer, outputFolderLocation):
-    guid = str(uuid.uuid4()).replace('-', '')
-    meta = {
-        "fileFormatVersion": 2,
-        "guid": guid
-    }
-    meta.update(importer)
-    yaml.dump(meta, open(os.path.join(outputFolderLocation, name+".meta"), 'w'))
-    return guid
-
-def writeNativeMeta(name, mainObjectFileID, outputFolderLocation):
-    return writeMeta(name, {
-        "NativeFormatImporter": {
-            "mainObjectFileID": mainObjectFileID
-        }
-    }, outputFolderLocation)
 
 def exportCol(col, outputFolderLocation, physNameBase):
     for groupIdx, group in enumerate(col.groups):
@@ -92,7 +76,7 @@ def exportCol(col, outputFolderLocation, physNameBase):
                 "serializedVersion": 2,
                 "localAABB": {
                     "m_Center": {'x': (minX+maxX)/2, 'y': (minY+maxY)/2, 'z': (minZ+maxZ)/2},
-                    "m_Extent": {'x': maxX-minX, 'y': maxY-minY, 'z': maxZ-minZ}
+                    "m_Extent": {'x': (maxX-minX)/2, 'y': (maxY-minY)/2, 'z': (maxZ-minZ)/2}
                 }
             })
 
@@ -153,29 +137,19 @@ def exportCol(col, outputFolderLocation, physNameBase):
             mesh.m_IndexBuffer = newIndexBuffer.tobytes().hex()
             mesh.m_LocalAABB = {
                 "m_Center": {'x': (minX+maxX)/2, 'y': (minY+maxY)/2, 'z': (minZ+maxZ)/2},
-                "m_Extent": {'x': maxX-minX, 'y': maxY-minY, 'z': maxZ-minZ}
+                "m_Extent": {'x': (maxX-minX)/2, 'y': (maxY-minY)/2, 'z': (maxZ-minZ)/2}
             }
             assetName = physName+".asset"
             asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
-            yield writeNativeMeta(assetName, 4300000, outputFolderLocation)
+            yield physName, writeNativeMeta(assetName, 4300000, outputFolderLocation)
 
 if __name__ == '__main__':
-    import re
-    # for whatever reason, unityparser adds explicit type markers to floats with no
-    # fraction. this restores pyyaml's default behavior
-    unityparser.resolver.Resolver.add_implicit_resolver(
-            'tag:yaml.org,2002:float',
-            re.compile(r'''^(?:[-+]?(?:[0-9][0-9_]*)\.[0-9_]*(?:[eE][-+][0-9]+)?
-                        |\.[0-9_]+(?:[eE][-+][0-9]+)?
-                        |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*
-                        |[-+]?\.(?:inf|Inf|INF)
-                        |\.(?:nan|NaN|NAN))$''', re.X),
-            list('-+0123456789.'))
+    fixUnityParserFloats()
 
     outputFolderLocation, physNameBase = os.path.split(sys.argv[1])
     fin = open(sys.argv[1], 'rb')
     col = ColReader()
     col.read(fin)
     fin.close()
-    for uid in exportCol(col, outputFolderLocation, physNameBase): pass
+    for physName, uid in exportCol(col, outputFolderLocation, physNameBase): pass
 

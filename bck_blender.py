@@ -75,10 +75,9 @@ class AnimComponent(Readable):
         self.r = AnimIndex(f)
         self.t = AnimIndex(f)
 
-class AnimIndex(Readable):
+class AnimIndex(ReadableStruct):
     header = Struct('>HHH')
-    def read(self, f):
-        self.count, self.index, self.zero = self.header.unpack(f.read(6))
+    fields = ["count", "index", "zero"]
 
 class Key(object): pass
 class Animation(object): pass
@@ -129,10 +128,10 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
 import bpy
-import os
 from mathutils import *
-from bisect import bisect
 import mathutils.geometry
+import os
+from bisect import bisect
 
 def doCurve(action, data_path, loopFlags, data):
     for i, subData in enumerate(data):
@@ -248,7 +247,12 @@ def importFile(filepath, context):
         # make modelspace
         if bone.parent:
             rest = bone.parent.matrix_local.inverted()@rest
+        #rest = rest@Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))
         #rest = Matrix(eval(bone['_bmd_rest']))
+        #print("local", repr(bone.matrix_local))
+        #print("scale", scale)
+        #if bone.parent: print("parent", repr(bone.parent.matrix_local))
+        #print("target", repr(Matrix(eval(bone['_bmd_rest']))))
         
         # big table of transformation components so that we can index them easily
         animList = (anim.scalesX, anim.scalesY, anim.scalesZ,

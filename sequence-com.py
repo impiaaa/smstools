@@ -185,7 +185,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       nextDelay, = unpack('>B', fin.read(1)) if cmd in (0xF0, 0x80) else unpack('>H', fin.read(2))
       delay += nextDelay
       totalTime += nextDelay
-      #print "Delay", hex(cmd), nextDelay
+      print "Delay", hex(cmd), nextDelay
       if pattern is not None:
         queuedEvents.sort(key=lambda e: 0 if e is None else e.tick)
         i = 0
@@ -212,55 +212,55 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
     elif cmd == 0x94:
       # perf
       type, value = unpack('>BB', fin.read(2))
-      #print "Perf", type, value, 0
+      print "Perf", type, value, 0
       if pattern is not None: queuedEvents.append(handlePerf(type, value, 0, 0xFF, track, delay))
       delay = 0
     elif cmd == 0x96:
       # perf
       type, value, duration = unpack('>BBB', fin.read(3))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0xFF, track, delay))
       delay = 0
     elif cmd == 0x97:
       # perf
       type, value, duration = unpack('>BBH', fin.read(4))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0xFF, track, delay))
       delay = 0
     elif cmd == 0x98:
       # perf
       type, value = unpack('>Bb', fin.read(2))
-      #print "Perf", type, value, 0
+      print "Perf", type, value, 0
       if pattern is not None: queuedEvents.append(handlePerf(type, value, 0, 0x7F, track, delay))
       delay = 0
     elif cmd == 0x9A:
       # perf
       type, value, duration = unpack('>BbB', fin.read(3))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0x7F, track, delay))
       delay = 0
     elif cmd == 0x9B:
       # perf
       type, value, duration = unpack('>BbH', fin.read(4))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0x7F, track, delay))
       delay = 0
     elif cmd == 0x9C:
       # perf
       type, value = unpack('>Bh', fin.read(3))
-      #print "Perf", type, value, 0
+      print "Perf", type, value, 0
       if pattern is not None: queuedEvents.append(handlePerf(type, value, 0, 0x7FFF, track, delay))
       delay = 0
     elif cmd == 0x9E:
       # perf
       type, value, duration = unpack('>BhB', fin.read(4))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0x7FFF, track, delay))
       delay = 0
     elif cmd == 0x9F:
       # perf
       type, value, duration = unpack('>BhH', fin.read(5))
-      #print "Perf", type, value, duration
+      print "Perf", type, value, duration
       if pattern is not None: queuedEvents.append(handlePerf(type, value, duration, 0x7FFF, track, delay))
       delay = 0
     elif cmd == 0xA4:
@@ -311,6 +311,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       mode, tmp, point = unpack('>BBH', fin.read(4))
       point |= tmp<<16
       if pattern is not None: delay = handleSeek(0xC4, mode, point, track, delay, voices)
+      else: print "cmdCall", mode, point
       stack.append(fin.tell())
       fin.seek(point)
     elif cmd == 0xC5:
@@ -325,6 +326,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       mode, = unpack('>B', fin.read(1))
       point = stack.pop()
       if pattern is not None: delay = handleSeek(0xC6, mode, point, track, delay, voices)
+      else: print "cmdRet", mode, point
       fin.seek(point)
     elif cmd == 0xC7:
       warn("Unknown C7, prob jump")
@@ -366,14 +368,19 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # loop end
       # cmdLoopE
       raise NotImplementedError("")
-    # 0xcb 0x8027eb54 cmdReadPort
-    # 0xcc 0x8027ebac cmdWritePort
+    #elif cmd == 0xCB:
+      # cmdReadPort
+      #assert fin.read(2) == '\0\0'
+    elif cmd == 0xCC:
+      # cmdWritePort
+      fin.read(2)
     # 0xcd 0x8027ed80 cmdCheckPortImport
     # 0xce 0x8027ed98 cmdCheckPortExport
     elif cmd == 0xCF:
       # delay
       # cmdWait
       raise NotImplementedError("")
+    # 0xD0 cmdConnectName
     # 0xD1 0x8027ebe0 cmdParentWritePort
     # 0xD2 0x8027ec68 cmdChildWritePort
     elif cmd == 0xD4:
@@ -415,14 +422,14 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       # TODO
       idx, tmp, point = unpack('>BBH', fin.read(4))
       point |= tmp<<16
-      raise NotImplementedError("")
+      #raise NotImplementedError("")
     elif cmd == 0xE0:
       # unset dynamic
       # cmdDisInterrupt
       #idx, = unpack('>B', fin.read(1))
       #raise NotImplementedError("")
       tempo, = unpack('>H', fin.read(2))
-      warn("Unknown E0, prob Tempo", tempo)
+      warn("Unknown E0, prob Tempo %s"%tempo)
       if pattern is not None: track.append(midi.SetTempoEvent(bpm=tempo, tick=delay))
       delay = 0
     elif cmd == 0xE1:
@@ -474,7 +481,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       fin.seek(3, 1)
     # 0xF0 0x8027f460 cmdOscRoute
     elif cmd == 0xF0:
-      warn("Unknown F0", hex(ord(fin.read(1))))
+      warn("Unknown F0 "+hex(ord(fin.read(1))))
     # 0xF1 0x8027f5c8 cmdIIRCutOff
     # 0xF2 0x8027f65c cmdOscFull
     # 0xF3 0x8027f098 cmdVolumeMode
@@ -513,14 +520,14 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         # voice off
         voiceId = cmd & 0x07
         unk, = struct.unpack('>B', fin.read(1))
-        #print "Voice off", voiceId, unk
+        print "Voice off", voiceId, unk
         if pattern is not None:
           doNoteOff(voiceId, track, delay, voices)
         delay = 0
       elif (cmd&0x80) == 0x80:
         # voice off
         voiceId = cmd & 0x07
-        #print "Voice off", voiceId
+        print "Voice off", voiceId
         if pattern is not None:
           doNoteOff(voiceId, track, delay, voices)
         delay = 0
@@ -530,7 +537,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
         flags, velocity = struct.unpack('>BB', fin.read(2))
         voiceId = flags&0x07
         flags &= 0xF8
-        #print "Voice on", cmd, voiceId, velocity
+        print "Voice on", cmd, voiceId, velocity
         if flags != 0:
           warn("Unsupported flags 0x%x"%flags)
         if pattern is not None and flags == 0:
@@ -547,7 +554,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
           delay = 0
     else:
       warn("Unknown command %x@%x"%(cmd,fin.tell()))
-      print hex(fin.tell())
+      #print hex(fin.tell())
       break
   if pattern is not None:
     if len(track) > 0 and not isinstance(track[-1], midi.EndOfTrackEvent):
@@ -572,11 +579,11 @@ for fname in files:
     fin.seek(0,2)
     maxpos = fin.tell()-2
     fin.seek(0,0)
-    try: readTrack(fin, pattern, maxpos=maxpos)
-    except Exception, e:
-      print e
-      continue
-    finally: print hex(fin.tell())
+    readTrack(fin, pattern, maxpos=maxpos)
+    #except Exception, e:
+    #  print e
+    #  continue
+    #finally: print hex(fin.tell())
     #print pattern
     if pattern is not None: midi.write_midifile(os.path.splitext(fname)[0]+".mid", pattern)
     fin.close()

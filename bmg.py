@@ -59,6 +59,7 @@ if bmg.inf1.size == 12:
         srtout.write(u"%d\n"%(j+1))
         srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
         srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
+        srtout.write(u"# %x\n"%unknown)
         if j+1 < len(bmg.inf1.inf):
             nextOffset = bmg.inf1.inf[j+1][0]
         else:
@@ -79,3 +80,4 @@ else:
         txtout.write(data)#.decode('shift-jis'))
         txtout.write(b"\n\n")
     txtout.close()
+

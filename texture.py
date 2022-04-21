@@ -404,7 +404,8 @@ ddsFormats = {
     TF.I8:     (DDPF.RGB,                        b'',     24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000),
     TF.IA4:    (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     TF.IA8:    (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
-    TF.RGB565: (DDPF.RGB,                        b'',     16,     0xF800,     0x07E0,     0x001F,          0),
+#    TF.RGB565: (DDPF.RGB,                        b'',     16,     0x001F,     0x07E0,     0xF800,          0),
+    TF.RGB565: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000),
     TF.RGB5A3: (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
     TF.RGBA8:  (DDPF.ALPHAPIXELS|DDPF.RGB,       b'',     32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
     TF.CMPR:   (DDPF.ALPHAPIXELS|DDPF.FOURCC,    b'DXT1',  0,          0,          0,          0,          0)
@@ -458,13 +459,21 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         for mipIdx in range(mipmapCount):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
             dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
-            if format in (TF.I4, TF.I8, TF.IA4, TF.IA8, TF.RGB5A3, TF.C4, TF.C8, TF.C14X2):
+            if format in (TF.I4, TF.I8, TF.IA4, TF.IA8, TF.RGB565, TF.RGB5A3, TF.C4, TF.C8, TF.C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*componentsOut)
                 if componentsIn == 1:
                     def putpixelarray(dx, dy, c):
                         offset = (mipWidth*dy + dx)*componentsOut
                         dest[offset:offset + componentsOut] = array('B', [c]*componentsOut)
-                else:
+                elif componentsIn == 2:
+                    def putpixelarray(dx, dy, c):
+                        offset = (mipWidth*dy + dx)*componentsOut
+                        dest[offset:offset + componentsOut] = array('B', [c[0], c[0], c[0], c[1]])
+                elif componentsIn == 3:
+                    def putpixelarray(dx, dy, c):
+                        offset = (mipWidth*dy + dx)*componentsOut
+                        dest[offset:offset + componentsOut] = array('B', [c[2], c[1], c[0]])
+                elif componentsIn == 4:
                     def putpixelarray(dx, dy, c):
                         offset = (mipWidth*dy + dx)*componentsOut
                         dest[offset:offset + componentsOut] = array('B', [c[2], c[1], c[0], c[3]])

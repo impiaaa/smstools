@@ -13,19 +13,19 @@ def readString(fin):
     length, = unpack('>H', fin.read(2))
     return fin.read(length).decode('shift-jis')
 
-def stylecolor(r,g,b):
+def stylecolor(c):
+    r, g, b = c[:3]
     if (r*r + g*g + b*b) < 48768:
         stylecode = 48
     else:
         stylecode = 38
-    return "\x1b[%d;2;%d;%d;%dm#%02X%02X%02X\x1b[0m"%(stylecode, r, g, b, r, g, b)
-
-class NamedPosition:
-    def read(self, fin):
-        self.name = readString(fin)
-        self.x, self.y, self.z, self.rx, self.ry, self.rz, self.sx, self.sy, self.sz = unpack('>fffffffff', fin.read(36))
-    def __repr__(self):
-        return "%s(%.1f,%.1f,%.1f)" % (self.name, self.x, self.y, self.z)
+    mr = min(r, 255)
+    mg = min(g, 255)
+    mb = min(b, 255)
+    s = "\x1b[%d;2;%d;%d;%dm#%02X%02X%02X\x1b[0m"%(stylecode, mr, mg, mb, r, g, b)
+    for x in c[3:]:
+        s += " %02X"%x
+    return s
 
 def readsection(fin):
     sectionlength, namehash = unpack('>IH', fin.read(6))

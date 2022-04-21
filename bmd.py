@@ -553,7 +553,7 @@ class Material(ReadableStruct):
         # 0x94
         self.constColorIndices = unpack('>4H', fin.read(8))
         # 0x9C
-        self.constColorSels = list(map(TevKColorSel, unpack('>16B', fin.read(16))))
+        self.constColorSels = [TevKColorSel(x) if x < 0x20 else x for x in unpack('>16B', fin.read(16))]
         # 0xAC
         self.constAlphaSels = unpack('>16B', fin.read(16))
         # 0xBC
@@ -729,96 +729,10 @@ class Mat3(Section):
         # 28 (MaterialData7)
         # 29 (NBTScaleInfo)
         
-        #for m in self.materials:
-        #    m.resolve(self)
+        for m in self.materials:
+            m.resolve(self)
         #    m.debug()
 
-
-class Index(Readable):
-    sizeStructs = {1: Struct('>B'), 3: Struct('>H')}
-    def __init__(self):
-        super().__init__()
-        self.indices = [INVALID_INDEX]*21
-    def read(self, fin, attribs):
-        for attrib in attribs:
-            #get value
-            s = self.sizeStructs[attrib.dataType]
-            val, = s.unpack(fin.read(s.size))
-            
-            if attrib.attrib < len(self.indices):
-                self.indices[attrib.attrib] = val
-            else:
-                #assert(false && "shp1: got invalid attrib in packet. should never happen because "
-                #"dumpBatch() should check this before calling dumpPacket()")
-
-                pass #ignore unknown types, it's enough to warn() in dumpBatch
-        self.indices = tuple(self.indices)
-
-    @property
-    def matrixIndex(self):
-        return self.indices[0]
-
-    @property
-    def posIndex(self):
-        return self.indices[9]
-
-    @property
-    def normalIndex(self):
-        return self.indices[0xa]
-
-    @property
-    def colorIndex(self):
-        return self.indices[0xb:0xd]
-
-    @property
-    def texCoordIndex(self):
-        return self.indices[0xd:0x15]
-
-class PrimitiveType(Enum):
-    NONE          = 0
-    POINTS        = 0xB8 # Draws a series of points. Each vertex is a single point.
-    LINES         = 0xA8 # Draws a series of unconnected line segments. Each pair of vertices makes a line.
-    LINESTRIP     = 0xB0 # Draws a series of lines. Each vertex (besides the first) makes a line between it and the previous.
-    TRIANGLES     = 0x90 # Draws a series of unconnected triangles. Three vertices make a single triangle.
-    TRIANGLESTRIP = 0x98 # Draws a series of triangles. Each triangle (besides the first) shares a side with the previous triangle.
-                         # Each vertex (besides the first two) completes a triangle.
-    TRIANGLEFAN   = 0xA0 # Draws a single triangle fan. The first vertex is the "centerpoint". The second and third vertex complete
-                         # the first triangle. Each subsequent vertex completes another triangle which shares a side with the previous
-                         # triangle (except the first triangle) and has the centerpoint vertex as one of the vertices.
-    QUADS         = 0x80 # Draws a series of unconnected quads. Every four vertices completes a quad. Internally, each quad is
-                         # translated into a pair of triangles.
-
-class Primitive(ReadableStruct):
-    header = Struct('>BH')
-    fields = [("type", PrimitiveType), "count"]
-    def read(self, fin, attribs):
-        super().read(fin)
-        if self.type == PrimitiveType.NONE: return
-
-        self.points = [Index() for jkl in range(self.count)]
-
-        for j in range(self.count):
-            currPoint = self.points[j]
-            currPoint.read(fin, attribs)
-
-class Packet(Readable):
-    locationHeader = Struct('>II')
-    matrixInfoHeader = Struct('>2xHI')
-    def read(self, fin, baseOffset, offsetData, offsetToMatrixData, \
-            firstMatrixData, packetIndex, offsetToMatrixTable, attribs):
-        locationSize, locationOffset = self.locationHeader.unpack(fin.read(8))
-
-        fin.seek(baseOffset+offsetData+locationOffset)
-        self.primitives = dumpPacketPrimitives(attribs, locationSize, fin)
-
-        fin.seek(baseOffset+offsetToMatrixData+(firstMatrixData+packetIndex)*8)
-        count, firstIndex = self.matrixInfoHeader.unpack(fin.read(8))
-        if count > 10: raise Exception()
-
-        fin.seek(baseOffset+offsetToMatrixTable+2*firstIndex)
-        self.matrixTable = array('H')
-        self.matrixTable.fromfile(fin, count)
-        if sys.byteorder == 'little': self.matrixTable.byteswap()
 
 class VtxAttr(Enum):
     PTNMTXIDX  =  0
@@ -857,13 +771,100 @@ class CompSize(Enum):
     RGBA6  = 4 # 24-bit RGBA
     RGBA8  = 5 # 32-bit RGBA
 
+class Index(Readable):
+    sizeStructs = {CompSize.S8: Struct('>B'), CompSize.S16: Struct('>H')}
+    def __init__(self):
+        super().__init__()
+        self.indices = [INVALID_INDEX]*21
+    def read(self, fin, attribs):
+        for attrib in attribs:
+            #get value
+            s = self.sizeStructs[attrib.dataType]
+            val, = s.unpack(fin.read(s.size))
+            
+            if attrib.attrib.value < len(self.indices):
+                self.indices[attrib.attrib.value] = val
+            else:
+                #assert(false && "shp1: got invalid attrib in packet. should never happen because "
+                #"dumpBatch() should check this before calling dumpPacket()")
+
+                pass #ignore unknown types, it's enough to warn() in dumpBatch
+        self.indices = tuple(self.indices)
+
+    @property
+    def matrixIndex(self):
+        return self.indices[VtxAttr.PTNMTXIDX.value]
+
+    @property
+    def posIndex(self):
+        return self.indices[VtxAttr.POS.value]
+
+    @property
+    def normalIndex(self):
+        return self.indices[VtxAttr.NRM.value]
+
+    @property
+    def colorIndex(self):
+        return self.indices[VtxAttr.CLR0.value:VtxAttr.CLR1.value+1]
+
+    @property
+    def texCoordIndex(self):
+        return self.indices[VtxAttr.TEX0.value:VtxAttr.TEX7.value+1]
+
+class PrimitiveType(Enum):
+    NONE          = 0
+    POINTS        = 0xB8 # Draws a series of points. Each vertex is a single point.
+    LINES         = 0xA8 # Draws a series of unconnected line segments. Each pair of vertices makes a line.
+    LINESTRIP     = 0xB0 # Draws a series of lines. Each vertex (besides the first) makes a line between it and the previous.
+    TRIANGLES     = 0x90 # Draws a series of unconnected triangles. Three vertices make a single triangle.
+    TRIANGLESTRIP = 0x98 # Draws a series of triangles. Each triangle (besides the first) shares a side with the previous triangle.
+                         # Each vertex (besides the first two) completes a triangle.
+    TRIANGLEFAN   = 0xA0 # Draws a single triangle fan. The first vertex is the "centerpoint". The second and third vertex complete
+                         # the first triangle. Each subsequent vertex completes another triangle which shares a side with the previous
+                         # triangle (except the first triangle) and has the centerpoint vertex as one of the vertices.
+    QUADS         = 0x80 # Draws a series of unconnected quads. Every four vertices completes a quad. Internally, each quad is
+                         # translated into a pair of triangles.
+
+class Primitive(ReadableStruct):
+    header = Struct('>BH')
+    fields = [("type", PrimitiveType), "count"]
+    def read(self, fin, attribs):
+        super().read(fin)
+        if self.type == PrimitiveType.NONE: return
+
+        self.points = [Index() for jkl in range(self.count)]
+
+        for j in range(self.count):
+            currPoint = self.points[j]
+            currPoint.read(fin, attribs)
+
+class Packet(Readable):
+    locationHeader = Struct('>II')
+    matrixInfoHeader = Struct('>HHI')
+    def read(self, fin, baseOffset, offsetData, offsetToMatrixData, \
+            firstMatrixData, packetIndex, offsetToMatrixTable, attribs):
+        locationSize, locationOffset = self.locationHeader.unpack(fin.read(8))
+
+        fin.seek(baseOffset+offsetData+locationOffset)
+        self.primitives = dumpPacketPrimitives(attribs, locationSize, fin)
+
+        fin.seek(baseOffset+offsetToMatrixData+(firstMatrixData+packetIndex)*8)
+        useMtxIndex, count, firstIndex = self.matrixInfoHeader.unpack(fin.read(8))
+        if count > 10: raise ValueError("%d is more than 10 matrix slots"%count)
+
+        fin.seek(baseOffset+offsetToMatrixTable+2*firstIndex)
+        self.matrixTable = array('H')
+        self.matrixTable.fromfile(fin, count)
+        if sys.byteorder == 'little': self.matrixTable.byteswap()
+
 class BatchAttrib(ReadableStruct):
     header = Struct('>II')
-    fields = ["attrib", "dataType"]
+    fields = [("attrib", VtxAttr), ("dataType", CompSize)]
 
 class Batch(ReadableStruct):
-    header = Struct('>BxHHHH6x')
-    fields = ["matrixType", "packetCount", "offsetToAttribs", "firstMatrixData", "firstPacketLocation"]
+    header = Struct('>BxHHHH2xf')
+    fields = ["displayFlags", "packetCount", "offsetToAttribs", "firstMatrixData",
+        "firstPacketLocation", "boundingSphereRadius"]
     def read(self, fin):
         super().read(fin)
         self.bbMin = bbStruct.unpack(fin.read(12))
@@ -874,7 +875,7 @@ class Batch(ReadableStruct):
         fin.seek(baseOffset+offsetToBatchAttribs+self.offsetToAttribs)
         self.attribs = []
         a = BatchAttrib(fin)
-        while a.attrib != 0xff:
+        while a.attrib != VtxAttr.NONE:
             self.attribs.append(a)
             a = BatchAttrib(fin)
         fin.seek(old)
@@ -887,19 +888,19 @@ class Batch(ReadableStruct):
         self.hasColors = [False]*2
         self.hasTexCoords = [False]*8
         for a in self.attribs:
-            if a.dataType != 1 and a.dataType != 3:
+            if a.dataType != CompSize.S8 and a.dataType != CompSize.S16:
                 warn("shp1, dumpBatch(): unknown attrib data type %s, skipping batch" % a.dataType)
                 return
-            if a.attrib == 0:
+            if a.attrib == VtxAttr.PTNMTXIDX:
                 self.hasMatrixIndices = True
-            elif a.attrib == 9:
+            elif a.attrib == VtxAttr.POS:
                 self.hasPositions = True
-            elif a.attrib == 0xa:
+            elif a.attrib == VtxAttr.NRM:
                 self.hasNormals = True
-            elif a.attrib in (0xb, 0xc):
-                self.hasColors[a.attrib - 0xb] = True
-            elif a.attrib >= 0xd and a.attrib <= 0x14:
-                self.hasTexCoords[a.attrib - 0xd] = True
+            elif a.attrib in (VtxAttr.CLR0, VtxAttr.CLR1):
+                self.hasColors[a.attrib.value - VtxAttr.CLR0.value] = True
+            elif a.attrib.value >= VtxAttr.TEX0.value and a.attrib.value <= VtxAttr.TEX7.value:
+                self.hasTexCoords[a.attrib.value - VtxAttr.TEX0.value] = True
             else:
                 warn("shp1, dumpBatch(): unknown attrib %d in batch, it might not display correctly" % a.attrib)
 
@@ -912,12 +913,12 @@ class Batch(ReadableStruct):
             self.packets.append(p)
 
 class Shp1(Section):
-    header = Struct('>H2xII4xIIIII')
+    header = Struct('>H2xIIIIIIII')
     def read(self, fin, start, size):
         # header
-        batchCount, offsetToBatches, offsetUnknown, offsetToBatchAttribs, \
-            offsetToMatrixTable, offsetData, offsetToMatrixData, \
-            offsetToPacketLocations = self.header.unpack(fin.read(36))
+        batchCount, offsetToBatches, offsetToRemapTable, offsetToNameTable, \
+            offsetToBatchAttribs, offsetToMatrixTable, offsetData, \
+            offsetToMatrixData, offsetToPacketLocations = self.header.unpack(fin.read(36))
         # batches
         self.batches = []
         fin.seek(start+offsetToBatches)

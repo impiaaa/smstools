@@ -5,6 +5,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, CollectionProperty
 from bpy.types import Operator, OperatorFileListElement
 import os.path
+from bmd import *
 
 
 def flipY(vec):
@@ -33,7 +34,7 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
     assert batch.hasPositions
     matrixTable = [(Matrix(), [], []) for i in range(10)]
     for mat, mmi, mmw in matrixTable:
-        mat.zero()
+        mat.identity()
     for i, packet in enumerate(batch.packets):
         # draw packet
         updateMatrixTable(bmd, packet, matrixTable)
@@ -180,7 +181,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 try:
                     image = bpy.data.images.load(fileName)
                 except RuntimeError as e:
-                    imgs = decodeTexturePIL(self.data, self.format, self.width, self.height, self.paletteFormat, self.palette, mipmapCount=self.mipmapCount)
+                    imgs = decodeTexturePIL(texture.data, texture.format, texture.width, texture.height, texture.paletteFormat, texture.palette, mipmapCount=texture.mipmapCount)
                     imgs[0][0].save(fileName)
                     image = bpy.data.images.load(fileName)
                     image.pack()
@@ -338,7 +339,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         node = placer.addNode('ShaderNodeTexImage')
                         if texture.wrapS == 0: node.extension = 'EXTEND'
                         elif texture.wrapS == 1: node.extension = 'REPEAT'
-                        elif texture.wrapS == 2: node.extension = 'CHECKER'
+                        #elif texture.wrapS == 2: node.extension = 'CHECKER'
                         node.interpolation = 'Linear' if texture.magFilter%2 == 1 else 'Closest'
                         node.image = bpy.data.images[texture.name]#getDataName(bmd)
                         tree.links.new(texGens[tevOrderInfo.texCoordId], node.inputs[0])
@@ -456,16 +457,15 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
     if sg.type == 0x10:
         f = bmd.jnt1.frames[sg.index]
         effP = updateMatrix(f, p)
-        bone = arm.edit_bones[f.name]
+        #bone = arm.edit_bones[f.name]
+        bone = arm.edit_bones.new(name=f.name)
         bone.head = Vector((0,0,0))
-        if len(sg.children) == 0:
-            bone.tail = Vector((0,0,8))
-        else:
-            ts = [bmd.jnt1.frames[node.index].translation for node in sg.children if node.index < len(bmd.jnt1.frames)]
-            if len(ts) == 0:
-                bone.tail = Vector((0,0,8))
-            else:
-                bone.tail = reduce(operator.add, ts)/len(sg.children)
+        bone.tail = Vector((0,0,10))
+        ts = [bmd.jnt1.frames[node.index].translation for node in sg.children if node.type == 0x10]
+        if len(ts) > 0:
+            bone.tail = reduce(operator.add, ts)/len(sg.children)
+            if bone.tail.magnitude < 0.0001:
+                bone.tail = Vector((0,0,10))
         bone.matrix = effP@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
         #Matrix(((0,1,0,0),(-1,0,0,0),(0,0,1,0),(0,0,0,1)))
         if parent is not None:
@@ -519,17 +519,17 @@ def importFile(filepath):
     bpy.context.scene.collection.objects.link(meshObject)
     bpy.context.scene.collection.objects.link(armObject)
 
-    bpy.context.view_layer.objects.active = armObject
-    bpy.ops.object.mode_set(mode='EDIT')
-
     if hasattr(bmd, "jnt1"):
+        bpy.context.view_layer.objects.active = armObject
+        bpy.ops.object.mode_set(mode='EDIT')
+
         for i, f in enumerate(bmd.jnt1.frames):
             meshObject.vertex_groups.new(name=f.name)
-            arm.edit_bones.new(name=f.name)
-    
+            #arm.edit_bones.new(name=f.name)
+
         importSkeleton(bmd, arm)
     
-    bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
     
     #armObject["scenegraph"] = repr(bmd.scenegraph.to_dict(bmd))
     

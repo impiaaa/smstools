@@ -1,4 +1,4 @@
-from scenebin import calcKeyCode, readString, stylecolor, NamedPosition, readsection
+from scenebin import calcKeyCode, readString, stylecolor, readsection
 from struct import unpack
 
 registeredObjectClasses = {}
@@ -28,11 +28,11 @@ class TNameRef:
 class TCameraMapTool(TNameRef):
     def read(self, fin):
         super().read(fin)
-        self.x, self.y, self.z = unpack('>3f', fin.read(12))
+        self.pos = unpack('>3f', fin.read(12))
         self.rot = unpack('>3f', fin.read(12))
         self.cameraMode, self.someFlag, self.someFrames = unpack('>iii', fin.read(12))
     def __repr__(self):
-        return super().__repr__()+'|%.1f,%.1f,%.1f mode=%r %d,%d'%(self.x, self.y, self.z, self.cameraMode, self.someFlag, self.someFrames)
+        return super().__repr__()+'|%.1f,%.1f,%.1f mode=%r %d,%d'%(self.pos+(self.cameraMode, self.someFlag, self.someFrames))
 
 @register('ScenarioArchiveName')
 class TScenarioArchiveName(TNameRef):
@@ -70,10 +70,10 @@ class TStageEventInfo(TNameRef):
 class TStagePositionInfo(TNameRef):
     def read(self, fin):
         super().read(fin)
-        self.x, self.y, self.z = unpack('>3f', fin.read(12))
+        self.pos = unpack('>3f', fin.read(12))
         unk1 = unpack('>IIIIII', fin.read(24))
     def __repr__(self):
-        return super().__repr__()+'|%.1f,%.1f,%.1f'%(self.x, self.y, self.z)
+        return super().__repr__()+'|%.1f,%.1f,%.1f'%(self.pos)
 
 
 class TCharacter(TNameRef):
@@ -96,24 +96,27 @@ class TSMSSmplChara(TCharacter): pass
 class TCubeGeneralInfo(TNameRef):
     def read(self, fin):
         super().read(fin)
-        self.unk1 = unpack('>3f', fin.read(12))
+        self.pos = unpack('>3f', fin.read(12))
+        self.rot = unpack('>3f', fin.read(12))
+        self.scale = unpack('>3f', fin.read(12))
+        self.unk = unpack('>3I', fin.read(12))
     def __repr__(self):
-        return super().__repr__()+'|'+repr(self.unk1)
+        return super().__repr__()+'|%.1f,%.1f,%.1f %r'%(self.pos+(self.unk,))
 
 @register('CameraCubeInfo')
 class TCubeCameraInfo(TCubeGeneralInfo):
     def read(self, fin):
         super().read(fin)
-        self.unk2 = readString(fin)
+        self.cameraObject = readString(fin)
     def __repr__(self):
-        return super().__repr__()+'|'+repr(self.unk2)
+        return super().__repr__()+'|cam=%s'%(self.cameraObject)
 
 
 @register('CubeStreamInfo')
 class TCubeStreamInfo(TCubeGeneralInfo):
     def read(self, fin):
         super().read(fin)
-        self.unk3 = unpack('>5f', fin.read(20))
+        self.unk3 = unpack('>2I', fin.read(8))
     def __repr__(self):
         return super().__repr__()+'|'+repr(self.unk3)
 
@@ -166,9 +169,9 @@ class TViewObj(TNameRef): pass
 class TAmbColor(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.r, self.g, self.b, self.a = unpack('>BBBB', fin.read(4))
+        self.color = unpack('>BBBB', fin.read(4))
     def __repr__(self):
-        return super().__repr__()+'|%s,%x'%(stylecolor(self.r, self.g, self.b), self.a)
+        return super().__repr__()+'|%s'%(stylecolor(self.color))
 
 #class TLightMap(TViewObj):
 
@@ -275,6 +278,13 @@ class TJ3DSysSetViewMtx(TViewObj): pass
 
 @register('MirrorMapOperator')
 class TMammaMirrorMapOperator(TViewObj): pass
+
+class NamedPosition:
+    def read(self, fin):
+        self.name = readString(fin)
+        self.x, self.y, self.z, self.rx, self.ry, self.rz, self.sx, self.sy, self.sz = unpack('>fffffffff', fin.read(36))
+    def __repr__(self):
+        return "%s(%.1f,%.1f,%.1f)" % (self.name, self.x, self.y, self.z)
 
 @register('Map')
 class TMap(TViewObj):
@@ -1083,17 +1093,17 @@ class TDoroHaneKuriManager(THaneHamuKuriManager): pass
 class TPlacement(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.x, self.y, self.z = unpack('>fff', fin.read(12))
+        self.pos = unpack('>fff', fin.read(12))
     def __repr__(self):
-        return super().__repr__()+'|%.1f,%.1f,%.1f'%(self.x, self.y, self.z)
+        return super().__repr__()+'|%.1f,%.1f,%.1f'%(self.pos)
 
 @register('Light')
 class TLight(TPlacement):
     def read(self, fin):
         super().read(fin)
-        self.r, self.g, self.b, self.a = unpack('>BBBB', fin.read(4))
+        self.color = unpack('>BBBB', fin.read(4))
     def __repr__(self):
-        return super().__repr__()+'|%s,%x'%(stylecolor(self.r, self.g, self.b), self.a)
+        return super().__repr__()+'|%s'%(stylecolor(self.color))
 
 @register('IdxLight')
 class TIdxLight(TLight): pass
@@ -1115,7 +1125,7 @@ class TLookAtCamera(TCamera): pass
 class CPolarSubCamera(TLookAtCamera):
     def __init__(self):
         super().__init__()
-        self.x = self.y = self.z = 0
+        self.pos = (0,0,0)
 
 
 class TActor(TPlacement):
@@ -1123,11 +1133,11 @@ class TActor(TPlacement):
         super().read(fin)
         self.rot = unpack('>fff', fin.read(12))
         self.scale = unpack('>fff', fin.read(12))
-        self.manager = readString(fin)
+        self.character = readString(fin)
         self.lightmapCount, = unpack('>I', fin.read(4))
         assert self.lightmapCount == 0, self.lightmapCount
     def __repr__(self):
-        return super().__repr__()+'|manager=%s'%(self.manager)
+        return super().__repr__()+'|character=%s'%(self.character)
 
 @register('SmJ3DAct')
 class TSmJ3DAct(TActor): pass
@@ -1358,7 +1368,6 @@ class TSwitchHelpActor(THelpActor): pass
 #class TKoopaHead(TKoopaParts):
 
 
-@register('JellyGate')
 class TTakeActor(THitActor): pass
 
 #class TBGBeakHit(TTakeActor):
@@ -1375,7 +1384,8 @@ class TTakeActor(THitActor): pass
 
 #class TYoshiTongue(TTakeActor):
 
-#class TModelGate(TTakeActor):
+@register('JellyGate')
+class TModelGate(TTakeActor): pass
 
 
 @register('Mario')
@@ -1384,7 +1394,7 @@ class TMario(TTakeActor):
         super().read(fin)
         self.someWaterGunParam, self.flagThing = unpack('>II', fin.read(8))
     def __repr__(self):
-        return super().__repr__()+'|%.1f,%d'%(self.someWaterGunParam, self.flagThing)
+        return super().__repr__()+'|%d,%d'%(self.someWaterGunParam, self.flagThing)
 
 #class TEnemyMario(TMario):
 
@@ -1466,7 +1476,7 @@ class TAnimalBase(TSpineEnemy):
 class TAnimalBird(TSpineEnemy):
     def read(self, fin):
         super().read(fin)
-        self.eventId, = unpack('>I', fin.read(4))
+        self.eventId, = unpack('>i', fin.read(4))
     def __repr__(self):
         return super().__repr__()+'|event=%d'%(self.eventId)
 
@@ -2278,7 +2288,7 @@ class TRideCloud(TRailMapObj):
         self.color1 = unpack('>HHHH', fin.read(8))
         self.color2 = unpack('>HHHH', fin.read(8))
     def __repr__(self):
-        return super().__repr__()+'|c1=%r,c2=%r'%(self.color1, self.color2)
+        return super().__repr__()+'|%s,%s'%(stylecolor(self.color1), stylecolor(self.color2))
 
 
 @register('Castella', 'Kamaboko', 'NormalLift', 'Hikidashi', 'EXKickBoard', 'Uirou')
@@ -2295,7 +2305,7 @@ class TWoodBlock(TNormalLift):
         super().read(fin)
         self.color = unpack('>IIII', fin.read(16))
     def __repr__(self):
-        return super().__repr__()+'|color=%r'%(self.color)
+        return super().__repr__()+'|%s'%(stylecolor(self.color))
 
 
 class TSirenaRollMapObj(TMapObjBase): pass
@@ -2357,7 +2367,7 @@ class TBreakableBlock(TMapObjGeneral): pass
 class TEggYoshi(TMapObjGeneral):
     def read(self, fin):
         super().read(fin)
-        self.unk2 = unpack('>I', fin.read(4))
+        self.unk2 = unpack('>i', fin.read(4))
     def __repr__(self):
         return super().__repr__()+'|%d'%(self.unk2)
 
@@ -2504,7 +2514,7 @@ class TWaterHitPictureHideObj(THideObjBase):
         super().read(fin)
         self.hitColor = unpack('>III', fin.read(12))
     def __repr__(self):
-        return super().__repr__()+'|%r'%(self.hitColor,)
+        return super().__repr__()+'|%s'%(stylecolor(self.hitColor))
 
 @register('PictureTeresa')
 class TPictureTelesa(TWaterHitPictureHideObj): pass
