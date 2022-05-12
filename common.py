@@ -53,8 +53,8 @@ class BFile(Readable):
     header = struct.Struct('>8sLL4s12x')
     
     def __init__(self, *args, **kwargs):
-        super(BFile, self).__init__(*args, **kwargs)
         self.aligned = False
+        super(BFile, self).__init__(*args, **kwargs)
     
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount, self.svr = self.header.unpack(fin.read(0x20))

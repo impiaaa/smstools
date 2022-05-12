@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import sys
 from struct import unpack, Struct
-import os.path
 from common import Section, BFile
 
 fpms = 0.02997
@@ -40,44 +38,46 @@ class Dat1(Section):
 class BMessages(BFile):
     sectionHandlers = {b'INF1': Inf1, b'DAT1': Dat1}
     def readHeader(self, fin):
-        super(BMessages, self).readHeader(fin)
+        super().readHeader(fin)
         assert self.signature == b'MESGbmg1', self.signature
+    def read(self, fin):
+        super().read(fin)
+        self.strings = [None]*len(self.inf1.inf)
+        for i in range(len(self.inf1.inf)):
+            offset = self.inf1.inf[i][0]
+            end = self.dat1.data.find(b'\0', offset)
+            data = self.dat1.data[offset:end]
+            self.strings[i] = (data,)+tuple(self.inf1.inf[i][1:])
 
-if len(sys.argv) != 2:
-    sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
-    exit(1)
+if __name__ == "__main__":
+    import sys
+    import os.path
+    if len(sys.argv) != 2:
+        sys.stderr.write("Usage: %s <bmg>\n"%sys.argv[0])
+        exit(1)
 
-fin = open(sys.argv[1], 'rb')
-bmg = BMessages()
-bmg.read(fin)
-fin.close()
+    fin = open(sys.argv[1], 'rb')
+    bmg = BMessages()
+    bmg.read(fin)
+    fin.close()
 
-if bmg.inf1.size == 12:
-    # subtitle format
-    srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
-    for j, (offset, start, end, unknown) in enumerate(bmg.inf1.inf):
-        srtout.write(u"%d\n"%(j+1))
-        srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
-        srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
-        srtout.write(u"# %x\n"%unknown)
-        if j+1 < len(bmg.inf1.inf):
-            nextOffset = bmg.inf1.inf[j+1][0]
-        else:
-            nextOffset = len(bmg.dat1.data)
-        srtout.write(bmg.dat1.data[offset:bmg.dat1.data.find(b'\0', offset)].decode('shift-jis'))
-        srtout.write(u"\n\n")
-    srtout.close()
-else:
-    txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'wb')
-    for j, indices in enumerate(bmg.inf1.inf):
-        offset = indices[0]
-        if j+1 < len(bmg.inf1.inf):
-            nextOffset = bmg.inf1.inf[j+1][0]
-        else:
-            nextOffset = len(bmg.dat1.data)
-        end = bmg.dat1.data.find(b'\0', offset)
-        data = bmg.dat1.data[offset:end]
-        txtout.write(data)#.decode('shift-jis'))
-        txtout.write(b"\n\n")
-    txtout.close()
+    if bmg.inf1.size == 12:
+        # subtitle format
+        srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w')
+        for data, start, end, unknown in enumerate(bmg.strings):
+            srtout.write(u"%d\n"%(j+1))
+            srtout.write(u"%02d:%02d:%02d,%03d --> "%frameToHMSMS(start))
+            srtout.write(u"%02d:%02d:%02d,%03d\n"%frameToHMSMS(end))
+            srtout.write(u"# %x\n"%unknown)
+            srtout.write(data.decode('shift-jis'))
+            srtout.write(u"\n\n")
+        srtout.close()
+    else:
+        txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'wb')
+        for data in enumerate(bmg.inf1.inf):
+            if isinstance(data, tuple):
+                data = data[0]
+            txtout.write(data)#.decode('shift-jis'))
+            txtout.write(b"\n\n")
+        txtout.close()
 
