@@ -1,12 +1,13 @@
 # Common functions and templates for (chunked) Mario/Zelda data files
 
+import io
 import sys
 import struct
 import warnings
 
 class Readable(object):
     def __init__(self, fin=None, pos=None):
-        super(Readable, self)
+        super().__init__()
         if fin is not None:
             if pos is not None:
                 fin.seek(pos)
@@ -54,7 +55,7 @@ class BFile(Readable):
     
     def __init__(self, *args, **kwargs):
         self.aligned = False
-        super(BFile, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
     
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount, self.svr = self.header.unpack(fin.read(0x20))
@@ -86,4 +87,20 @@ class BFile(Readable):
     
     def writeChunks(self, fout):
         for chunk in self.chunks:
-            chunk.write(fout)
+            chunkId = type(chunk).__name__.upper().encode()
+            buffer = io.BytesIO()
+            chunk.write(buffer)
+            buffer.write(b'\0'*((32-(buffer.tell()+8))%32))
+            data = buffer.getvalue()
+            fout.write(struct.pack('>4sL', chunkId, len(data)+8))
+            fout.write(data)
+    
+    def write(self, fout):
+        buffer = io.BytesIO()
+        self.writeChunks(buffer)
+        data = buffer.getvalue()
+        self.fileLength = len(data)+self.header.size
+        self.chunkCount = len(self.chunks)
+        self.writeHeader(fout)
+        fout.write(data)
+
