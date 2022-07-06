@@ -3,13 +3,13 @@
 #@menupath Tools.annotate_virtual_call
 #@toolbar
 
-from ghidra.app.decompiler import DecompileOptions
-from ghidra.app.decompiler import DecompInterface
-from ghidra.util.task import ConsoleTaskMonitor
-from ghidra.app.decompiler import ClangOpToken
-from ghidra.program.model.symbol import SymbolType
+from ghidra.app.decompiler import ClangOpToken, DecompileOptions, DecompInterface
 from ghidra.program.model.data import FunctionDefinitionDataType
+from ghidra.program.model.listing import CodeUnit
 from ghidra.program.model.pcode import HighFunctionDBUtil
+from ghidra.program.model.symbol import SymbolType, SourceType
+from ghidra.util.exception import CancelledException
+from ghidra.util.task import ConsoleTaskMonitor
 
 options = DecompileOptions()
 monitor = ConsoleTaskMonitor()
@@ -43,33 +43,86 @@ assert getVt.opcode == getVt.PTRSUB, "expected input 1 to load to be ptrsub, not
 assert getVt.getInput(1).isConstant()
 assert getVt.getInput(1).getAddress().offset == 0, "expected vtable to be at offset 0, not %s"%(getVt.getInput(1).getAddress().offset)
 theVariable = getVt.getInput(0)
-classNames = [theVariable.high.dataType.dataType.name]
+
+def getVtableSymbolsForClassName(className):
+    symdb = currentProgram.symbolTable
+    vtableSymbols = []
+    for sym in symdb.getSymbols(className):
+        if sym.symbolType == SymbolType.NAMESPACE:
+            vtableSymbols.extend(symdb.getSymbols("__vt", sym.getObject()))
+    return vtableSymbols
+
+def getVFunc(vtableSymbols, vtableIndex, pointerSize):
+    listing = currentProgram.listing
+    for vtableSymbol in vtableSymbols:
+        vtableAddr = vtableSymbol.address
+        vtableData = listing.getDataAt(vtableAddr)
+        if vtableData is None:
+            print vtableSymbol.getName(True), "has no data defined"
+            continue
+        funcPointer = vtableData.getComponent(vtableIndex)
+        if funcPointer is None:
+            print vtableSymbol.getName(True), "has no data defined at index", vtableIndex
+            continue
+        funcAddr = funcPointer.value
+        if funcAddr.offset == 0:
+            print "The function pointer at", vtableIndex, "in", vtableSymbol.getName(True), "is NULL"
+            continue
+        calledFunc = getFunctionAt(funcAddr)
+        if calledFunc is None:
+            print "No function defined at", funcAddr
+        if vtableSymbol.parentNamespace.name == calledFunc.parentNamespace.name:
+            return calledFunc
+
+def annotateVirtualCall(calledFunc, startingFunc, callAddr, thisOverride=None):
+    print calledFunc
+    funcDef = FunctionDefinitionDataType(calledFunc.signature)
+    if thisOverride is not None:
+        originalThis = funcDef.arguments[0]
+        funcDef.replaceArgument(0, originalThis.name, thisOverride, originalThis.comment, SourceType.DEFAULT)
+    HighFunctionDBUtil.writeOverride(startingFunc, callAddr, funcDef)
+    currentProgram.listing.setComment(callAddr, CodeUnit.PRE_COMMENT, "{@symbol %s}"%calledFunc.symbol.getName(True))
+
+superClassNames = [theVariable.high.dataType.dataType.name]
+overrideClass = theVariable.high.dataType
 defTheVariable = theVariable.getDef()
 while defTheVariable is not None and defTheVariable.opcode == defTheVariable.PTRSUB:
     if defTheVariable.getInput(1).getAddress().offset != 0: raise ValueError("multiple inheritance not currently supported")
     theVariable = defTheVariable.getInput(0)
-    classNames.insert(0, theVariable.high.dataType.dataType.name)
+    superClassNames.insert(0, theVariable.high.dataType.dataType.name)
     defTheVariable = theVariable.getDef()
 
-symdb = currentProgram.symbolTable
-vtableSymbols = []
-for className in classNames:
-    for sym in symdb.getSymbols(className):
-        if sym.symbolType == SymbolType.NAMESPACE:
-            vtableSymbols.extend(symdb.getSymbols("__vt", sym.getObject()))
+calledFunc = None
+for className in superClassNames:
+    calledFunc = getVFunc(getVtableSymbolsForClassName(className), vtableIndex, pointerSize)
+    if calledFunc is not None:
+        annotateVirtualCall(calledFunc, startingFunc, callAddr)
+        break
 
-listing = currentProgram.listing
-for vtableSymbol in vtableSymbols:
-    vtableAddr = vtableSymbol.address
-    funcPointer = listing.getDataAt(vtableAddr.add(vtableIndex*pointerSize))
-    if funcPointer is not None:
-        funcAddr = funcPointer.value
-        if funcAddr.offset != 0:
-            calledFunc = getFunctionAt(funcAddr)
-            if calledFunc is not None and vtableSymbol.parentNamespace.name == calledFunc.parentNamespace.name:
-                print calledFunc
-                funcDef = FunctionDefinitionDataType(calledFunc.signature)
-                HighFunctionDBUtil.writeOverride(startingFunc, callAddr, funcDef)
-                listing.setComment(callAddr, funcPointer.PRE_COMMENT, "{@symbol %s}"%calledFunc.symbol.getName(True))
-                break
+if calledFunc is None:
+    dataDb = currentProgram.getDataTypeManager()
+    calledFuncs = []
+    subClassNames = []
+    while len(calledFuncs) == 0 and len(superClassNames) > 0:
+        superClass = superClassNames.pop(0)
+        for struct in dataDb.getAllStructures():
+            if struct.numComponents > 0 and struct.getComponent(0).dataType.name == superClass:
+                subClassNames.append(struct.name)
+                calledFunc = getVFunc(getVtableSymbolsForClassName(struct.name), vtableIndex, pointerSize)
+                if calledFunc is not None:
+                    calledFuncs.append(calledFunc)
+        if len(superClassNames) == 0:
+            superClassNames = subClassNames
+            subClassNames = []
+
+    try:
+        choice = askChoice("Pure-virtual call", # title
+                           "I can't find an implementation for this fuction table for this type. Should I use one from a concrete subclass?", # message
+                           calledFuncs, # choices
+                           None) # defaultValue
+    except CancelledException:
+        choice = None
+    
+    if choice is not None:
+        annotateVirtualCall(choice, startingFunc, callAddr, overrideClass)
 
