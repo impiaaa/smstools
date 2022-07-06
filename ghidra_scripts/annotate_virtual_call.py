@@ -1,4 +1,4 @@
-#
+#Deduce the virtual function being called at the current selected location
 #@keybinding
 #@menupath Tools.annotate_virtual_call
 #@toolbar
@@ -11,6 +11,8 @@ from ghidra.program.model.symbol import SymbolType, SourceType
 from ghidra.util.exception import CancelledException
 from ghidra.util.task import ConsoleTaskMonitor
 
+VTABLE_LABEL = "__vt"
+
 options = DecompileOptions()
 monitor = ConsoleTaskMonitor()
 ifc = DecompInterface()
@@ -20,12 +22,15 @@ ifc.openProgram(currentProgram)
 startingFunc = getFunctionContaining(currentAddress)
 res = ifc.decompileFunction(startingFunc, 60, monitor)
 
+# Get the indirect-call instruction nearest to the user's selection
 inst = getInstructionAt(currentAddress)
 while not any([pcode.opcode == pcode.CALLIND for pcode in inst.pcode]): inst = inst.getNext()
 callAddr = inst.address
 
-#callOp = [pcode for pcode in inst.pcode if pcode.opcode == pcode.CALLIND][0]
+# Need to use decompiled Pcode to get AST access
 callOp = [pcode for pcode in res.highFunction.getPcodeOps(callAddr) if pcode.opcode == pcode.CALLIND][0]
+
+# Travel AST to get the object that's being called
 castToCode = callOp.getInput(0).getDef()
 if castToCode.opcode == castToCode.CAST:
     loadFnPtr = castToCode.getInput(0).getDef()
@@ -44,12 +49,23 @@ assert getVt.getInput(1).isConstant()
 assert getVt.getInput(1).getAddress().offset == 0, "expected vtable to be at offset 0, not %s"%(getVt.getInput(1).getAddress().offset)
 theVariable = getVt.getInput(0)
 
+# Follow parent-class reference chains and memorize the ancestry
+superClassNames = [theVariable.high.dataType.dataType.name]
+overrideClass = theVariable.high.dataType
+defTheVariable = theVariable.getDef()
+while defTheVariable is not None and defTheVariable.opcode == defTheVariable.PTRSUB:
+    if defTheVariable.getInput(1).getAddress().offset != 0: raise ValueError("multiple inheritance not currently supported")
+    theVariable = defTheVariable.getInput(0)
+    superClassNames.insert(0, theVariable.high.dataType.dataType.name)
+    defTheVariable = theVariable.getDef()
+
+
 def getVtableSymbolsForClassName(className):
     symdb = currentProgram.symbolTable
     vtableSymbols = []
     for sym in symdb.getSymbols(className):
         if sym.symbolType == SymbolType.NAMESPACE:
-            vtableSymbols.extend(symdb.getSymbols("__vt", sym.getObject()))
+            vtableSymbols.extend(symdb.getSymbols(VTABLE_LABEL, sym.getObject()))
     return vtableSymbols
 
 def getVFunc(vtableSymbols, vtableIndex, pointerSize):
@@ -85,15 +101,7 @@ def annotateVirtualCall(calledFunc, startingFunc, callAddr, thisOverride=None):
     HighFunctionDBUtil.writeOverride(startingFunc, callAddr, funcDef)
     currentProgram.listing.setComment(callAddr, CodeUnit.PRE_COMMENT, "{@symbol %s}"%calledFunc.symbol.getName(True))
 
-superClassNames = [theVariable.high.dataType.dataType.name]
-overrideClass = theVariable.high.dataType
-defTheVariable = theVariable.getDef()
-while defTheVariable is not None and defTheVariable.opcode == defTheVariable.PTRSUB:
-    if defTheVariable.getInput(1).getAddress().offset != 0: raise ValueError("multiple inheritance not currently supported")
-    theVariable = defTheVariable.getInput(0)
-    superClassNames.insert(0, theVariable.high.dataType.dataType.name)
-    defTheVariable = theVariable.getDef()
-
+# Look through the vtables of the primary class and any superclasses for a function pointer at the called index
 calledFunc = None
 for className in superClassNames:
     calledFunc = getVFunc(getVtableSymbolsForClassName(className), vtableIndex, pointerSize)
@@ -101,6 +109,7 @@ for className in superClassNames:
         annotateVirtualCall(calledFunc, startingFunc, callAddr)
         break
 
+# If we didn't find any, offer to the user a subclass implementation instead
 if calledFunc is None:
     dataDb = currentProgram.getDataTypeManager()
     calledFuncs = []
