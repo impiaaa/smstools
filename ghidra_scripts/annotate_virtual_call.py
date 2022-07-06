@@ -62,6 +62,8 @@ def getVFunc(vtableSymbols, vtableIndex, pointerSize):
             continue
         funcPointer = vtableData.getComponent(vtableIndex)
         if funcPointer is None:
+            funcPointer = listing.getDataAt(vtableAddr.add(vtableIndex*pointerSize))
+        if funcPointer is None:
             print vtableSymbol.getName(True), "has no data defined at index", vtableIndex
             continue
         funcAddr = funcPointer.value
@@ -115,14 +117,15 @@ if calledFunc is None:
             superClassNames = subClassNames
             subClassNames = []
 
-    try:
-        choice = askChoice("Pure-virtual call", # title
-                           "I can't find an implementation for this fuction table for this type. Should I use one from a concrete subclass?", # message
-                           calledFuncs, # choices
-                           None) # defaultValue
-    except CancelledException:
-        choice = None
-    
-    if choice is not None:
-        annotateVirtualCall(choice, startingFunc, callAddr, overrideClass)
+    if len(calledFuncs) > 0:
+        try:
+            choice = askChoice("Pure-virtual call", # title
+                               "I can't find an implementation for this fuction table for this type. Should I use one from a concrete subclass?", # message
+                               calledFuncs, # choices
+                               None) # defaultValue
+        except CancelledException:
+            choice = None
+        
+        if choice is not None:
+            annotateVirtualCall(choice, startingFunc, callAddr, overrideClass)
 
