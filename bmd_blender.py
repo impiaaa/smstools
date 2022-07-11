@@ -122,7 +122,7 @@ def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, in
         # material
         matIndex = sg.index
         mat = bmd.mat3.materials[sg.index]
-        onDown = mat.flag == 1
+        onDown = mat.materialMode == 1
     elif sg.type == 0x12 and onDown:
         # shape
         batch = bmd.shp1.batches[sg.index]
@@ -202,12 +202,12 @@ def importMesh(filePath, bmd, mesh, bm=None):
             
             if mat.cullMode is not None:
                 bmat.use_backface_culling = mat.cullMode == 2
-            if mat.blendInfo == BlendMode.NONE:
+            if mat.blend == BlendMode.NONE:
                 bmat.blend_method = 'OPAQUE'
-            elif mat.blendInfo == BlendMode.BLEND:
+            elif mat.blend == BlendMode.BLEND:
                 bmat.blend_method = 'BLEND'
-            if len(mat.colors) > 0 and mat.colors[0] is not None:
-                bmat.diffuse_color = color8ToLinear(mat.colors[0])
+            if len(mat.tevColors) > 0 and mat.tevColors[0] is not None:
+                bmat.diffuse_color = color8ToLinear(mat.tevColors[0])
             
             bmat.use_nodes = True
             tree = bmat.node_tree
@@ -222,9 +222,9 @@ def importMesh(filePath, bmd, mesh, bm=None):
             colorReg = []
             for values, name, out in [
                 (mat.matColors, "Material", colorMatReg),
-                (mat.ambientColors, "Ambient", colorAmbReg),
-                (mat.constColors, "Constant", konstColorReg),
-                (mat.colors, "Base", colorReg)
+                (mat.ambColors, "Ambient", colorAmbReg),
+                (mat.tevKColors, "Constant", konstColorReg),
+                (mat.tevColors, "Base", colorReg)
             ]:
                 for j, color in enumerate(values):
                     node = placer.addNode('ShaderNodeRGB')
@@ -232,7 +232,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     node.label = name + ' ' + str(j)
                     out.append(node.outputs[0])
             colorVtxReg = []
-            for j in range(mat.lightChanCount):
+            for j in range(mat.colorChanNum):
                 node = placer.addNode('ShaderNodeVertexColor')
                 node.layer_name = str(j)
                 colorVtxReg.append(node.outputs['Color']) # TODO alpha
@@ -240,9 +240,9 @@ def importMesh(filePath, bmd, mesh, bm=None):
             
             # Light channels
             colorChannels = []
-            for j in range(mat.lightChanCount):
-                colorChannel = safeGet(mat.lightChanInfos, j*2)
-                #alphaChannel = safeGet(mat.lightChanInfos, j*2+1)
+            for j in range(mat.colorChanNum):
+                colorChannel = safeGet(mat.colorChans, j*2)
+                #alphaChannel = safeGet(mat.colorChans, j*2+1)
                 matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
                 ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
                 if colorChannel.lightingEnabled and colorChannel.litMask != 0:
@@ -276,7 +276,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
             
             # Texgen stages
             texGens = []
-            for j, texGen in enumerate(mat.texGenInfos[:mat.texGenCount]):
+            for j, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
                 if texGen.source == TexGenSrc.POS:
                     node = placer.addNode('ShaderNodeNewGeometry')
                     out = node.outputs['Position']
@@ -311,8 +311,8 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 if texGen.type == TexGenType.MTX3x4 or texGen.type == TexGenType.MTX2x4:
                     node = placer.addNode('ShaderNodeMapping')
                     node.vector_type = 'POINT'
-                    if texGen.matrix >= TexGenMatrix.TEXMTX0 and texGen.matrix <= TexGenMatrix.TEXMTX9 and mat.texMtxInfos[texGen.matrix-TexGenMatrix.TEXMTX0] is not None:
-                        texMtx = mat.texMtxInfos[texGen.matrix-TexGenMatrix.TEXMTX0]
+                    if texGen.matrix >= TexGenMatrix.TEXMTX0 and texGen.matrix <= TexGenMatrix.TEXMTX9 and mat.texMtxs[texGen.matrix-TexGenMatrix.TEXMTX0] is not None:
+                        texMtx = mat.texMtxs[texGen.matrix-TexGenMatrix.TEXMTX0]
                         node.inputs['Location'].default_value = texMtx.translation+(0,)
                         node.inputs['Rotation'].default_value = (0,0,texMtx.rotation) # TODO what units
                         node.inputs['Scale'].default_value = texMtx.scale+(1,)
@@ -327,15 +327,15 @@ def importMesh(filePath, bmd, mesh, bm=None):
             placer.nextColumn()
             
             for j in range(mat.tevStageCount):
-                tevOrderInfo = mat.tevOrderInfos[j]
-                tevStage = mat.tevStageInfos[j]
+                tevOrderInfo = mat.tevOrders[j]
+                tevStage = mat.tevStages[j]
                 
                 colorSources = []
                 for colorSrc in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD):
                     if colorSrc in (TevColorArg.CPREV, TevColorArg.C0, TevColorArg.C1, TevColorArg.C2):
                         colorSources.append(colorReg[colorSrc.value//2])
                     elif colorSrc in (TevColorArg.TEXC, TevColorArg.TEXA):
-                        texture = bmd.tex1.textures[mat.textureIndexes[tevOrderInfo.texMap]]
+                        texture = bmd.tex1.textures[mat.texNoes[tevOrderInfo.texMap]]
                         node = placer.addNode('ShaderNodeTexImage')
                         if texture.wrapS == 0: node.extension = 'EXTEND'
                         elif texture.wrapS == 1: node.extension = 'REPEAT'

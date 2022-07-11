@@ -202,6 +202,14 @@ class DiffuseFunction(Enum):
     SIGN = 1
     CLAMP = 2
 
+def _SHIFTL(v, s, w):
+    """mask the first w bits of v before lshifting"""
+    return (v & ((0x01 << w) - 1)) << s
+
+def _SHIFTR(v, s, w):
+    """rshift v and mask the first w bits afterwards"""
+    return (v >> s) & ((0x01 << w) - 1)
+
 class ColorChanInfo(ReadableStruct):
     header = Struct('>BBBBBB2x')
     fields = [
@@ -212,6 +220,16 @@ class ColorChanInfo(ReadableStruct):
         "attenuationFunction",
         ("ambColorSource", ColorSrc)
     ]
+    def getId(self):
+        difffn = DiffuseFunction.NONE if self.attenuationFunction==0 else self.diffuseFunction
+        return (self.matColorSource.value&1)|\
+               (_SHIFTL(self.lightingEnabled,1,1))|\
+               (_SHIFTL(self.litMask,2,4))|\
+               (_SHIFTL(self.ambColorSource.value,6,1))|\
+               (_SHIFTL(difffn.value,7,2))|\
+               (_SHIFTL(((2-self.attenuationFunction)>0),9,1))|\
+               (_SHIFTL((self.attenuationFunction>0),10,1))|\
+               (_SHIFTL((_SHIFTR(self.litMask,4,4)),11,4))
 
 class TexGenType(IntEnum):
     MTX3x4 = 0
@@ -489,6 +507,7 @@ class TevKColorSel(IntEnum):
     CONST_3_8 = 0x05 # constant 3/8
     CONST_1_4 = 0x06 # constant 1/4
     CONST_1_8 = 0x07 # constant 1/8
+    NONE = 0x09
     K0 = 0x0C # K0[RGB] register
     K1 = 0x0D # K1[RGB] register
     K2 = 0x0E # K2[RGB] register
@@ -525,23 +544,23 @@ def safeGet(arr, idx):
         return None
 
 class Material(ReadableStruct):
-    header = Struct('>BBBBBxBx')
-    fields = ["flag", "cullModeIndex", "lightChanCountIndex", "texGenCountIndex",
-        "tevCountIndex", "zModeIndex"]
+    header = Struct('>BBBBBBBB')
+    fields = ["materialMode", "cullModeIndex", "colorChanNumIndex", "texGenNumIndex",
+        "tevStageNumIndex", "zCompLocIndex", "zModeIndex", "ditherIndex"]
     def read(self, fin):
         super().read(fin)
         # 0x08
         self.matColorIndices = unpack('>2H', fin.read(4))
         # 0x0C
-        self.lightChanIndices = unpack('>4H', fin.read(8))
+        self.colorChanIndices = unpack('>4H', fin.read(8))
 
         # 0x14
-        self.ambientColorIndices = unpack('>2H', fin.read(4))
+        self.ambColorIndices = unpack('>2H', fin.read(4))
         # 0x18
         self.lightIndices = unpack('>8H', fin.read(16))
 
         # 0x28
-        self.texGenIndices = unpack('>8H', fin.read(16))
+        self.texCoordIndices = unpack('>8H', fin.read(16))
         # 0x38
         self.postTexGenIndices = unpack('>8H', fin.read(16))
         # 0x48
@@ -549,17 +568,17 @@ class Material(ReadableStruct):
         # 0x5C
         self.postTexMtxIndices = unpack('>20H', fin.read(40))
         # 0x84
-        self.texStageIndices = unpack('>8H', fin.read(16))
+        self.texNoIndices = unpack('>8H', fin.read(16))
         # 0x94
-        self.constColorIndices = unpack('>4H', fin.read(8))
+        self.tevKColorIndices = unpack('>4H', fin.read(8))
         # 0x9C
-        self.constColorSels = [TevKColorSel(x) if x < 0x20 else x for x in unpack('>16B', fin.read(16))]
+        self.tevKColorSels = [TevKColorSel(x) if x < 0x20 else x for x in unpack('>16B', fin.read(16))]
         # 0xAC
-        self.constAlphaSels = unpack('>16B', fin.read(16))
+        self.tevKAlphaSels = unpack('>16B', fin.read(16))
         # 0xBC
         self.tevOrderIndices = unpack('>16H', fin.read(32))
         # 0xDC
-        self.colorIndices = unpack('>4H', fin.read(8))
+        self.tevColorIndices = unpack('>4H', fin.read(8))
         # 0xE4
         self.tevStageIndices = unpack('>16H', fin.read(32))
         # 0x104
@@ -569,55 +588,55 @@ class Material(ReadableStruct):
         # 0x12C
         self.unknownIndices6 = unpack('>12H', fin.read(24))
         # 0x144
-        self.fogIndex, self.alphaCompIndex, self.blendIndex = unpack('>HHH2x', fin.read(8))
+        self.fogIndex, self.alphaCompIndex, self.blendIndex, self.nbtScaleIndex = unpack('>HHHH', fin.read(8))
     
     def resolve(self, mat3):
         self.cullMode = safeGet(mat3.cullModeArray, self.cullModeIndex)
-        self.lightChanCount = safeGet(mat3.lightChanCountArray, self.lightChanCountIndex)
-        self.texGenCount = safeGet(mat3.texGenCountArray, self.texGenCountIndex)
-        self.tevStageCount = safeGet(mat3.tevCountArray, self.tevCountIndex)
+        self.colorChanNum = safeGet(mat3.colorChanNumArray, self.colorChanNumIndex)
+        self.texGenNum = safeGet(mat3.texGenNumArray, self.texGenNumIndex)
+        self.tevStageNum = safeGet(mat3.tevStageNumArray, self.tevStageNumIndex)
         self.zMode = safeGet(mat3.zModeArray, self.zModeIndex)
         self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
-        self.lightChanInfos = [safeGet(mat3.lightChanInfoArray, i) for i in self.lightChanIndices]
-        self.ambientColors = [safeGet(mat3.ambientColorArray, i) for i in self.ambientColorIndices]
-        self.texGenInfos = [safeGet(mat3.texGenInfoArray, i) for i in self.texGenIndices]
-        #self.postTexGenInfos = [safeGet(mat3.postTexGenInfoArray, i) for i in self.postTexGenIndices]
-        self.texMtxInfos = [safeGet(mat3.texMtxInfoArray, i) for i in self.texMtxIndices]
-        #self.postTexMtxInfos = [safeGet(mat3.postTexMtxInfoArray, i) for i in self.postTexMtxIndices]
-        self.textureIndexes = [safeGet(mat3.textureIndexArray, i) for i in self.texStageIndices]
-        self.constColors = [safeGet(mat3.constColorArray, i) for i in self.constColorIndices]
-        self.tevOrderInfos = [safeGet(mat3.tevOrderInfoArray, i) for i in self.tevOrderIndices]
-        self.colors = [safeGet(mat3.colorArray, i) for i in self.colorIndices]
-        self.tevStageInfos = [safeGet(mat3.tevStageInfoArray, i) for i in self.tevStageIndices]
-        self.tevSwapModeInfos = [safeGet(mat3.tevSwapModeInfoArray, i) for i in self.tevSwapModeIndices]
+        self.colorChans = [safeGet(mat3.colorChanArray, i) for i in self.colorChanIndices]
+        self.ambColors = [safeGet(mat3.ambColorArray, i) for i in self.ambColorIndices]
+        self.texCoords = [safeGet(mat3.texCoordArray, i) for i in self.texCoordIndices]
+        #self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
+        self.texMtxs = [safeGet(mat3.texMtxArray, i) for i in self.texMtxIndices]
+        #self.postTexMtxs = [safeGet(mat3.postTexMtxArray, i) for i in self.postTexMtxIndices]
+        self.texNoes = [safeGet(mat3.texNoArray, i) for i in self.texNoIndices]
+        self.tevKColors = [safeGet(mat3.tevKColorArray, i) for i in self.tevKColorIndices]
+        self.tevOrders = [safeGet(mat3.tevOrderArray, i) for i in self.tevOrderIndices]
+        self.tevColors = [safeGet(mat3.tevColorArray, i) for i in self.tevColorIndices]
+        self.tevStages = [safeGet(mat3.tevStageArray, i) for i in self.tevStageIndices]
+        self.tevSwapModes = [safeGet(mat3.tevSwapModeArray, i) for i in self.tevSwapModeIndices]
         self.tevSwapModeTables = [safeGet(mat3.tevSwapModeTableArray, i) for i in self.tevSwapModeTableIndices]
-        #self.fogInfo = safeGet(mat3.blendInfoArray, self.fogIndex)
+        #self.fog = safeGet(mat3.fogArray, self.fogIndex)
         self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
-        self.blendInfo = safeGet(mat3.blendInfoArray, self.blendIndex)
+        self.blend = safeGet(mat3.blendArray, self.blendIndex)
         
     def debug(self):
         print(self.name)
-        print("flag =", self.flag)
+        print("materialMode =", self.materialMode)
         print("cullMode =", self.cullMode)
-        print("lightChanCount =", self.lightChanCount)
-        print("texGenCount =", self.texGenCount)
+        print("colorChanNum =", self.colorChanNum)
+        print("texGenNum =", self.texGenNum)
         print("zMode =", self.zMode)
         print("matColors =", self.matColors)
-        print("lightChanInfos =", self.lightChanInfos)
-        print("ambientColors =", self.ambientColors)
-        print("texGenInfos =", self.texGenInfos)
-        #print("postTexGenInfos =", self.postTexGenInfos)
-        print("texMtxInfos =", self.texMtxInfos)
-        #print("postTexMtxInfos =", self.postTexMtxInfos)
-        print("textureIndexes =", self.textureIndexes)
-        print("constColors =", self.constColors)
-        print("tevOrderInfos =", self.tevOrderInfos)
-        print("colors =", self.colors)
-        print("tevStageInfos =", self.tevStageInfos)
-        print("tevSwapModeInfos =", self.tevSwapModeInfos)
+        print("colorChans =", self.colorChans)
+        print("ambColors =", self.ambColors)
+        print("texCoords =", self.texCoords)
+        #print("postTexGens =", self.postTexGens)
+        print("texMtxs =", self.texMtxs)
+        #print("postTexMtxs =", self.postTexMtxs)
+        print("texNoes =", self.texNoes)
+        print("tevKColors =", self.tevKColors)
+        print("tevOrders =", self.tevOrders)
+        print("tevColors =", self.tevColors)
+        print("tevStages =", self.tevStages)
+        print("tevSwapModes =", self.tevSwapModes)
         print("tevSwapModeTables =", self.tevSwapModeTables)
         print("alphaComp =", self.alphaComp)
-        print("blendInfo =", self.blendInfo)
+        print("blend =", self.blend)
 
 class Mat3(Section):
     header = Struct('>H2x')
@@ -649,7 +668,7 @@ class Mat3(Section):
         for m, n in zip(self.materials, self.materialNames):
             m.name = n
 
-        # 3 (IndirectTexturing)
+        # 3 (indirect)
 
         fin.seek(start+offsets[4])
         self.cullModeArray = array('I')
@@ -660,74 +679,72 @@ class Mat3(Section):
         self.matColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
 
         fin.seek(start+offsets[6])
-        self.lightChanCountArray = array('B')
-        self.lightChanCountArray.fromfile(fin, lengths[6])
+        self.colorChanNumArray = array('B')
+        self.colorChanNumArray.fromfile(fin, lengths[6])
 
         fin.seek(start+offsets[7])
-        self.lightChanInfoArray = [ColorChanInfo.try_make(fin) for i in range(lengths[7]//ColorChanInfo.header.size)]
+        self.colorChanArray = [ColorChanInfo.try_make(fin) for i in range(lengths[7]//ColorChanInfo.header.size)]
 
         fin.seek(start+offsets[8])
-        self.ambientColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)] 
+        self.ambColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)]
 
-        # 9 (LightInfo)
+        # 9 (lightInfo)
         
         fin.seek(start+offsets[10])
-        self.texGenCountArray = array('B')
-        self.texGenCountArray.fromfile(fin, lengths[10])
+        self.texGenNumArray = array('B')
+        self.texGenNumArray.fromfile(fin, lengths[10])
 
         fin.seek(start+offsets[11])
-        self.texGenInfoArray = [TexGenInfo.try_make(fin) for i in range(lengths[11]//TexGenInfo.header.size)]
+        self.texCoordArray = [TexGenInfo.try_make(fin) for i in range(lengths[11]//TexGenInfo.header.size)]
 
-        # 12 (TexCoord2Info)
-        # postTexGen
+        # 12 (postTexGen)
         
         fin.seek(start + offsets[13])
-        self.texMtxInfoArray = [TexMtxInfo.try_make(fin) for i in range(lengths[13]//100)]
+        self.texMtxArray = [TexMtxInfo.try_make(fin) for i in range(lengths[13]//100)]
         
-        # 14 (TexMtxInfo2)
-        # postTexMtx
+        # 14 (postTexMtx)
         
         fin.seek(start+offsets[15])
-        self.textureIndexArray = array('H')
-        self.textureIndexArray.fromfile(fin, lengths[15]//2)
-        if sys.byteorder == 'little': self.textureIndexArray.byteswap()
+        self.texNoArray = array('H')
+        self.texNoArray.fromfile(fin, lengths[15]//2)
+        if sys.byteorder == 'little': self.texNoArray.byteswap()
 
         fin.seek(start+offsets[16])
-        self.tevOrderInfoArray = [TevOrderInfo.try_make(fin) for i in range(lengths[16]//TevOrderInfo.header.size)]
+        self.tevOrderArray = [TevOrderInfo.try_make(fin) for i in range(lengths[16]//TevOrderInfo.header.size)]
         
         fin.seek(start+offsets[17])
-        self.colorArray = [unpack('>hhhh', fin.read(8)) for i in range(lengths[17]//8)] 
+        self.tevColorArray = [unpack('>hhhh', fin.read(8)) for i in range(lengths[17]//8)]
         
         fin.seek(start+offsets[18])
-        self.constColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[18]//4)] 
+        self.tevKColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[18]//4)]
 
         fin.seek(start+offsets[19])
-        self.tevCountArray = array('B')
-        self.tevCountArray.fromfile(fin, lengths[19])
+        self.tevStageNumArray = array('B')
+        self.tevStageNumArray.fromfile(fin, lengths[19])
 
         fin.seek(start+offsets[20])
-        self.tevStageInfoArray = [TevStageInfo.try_make(fin) for i in range(lengths[20]//TevStageInfo.header.size)]
+        self.tevStageArray = [TevStageInfo.try_make(fin) for i in range(lengths[20]//TevStageInfo.header.size)]
         
         fin.seek(start+offsets[21])
-        self.tevSwapModeInfoArray = [TevSwapMode.try_make(fin) for i in range(lengths[21]//TevSwapMode.header.size)]
+        self.tevSwapModeArray = [TevSwapMode.try_make(fin) for i in range(lengths[21]//TevSwapMode.header.size)]
         
         fin.seek(start+offsets[22])
         self.tevSwapModeTableArray = [TevSwapModeTable.try_make(fin) for i in range(lengths[22]//TevSwapModeTable.header.size)]
 
-        # 23 (FogInfo)
+        # 23 (fog)
         
         fin.seek(start+offsets[24])
         self.alphaCompArray = [AlphaCompare.try_make(fin) for i in range(lengths[24]//AlphaCompare.header.size)]
 
         fin.seek(start+offsets[25])
-        self.blendInfoArray = [BlendInfo.try_make(fin) for i in range(lengths[25]//BlendInfo.header.size)]
+        self.blendArray = [BlendInfo.try_make(fin) for i in range(lengths[25]//BlendInfo.header.size)]
 
         fin.seek(start+offsets[26])
         self.zModeArray = [ZMode.try_make(fin) for i in range(lengths[26]//ZMode.header.size)]
         
-        # 27 (MaterialData6)
-        # 28 (MaterialData7)
-        # 29 (NBTScaleInfo)
+        # 27 (zCompLoc)
+        # 28 (dither)
+        # 29 (nbtScale)
         
         for m in self.materials:
             m.resolve(self)
