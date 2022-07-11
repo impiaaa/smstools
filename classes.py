@@ -5,6 +5,7 @@ registeredObjectClasses = {}
 def register(*names):
     assert len(names) > 0
     def sub(c):
+        c.names = list(names)+c.names
         for name in names:
             assert name not in registeredObjectClasses
             registeredObjectClasses[name] = c
@@ -12,6 +13,7 @@ def register(*names):
     return sub
 
 class TNameRef:
+    names = []
     def read(self, fin):
         self.deschash, = unpack('>H', fin.read(2))
         self.description = readString(fin)
@@ -274,7 +276,8 @@ class TJ3DSysSetViewMtx(TViewObj): pass
 
 #class TLightWithDBSetManager(TViewObj):
 
-#class TMBindShadowManager(TViewObj):
+@register('BindShadow')
+class TMBindShadowManager(TViewObj): pass
 
 @register('MirrorMapOperator')
 class TMammaMirrorMapOperator(TViewObj): pass
@@ -633,16 +636,26 @@ class TAirportEventSink(TMapEventSinkInPollutionReset): pass
 class TMapEventSinkBianco(TMapEventSinkInPollutionReset): pass
 
 
-#class TSMSFader(TViewObj):
+class TSMSFader(TViewObj): pass
+    #def read(self, fin):
+    #    super().read(fin)
+    #    self.someDuration, = unpack('>I', fin.read(4))
+    #    self.color = unpack('>BBBB', fin.read(4))
+    #def __repr__(self):
+    #    return super().__repr__()+'|%d,%s'%(self.someDuration,stylecolor(self.color))
 
-#class TSmplFader(TSMSFader): pass
+@register('ScrnFader')
+class TSmplFader(TSMSFader): pass
 
-#class TShineFader(TSmplFader): pass
+@register('ShineFader')
+class TShineFader(TSmplFader): pass
 
 
-#class TSunGlass(TViewObj):
+@register('SunGlass')
+class TSunGlass(TViewObj): pass
 
-#class TSunShine(TSunGlass): pass
+@register('SunShine')
+class TSunShine(TSunGlass): pass
 
 
 class TEfbCtrl(TViewObj): pass
@@ -1492,7 +1505,7 @@ class TBaseNPC(TSpineEnemy):
             self.coinId = -1
         else:
             self.unk = [unpack('>III', fin.read(12)) for i in range(2)]
-            unk2, actionFlagIndex, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId = unpack('>IIIiii', fin.read(24))
+            partsFlag, actionFlagIndex, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId = unpack('>iIIiii', fin.read(24))
     def __repr__(self):
         return super().__repr__()+'|%r,%d,%d,%d,%d'%(self.unk, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId)
 
