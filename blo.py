@@ -9,34 +9,24 @@ class Bgn1(Section): pass
 class End1(Section): pass
 
 class Inf1(Section):
-    header = Struct('>HH4x')
+    header = Struct('>HHI')
     def read(self, fin, start, size):
-        self.width, self.height = self.header.unpack(fin.read(size-8))
-
-class Pic1(Section):
-    header = Struct('>BBBB4s')
-    def read(self, fin, start, size):
-        u = [None]*9
-        self.rel, u[0], u[1], u[2], self.id = self.header.unpack(fin.read(8))
-        if self.rel == 0x06:
-            self.x, self.y, self.width, self.height = unpack('>hhhh', fin.read(8))
-        elif self.rel == 0x07:
-            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack('>xbxbhhBBBB', fin.read(12))
-        elif self.rel == 0x08:
-            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack('>hhhhBBBB', fin.read(12))
-        elif self.rel == 0x09:
-            self.x, self.y, self.width, self.height, u[3], u[4], u[5], u[6] = unpack('>hhhhBBBB', fin.read(12))
-        else:
-            raise Exception("Unknown rel type 0x%02X"%self.rel)
-        u[7], u[8], namelen = unpack('>BBB', fin.read(3))
-        self.name = os.path.splitext(fin.read(namelen).decode('shift-jis'))[0]
-        u += map(ord, fin.read(fin.tell()+size-start))
+        self.width, self.height, unknown = self.header.unpack(fin.read(size-8))
 
 class Pan1(Section):
+    header = Struct('>H?x4shhhh')
     def read(self, fin, start, size):
-        unknown1, self.id, self.x, self.y, self.width, self.height = unpack('>H2x4shhhh', fin.read(16))
-        if unknown1 == 0x00000801:
-            unknown2, = unpack('>L', fin.read(4))
+        self.rel, self.unknown1, self.id, self.x, self.y, self.width, self.height = self.header.unpack(fin.read(16))
+
+def getResource(fin):
+    unk, namelen = unpack('>BB', fin.read(2))
+    return fin.read(namelen).decode('shift-jis')
+
+class Pic1(Pan1):
+    def read(self, fin, start, size):
+        super().read(fin, start, size)
+        self.imageName = getResource(fin)
+        self.lutName = getResource(fin)
 
 class BLayout(BFile):
     sectionHandlers = {
@@ -61,7 +51,7 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
             htmlout.write("</div>\n")
         elif isinstance(chunk, End1):
             return i
-        elif isinstance(chunk, Pic1):
+        elif isinstance(chunk, Pan1):
             if chunk.rel == 0x06:
                 # relative to parent
                 pass
@@ -76,13 +66,10 @@ def parsechunks(chunklist, i=0, indent=0, parentx=0, parenty=0):
             elif chunk.rel == 0x09:
                 # ???
                 pass
-            htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(chunk.x,chunk.y,chunk.width,chunk.height,chunk.name,chunk.id))
-        elif isinstance(chunk, Pan1):
-            toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(chunk.x, chunk.y, chunk.width, chunk.height)
-            lastX = chunk.x
-            lastY = chunk.y
-            newx = chunk.x
-            newy = chunk.y
+            if isinstance(chunk, Pic1):
+                htmlout.write('<img style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid" src="../timg/%s.png" id="%s">\n'%(chunk.x,chunk.y,chunk.width,chunk.height,chunk.imageName,chunk.id))
+            else:
+                toWrite = '<div style="position:absolute; left:%dpx; top:%dpx; width:%dpx; height: %dpx; border: black 0px solid">\n'%(chunk.x, chunk.y, chunk.width, chunk.height)
         i += 1
     return i
 
