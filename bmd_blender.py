@@ -246,14 +246,15 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
                 ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
                 if colorChannel.lightingEnabled and colorChannel.litMask != 0:
-                    if colorChannel.attenuationFunction in (1, 3):
+                    if colorChannel.attenuationFunction in (0, 1):
                         node = placer.addNode('ShaderNodeEeveeSpecular')
                         tree.links.new(matSource, node.inputs['Specular'])
                         tree.links.new(ambSource, node.inputs['Emissive Color'])
-                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-                            node.inputs['Base Color'].default_value = (0,0,0,0)
-                        else:
-                            tree.links.new(matSource, node.inputs['Base Color'])
+                        #if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                        node.inputs['Base Color'].default_value = (0,0,0,0)
+                        #else:
+                        #    tree.links.new(matSource, node.inputs['Base Color'])
+                        node.inputs['Roughness'].default_value = 0.0
                         out = node.outputs['BSDF']
                     else:
                         if colorChannel.diffuseFunction == DiffuseFunction.NONE:
@@ -303,7 +304,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     out = node.outputs[0]
                     tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
                 elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
-                    node = placer.addNode('NodeReroute')
+                    node = placer.addNode('ShaderNodeShaderToRGB')
                     out = node.outputs[0]
                     tree.links.new(colorChannels[texGen.source-TexGenSrc.COLOR0], node.inputs[0])
                 node.label = "Texture coordinate generation source %d"%j
@@ -318,15 +319,12 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         node.inputs['Scale'].default_value = texMtx.scale+(1,)
                     tree.links.new(out, node.inputs[0])
                     out = node.outputs[0]
-                elif texGen.type == TexGenType.SRTG:
-                    node = placer.addNode('ShaderNodeShaderToRGB')
-                    out = node.outputs[0]
                 placer.previousColumn()
                 texGens.append(out)
             placer.nextColumn()
             placer.nextColumn()
             
-            for j in range(mat.tevStageCount):
+            for j in range(mat.tevStageNum):
                 tevOrderInfo = mat.tevOrders[j]
                 tevStage = mat.tevStages[j]
                 
@@ -351,11 +349,11 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         if tevOrderInfo.chanId == ColorChannelID.COLOR0:
                             colorSources.append(colorChannels[0])
                         elif tevOrderInfo.chanId == ColorChannelID.COLOR1:
-                            colorSources.append(colorChannels[0])
+                            colorSources.append(colorChannels[1])
                         elif tevOrderInfo.chanId == ColorChannelID.COLOR0A0:
                             colorSources.append(colorChannels[0])
                         elif tevOrderInfo.chanId == ColorChannelID.COLOR1A1:
-                            colorSources.append(colorChannels[0])
+                            colorSources.append(colorChannels[1])
                         else:
                             assert False, tevOrderInfo.chanId
                             colorSources.append(None)
@@ -364,7 +362,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     elif colorSrc == TevColorArg.HALF:
                         colorSources.append(0.5)
                     elif colorSrc == TevColorArg.KONST:
-                        constColorSel = mat.constColorSels[j]
+                        constColorSel = mat.tevKColorSels[j]
                         if constColorSel == TevKColorSel.CONST_1:
                             colorSources.append(1.0)
                         elif constColorSel == TevKColorSel.CONST_7_8:
@@ -381,7 +379,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                             colorSources.append(1/4)
                         elif constColorSel == TevKColorSel.CONST_1_8:
                             colorSources.append(1/8)
-                        elif constColorSel >= TevKColorSel.K0 and constColorSel <= TevKColorSel.K1:
+                        elif constColorSel >= TevKColorSel.K0 and constColorSel <= TevKColorSel.K3:
                             colorSources.append(konstColorReg[constColorSel-TevKColorSel.K0])
                         else:
                             #sep = placer.addNode('ShaderNodeSeparateRGB')
@@ -397,30 +395,38 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 
                 placer.nextColumn()
                 if tevStage.colorOp in (TevOp.ADD, TevOp.SUB):
-                    node = placer.addNode('ShaderNodeMixRGB')
-                    node.blend_type = 'MIX'
+                    node = placer.addNode('ShaderNodeMixShader')
                     if isinstance(colorSources[2], float):
                         node.inputs['Fac'].default_value = colorSources[2]
                     else:
                         tree.links.new(colorSources[2], node.inputs['Fac'])
                     if isinstance(colorSources[0], float):
-                        node.inputs[1].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
+                        #node.inputs[1].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
+                        rgb = placer.addNode('ShaderNodeRGB')
+                        rgb.outputs[0].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
+                        tree.links.new(rgb.outputs[0], node.inputs[1])
                     else:
                         tree.links.new(colorSources[0], node.inputs[1])
                     if isinstance(colorSources[1], float):
-                        node.inputs[2].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
+                        #node.inputs[2].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
+                        rgb = placer.addNode('ShaderNodeRGB')
+                        rgb.outputs[0].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
+                        tree.links.new(rgb.outputs[0], node.inputs[2])
                     else:
                         tree.links.new(colorSources[1], node.inputs[2])
                     
                     placer.nextColumn()
-                    node2 = placer.addNode('ShaderNodeMixRGB')
-                    node2.blend_type = 'ADD' if tevStage.colorOp == TevOp.ADD else 'SUBTRACT'
-                    node2.inputs['Fac'].default_value = 1.0
-                    tree.links.new(node.outputs[0], node2.inputs[1])
+                    node2 = placer.addNode('ShaderNodeAddShader')
+                    #node2.blend_type = 'ADD' if tevStage.colorOp == TevOp.ADD else 'SUBTRACT'
+                    #node2.inputs['Fac'].default_value = 1.0
+                    tree.links.new(node.outputs[0], node2.inputs[0])
                     if isinstance(colorSources[3], float):
-                        node2.inputs[2].default_value = (colorSources[3],colorSources[3],colorSources[3],1)
+                        #node2.inputs[2].default_value = (colorSources[3],colorSources[3],colorSources[3],1)
+                        rgb = placer.addNode('ShaderNodeRGB')
+                        rgb.outputs[0].default_value = (colorSources[3],colorSources[3],colorSources[3],1)
+                        tree.links.new(rgb.outputs[0], node2.inputs[1])
                     else:
-                        tree.links.new(colorSources[3], node2.inputs[2])
+                        tree.links.new(colorSources[3], node2.inputs[1])
                     placer.previousColumn()
                     colorReg[0] = node2.outputs[0]
                 placer.nextColumn()
