@@ -4,6 +4,7 @@
 #@toolbar
 
 from ghidra.app.decompiler import ClangOpToken, DecompileOptions, DecompInterface
+from ghidra.program.model.address import Address
 from ghidra.program.model.data import FunctionDefinitionDataType
 from ghidra.program.model.listing import CodeUnit
 from ghidra.program.model.pcode import HighFunctionDBUtil
@@ -83,6 +84,9 @@ def getVFunc(vtableSymbols, vtableIndex, pointerSize):
             print vtableSymbol.getName(True), "has no data defined at index", vtableIndex
             continue
         funcAddr = funcPointer.value
+        if not isinstance(funcAddr, Address):
+            print "The function pointer at", vtableIndex, "in", vtableSymbol.getName(True), "is not an address"
+            continue
         if funcAddr.offset == 0:
             print "The function pointer at", vtableIndex, "in", vtableSymbol.getName(True), "is NULL"
             continue

@@ -282,6 +282,25 @@ class TMBindShadowManager(TViewObj): pass
 @register('MirrorMapOperator')
 class TMammaMirrorMapOperator(TViewObj): pass
 
+class TMapXlu:
+    def read(self, fin):
+        count1, = unpack('>I', fin.read(4))
+        self.things = []
+        for i in range(count1):
+            thing = []
+            count2, = unpack('>I', fin.read(4))
+            for j in range(count2):
+                thing.append(unpack('>II', fin.read(8)))
+            self.things.append(thing)
+    def __repr__(self):
+        return "TMapXlu"+repr(self.things)
+
+class TMapCollisionData:
+    def read(self, fin):
+        self.unknown = unpack('>IIIII', fin.read(20))
+    def __repr__(self):
+        return "TMapCollisionData(%r)"%(self.unknown,)
+
 class NamedPosition:
     def read(self, fin):
         self.name = readString(fin)
@@ -289,20 +308,35 @@ class NamedPosition:
     def __repr__(self):
         return "%s(%.1f,%.1f,%.1f)" % (self.name, self.x, self.y, self.z)
 
+class TMapWarp:
+    def read(self, fin):
+        count, = unpack('>I', fin.read(4))
+        self.currentAwakeJointId = 0
+        self.jointWakeIds = []
+        self.warps = []
+        if count != 0:
+            self.currentAwakeJointId, = unpack('>I', fin.read(4))
+            for i in range(count):
+                self.jointWakeIds.append(unpack('>II', fin.read(8)))
+            for i in range(count*2):
+                w = NamedPosition()
+                w.read(fin)
+                self.warps.append(w)
+    def __repr__(self):
+        return "TMapWarp(%r, %r, %r)"%(self.currentAwakeJointId, self.jointWakeIds, self.warps)
+
 @register('Map')
 class TMap(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.unknown = unpack('>7I', fin.read(28))
-        self.warps = []
-        if self.unknown[6] == 2:
-           self.unknown += unpack('>5I', fin.read(20))
-           while fin.tell() < len(fin.getvalue()):
-               w = NamedPosition()
-               w.read(fin)
-               self.warps.append(w)
+        self.xlu = TMapXlu()
+        self.xlu.read(fin)
+        self.collisionData = TMapCollisionData()
+        self.collisionData.read(fin)
+        self.warp = TMapWarp()
+        self.warp.read(fin)
     def __repr__(self):
-        return super().__repr__()+'|%r warps=%r'%(self.unknown, self.warps)
+        return super().__repr__()+'|xlu=%r, collisionData=%r, warp=%r'%(self.xlu, self.collisionData, self.warp)
 
 @register('MapDrawWall')
 class TMapDrawWall(TViewObj): pass
