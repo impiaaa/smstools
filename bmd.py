@@ -537,6 +537,14 @@ class TevSwapModeTable(ReadableStruct):
     header = Struct('>BBBB')
     fields = ["rSel", "gSel", "bSel", "aSel"]
 
+class FogInfo(ReadableStruct):
+    header = Struct('>BBHffff')
+    fields = ["type", "enable", "center", "startz", "endz", "nearz", "farz"]
+    def read(self, fin):
+        super().read(fin)
+        self.color = unpack('>4B', fin.read(4))
+        self.table = unpack('>10H', fin.read(20))
+
 def safeGet(arr, idx):
     if idx >= 0 and idx < len(arr):
         return arr[idx]
@@ -603,14 +611,14 @@ class Material(ReadableStruct):
         #self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
         self.texMtxs = [safeGet(mat3.texMtxArray, i) for i in self.texMtxIndices]
         #self.postTexMtxs = [safeGet(mat3.postTexMtxArray, i) for i in self.postTexMtxIndices]
-        self.texNoes = [safeGet(mat3.texNoArray, i) for i in self.texNoIndices]
+        self.texNos = [safeGet(mat3.texNoArray, i) for i in self.texNoIndices]
         self.tevKColors = [safeGet(mat3.tevKColorArray, i) for i in self.tevKColorIndices]
         self.tevOrders = [safeGet(mat3.tevOrderArray, i) for i in self.tevOrderIndices]
         self.tevColors = [safeGet(mat3.tevColorArray, i) for i in self.tevColorIndices]
         self.tevStages = [safeGet(mat3.tevStageArray, i) for i in self.tevStageIndices]
         self.tevSwapModes = [safeGet(mat3.tevSwapModeArray, i) for i in self.tevSwapModeIndices]
         self.tevSwapModeTables = [safeGet(mat3.tevSwapModeTableArray, i) for i in self.tevSwapModeTableIndices]
-        #self.fog = safeGet(mat3.fogArray, self.fogIndex)
+        self.fog = safeGet(mat3.fogArray, self.fogIndex)
         self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
         self.blend = safeGet(mat3.blendArray, self.blendIndex)
         
@@ -628,13 +636,14 @@ class Material(ReadableStruct):
         #print("postTexGens =", self.postTexGens)
         print("texMtxs =", self.texMtxs)
         #print("postTexMtxs =", self.postTexMtxs)
-        print("texNoes =", self.texNoes)
+        print("texNos =", self.texNos)
         print("tevKColors =", self.tevKColors)
         print("tevOrders =", self.tevOrders)
         print("tevColors =", self.tevColors)
         print("tevStages =", self.tevStages)
         print("tevSwapModes =", self.tevSwapModes)
         print("tevSwapModeTables =", self.tevSwapModeTables)
+        print("fog =", self.fog)
         print("alphaComp =", self.alphaComp)
         print("blend =", self.blend)
 
@@ -731,7 +740,8 @@ class Mat3(Section):
         fin.seek(start+offsets[22])
         self.tevSwapModeTableArray = [TevSwapModeTable.try_make(fin) for i in range(lengths[22]//TevSwapModeTable.header.size)]
 
-        # 23 (fog)
+        fin.seek(start+offsets[22])
+        self.fogArray = [FogInfo.try_make(fin) for i in range(lengths[23]//44)]
         
         fin.seek(start+offsets[24])
         self.alphaCompArray = [AlphaCompare.try_make(fin) for i in range(lengths[24]//AlphaCompare.header.size)]
