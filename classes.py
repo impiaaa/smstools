@@ -175,15 +175,25 @@ class TAmbColor(TViewObj):
     def __repr__(self):
         return super().__repr__()+'|%s'%(stylecolor(self.color))
 
-#class TLightMap(TViewObj):
+class TLightMap(TViewObj):
+    def read(self, fin):
+        #super().read(fin)
+        infoCount, = unpack('>I', fin.read(4))
+        self.lightInfos = []
+        for i in range(infoCount):
+            unk1, = unpack('>I', fin.read(4))
+            objName = readString(fin)
+            self.lightInfos.append((unk1, objName))
+    def __repr__(self):
+        return "TLightMap"+repr(self.lightInfos)
 
 @register('Viewport')
 class TViewport(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.unk = unpack('>4I', fin.read(16))
+        self.rect = unpack('>4I', fin.read(16))
     def __repr__(self):
-        return super().__repr__()+'|'+repr(self.unk)
+        return super().__repr__()+'|'+repr(self.rect)
 
 @register('AfterEffect')
 class TAfterEffect(TViewObj): pass
@@ -195,9 +205,19 @@ class TAlphaCatch(TViewObj): pass
 class TAreaCylinder(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.unk2 = unpack('>I', fin.read(4))
+        self.bottom = unpack('>fff', fin.read(3*4))
+        fin.read(3*4)
+        self.radius, self.height = unpack('>ff', fin.read(8))
+        fin.read(4)
+        readString(fin)
+        count, = unpack('>I', fin.read(4))
+        for i in range(count):
+            unpack('>I', fin.read(4))
+            readString(fin)
+        self.areaManager = readString(fin)
+        self.unk2, = unpack('>I', fin.read(4))
     def __repr__(self):
-        return super().__repr__()+'|%d'%(self.unk2)
+        return super().__repr__()+'|(%.1f,%.1f,%.1f) r=%f h=%f u=%d'%(self.bottom+(self.radius, self.height, self.unk2))
 
 #class TAreaCylinderManager(TViewObj):
 
@@ -424,9 +444,9 @@ class TMarioPositionObj(TViewObj):
 class TMirrorModelManager(TViewObj):
     def read(self, fin):
         super().read(fin)
-        self.unk = unpack('>3I', fin.read(12))
+        self.counts = unpack('>3I', fin.read(12))
     def __repr__(self):
-        return super().__repr__()+'|'+repr(self.unk)
+        return super().__repr__()+'|'+repr(self.counts)
 
 @register('ModelWaterManager')
 class TModelWaterManager(TViewObj): pass
@@ -566,10 +586,12 @@ class TLightAry(TViewObjPtrListT): pass
 class TSmJ3DScn(TViewObjPtrListT):
     def read(self, fin):
         TViewObj.read(self, fin)
-        self.unk, count, = unpack('>LL', fin.read(8))
+        self.lightMap = TLightMap()
+        self.lightMap.read(fin)
+        count, = unpack('>L', fin.read(4))
         self.objects = [readsection(fin) for i in range(count)]
     def __repr__(self):
-        return super().__repr__()+'|%d'%self.unk
+        return super().__repr__()+'|%r'%self.lightMap
 
 
 @register('DrawBufObj')
@@ -1181,8 +1203,8 @@ class TActor(TPlacement):
         self.rot = unpack('>fff', fin.read(12))
         self.scale = unpack('>fff', fin.read(12))
         self.character = readString(fin)
-        self.lightmapCount, = unpack('>I', fin.read(4))
-        assert self.lightmapCount == 0, self.lightmapCount
+        self.lightMap = TLightMap()
+        self.lightMap.read(fin)
     def __repr__(self):
         return super().__repr__()+'|character=%s'%(self.character)
 
@@ -1320,9 +1342,9 @@ class TMapObjFlag(THitActor):
 class TMapObjGrassGroup(THitActor):
     def read(self, fin):
         super().read(fin)
-        self.unk2, = unpack('>I', fin.read(4))
+        self.bladeCount, = unpack('>I', fin.read(4))
     def __repr__(self):
-        return super().__repr__()+'|%d'%(self.unk2)
+        return super().__repr__()+'|%d'%(self.bladeCount)
 
 #class TMapObjMessenger(THitActor):
 
@@ -1538,8 +1560,9 @@ class TBaseNPC(TSpineEnemy):
             self.thingAttr2 = 0
             self.coinId = -1
         else:
+            # body color selection, clothes color selection, some other color thing
             self.unk = [unpack('>III', fin.read(12)) for i in range(2)]
-            partsFlag, actionFlagIndex, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId = unpack('>iIIiii', fin.read(24))
+            self.partsFlag, self.actionFlagIndex, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId = unpack('>iIIiii', fin.read(24))
     def __repr__(self):
         return super().__repr__()+'|%r,%d,%d,%d,%d'%(self.unk, self.hasThingFlag, self.thingAttr1, self.thingAttr2, self.coinId)
 
