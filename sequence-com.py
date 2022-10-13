@@ -103,6 +103,10 @@ def handleBankProgram(which, selection, track, tick):
     print "Program", selection
     if selection >= 128:
       warn("Program %d >= 128"%selection)
+      #event = midi.ControlChangeEvent(tick=tick)
+      #event.control = 32 # Bank Select
+      #event.value = 128
+      #track.append(event)
       #selection -= 228
     event = midi.ProgramChangeEvent(tick=tick, value=selection%128)
     track.append(event)
@@ -164,6 +168,7 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
     queuedEvents = []
   tracksToDo = []
   channel = (trackId)%16
+  if channel >= 9: channel = (channel+1)%16
   if trackId >= 16: warn("Track ID %d >= 16"%trackId)
   #if trackId == 15: channel = 9
   bytePositionInTrack = {}
@@ -349,8 +354,8 @@ def readTrack(fin, pattern=None, trackId=-1, delay=0, endTime=-1, maxpos=-1):
       mode, tmp, point = unpack('>BBH', fin.read(4))
       point |= tmp<<16
       if pattern is not None: delay = handleSeek(0xC8, mode, point, track, delay, voices)
-      if 1:#totalTime < endTime: fin.seek(point)
-      #else:
+      #if totalTime < endTime: fin.seek(point)
+      if pattern is not None:
         track.append(midi.TextMetaEvent(tick=delay, data=map(ord, "Jump to 0x%X"%(point))))
         jumpToInTrack = bytePositionInTrack[point]
         delay = delayAtBytePosition[point]
