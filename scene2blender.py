@@ -4,7 +4,9 @@ from warnings import warn
 import bpy
 from math import radians
 
-def bmd2blendcoords(x, y, z, rx, ry, rz):
+def bmd2blendcoords(pos, rot):
+    x, y, z = pos
+    rx, ry, rz = rot
     return (z, x, y), (radians(rz+90), radians(rx), radians(ry+90))
 
 def getmesh(name):
@@ -16,7 +18,7 @@ def getmesh(name):
         except KeyError:
             return bpy.data.meshes.new(name)
 
-argpath = pathlib.Path("")
+argpath = pathlib.Path("/media/spencer/ExtraData/Game extracts/sms/scene/pinnaBoss1")
 if argpath.is_dir():
     if argpath.name == "map":
         scenedirpath = argpath.parent
@@ -44,28 +46,26 @@ for o in marScene.objects:
             lamp = bpy.data.lights.new(o2.description, "POINT")
             obj = bpy.data.objects.new(o2.description, lamp)
             bpy.context.scene.collection.objects.link(obj)
-            obj.location, obj.rotation_euler = bmd2blendcoords(o2.x, o2.y, o2.z, 0, 0, 0)
-            lamp.color = (o2.r/255.0, o2.g/255.0, o2.b/255.0)
+            obj.location, obj.rotation_euler = bmd2blendcoords(o2.pos, (0, 0, 0))
+            lamp.color = [c/255.0 for c in o2.color][:3]
     if o.namehash == 0xabc3: # Strategy
         strategy = o
 
 for group in strategy.objects:
     assert group.namehash == 0x2682
     for o in group.objects:
+        if not hasattr(o, "pos"): continue
         if o.namehash == 0xa3d9:
-            lamp = bpy.data.lights.new(o.description, "SUN")
-            obj = bpy.data.objects.new(o.description, lamp)
-            bpy.context.scene.collection.objects.link(obj)
-            obj.location, obj.rotation_euler = bmd2blendcoords(o.x, o.y, o.z, o.rx, o.ry, o.rz)
+            data = bpy.data.lights.new(o.description, "SUN")
         elif hasattr(o, "model"):
-            mesh = getmesh(o.model.lower())
-            obj = bpy.data.objects.new(o.description, mesh)
-            bpy.context.scene.collection.objects.link(obj)
-            obj.location, obj.rotation_euler = bmd2blendcoords(o.x, o.y, o.z, o.rx, o.ry, o.rz)
-            obj.scale = (o.sx, o.sy, o.sz)
-        elif hasattr(o, "sx"):
-            obj = bpy.data.objects.new(o.description, None)
-            bpy.context.scene.collection.objects.link(obj)
-            obj.location, obj.rotation_euler = bmd2blendcoords(o.x, o.y, o.z, o.rx, o.ry, o.rz)
-            obj.scale = (o.sx, o.sy, o.sz)
-
+            data = getmesh(o.model.lower())
+        else:
+            data = None
+        obj = bpy.data.objects.new(o.description, data)
+        bpy.context.scene.collection.objects.link(obj)
+        if hasattr(o, "rot"):
+            obj.location, obj.rotation_euler = bmd2blendcoords(o.pos, o.rot)
+        else:
+            obj.location, obj.rotation_euler = bmd2blendcoords(o.pos, (0,0,0))
+        if hasattr(o, "scale"):
+            obj.scale = o.scale
