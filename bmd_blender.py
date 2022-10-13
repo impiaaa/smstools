@@ -333,7 +333,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     if colorSrc in (TevColorArg.CPREV, TevColorArg.C0, TevColorArg.C1, TevColorArg.C2):
                         colorSources.append(colorReg[colorSrc.value//2])
                     elif colorSrc in (TevColorArg.TEXC, TevColorArg.TEXA):
-                        texture = bmd.tex1.textures[mat.texNoes[tevOrderInfo.texMap]]
+                        texture = bmd.tex1.textures[mat.texNos[tevOrderInfo.texMap]]
                         node = placer.addNode('ShaderNodeTexImage')
                         if texture.wrapS == 0: node.extension = 'EXTEND'
                         elif texture.wrapS == 1: node.extension = 'REPEAT'
