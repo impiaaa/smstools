@@ -93,6 +93,7 @@ def getVFunc(vtableSymbols, vtableIndex, pointerSize):
         calledFunc = getFunctionAt(funcAddr)
         if calledFunc is None:
             print "No function defined at", funcAddr
+            continue
         if vtableSymbol.parentNamespace.name == calledFunc.parentNamespace.name:
             return calledFunc
 
@@ -102,7 +103,8 @@ def annotateVirtualCall(calledFunc, startingFunc, callAddr, thisOverride=None):
     if thisOverride is not None:
         originalThis = funcDef.arguments[0]
         funcDef.replaceArgument(0, originalThis.name, thisOverride, originalThis.comment, SourceType.DEFAULT)
-    HighFunctionDBUtil.writeOverride(startingFunc, callAddr, funcDef)
+    try: HighFunctionDBUtil.writeOverride(startingFunc, callAddr, funcDef)
+    except: print startingFunc, callAddr, funcDef
     currentProgram.listing.setComment(callAddr, CodeUnit.PRE_COMMENT, "{@symbol %s}"%calledFunc.symbol.getName(True))
 
 # Look through the vtables of the primary class and any superclasses for a function pointer at the called index
