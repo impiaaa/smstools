@@ -59,7 +59,8 @@ import classes
 
 if __name__ == "__main__":
     def printobj(o, i=0):
-        print('  '*i, o)
+        try: print('  '*i, o)
+        except Exception as e: print('  '*i, e)
         if o.extra:
             print('  '*(i+1), o.extra.hex())
         if hasattr(o, "objects"):
