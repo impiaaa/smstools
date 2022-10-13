@@ -1753,7 +1753,10 @@ class TAmenbo(TSmallEnemy): pass
 class TBathtubKiller(TSmallEnemy): pass
 
 @register('Cannon')
-class TCannon(TSmallEnemy): pass
+class TCannon(TSmallEnemy):
+    def read(self, fin):
+        TSpineEnemy.read(self, fin)
+        self.coinId = -1
 
 @register('DebuTelesa')
 class TDebuTelesa(TSmallEnemy): pass
@@ -2367,13 +2370,15 @@ class TNormalLift(TRailMapObj):
         super().read(fin)
         self.collisionData, = unpack('>f', fin.read(4))
     def __repr__(self):
-        return super().__repr__()+'|graph=%s,colinfo=%.1f'%(self.graphName, self.collisionData)
+        return super().__repr__()+'|colinfo=%.1f'%(self.collisionData)
 
 @register('YoshiBlock', 'WoodBlock')
 class TWoodBlock(TNormalLift):
     def read(self, fin):
-        super().read(fin)
-        self.color = unpack('>IIII', fin.read(16))
+        TRailMapObj.read(self, fin)
+        self.unk1, = unpack('>I', fin.read(4))
+        self.color = unpack('>III', fin.read(12))
+        self.collisionData = 0
     def __repr__(self):
         return super().__repr__()+'|%s'%(stylecolor(self.color))
 
