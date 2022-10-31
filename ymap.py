@@ -20,18 +20,18 @@ fin.seek(dataOffset)
 print("%d regions"%nRegions)
 
 for i in range(nRegions):
-    sz, zero2 = unpack('>II', fin.read(8))
+    pollutionEffect, unk1, pollutionLayerType = unpack('>HHI', fin.read(8))
 
     #assert sz == 0x20000, hex(fin.tell())
     #assert zero2 == 0, hex(fin.tell())
 
-    x1, y1, z1, x2, y2, z2 = unpack('>ffffff', fin.read(24))
+    yOffset, texToWorldSize, xMin, zMin, xMax, zMax = unpack('>ffffff', fin.read(24))
 
     widthPow, heightPow, unk3, dataOffset = unpack('>HHII', fin.read(12))
     width = 1<<widthPow
     height = 1<<heightPow
 
-    print("(%f,%f,%f),(%f,%f,%f) 0x%X"%(x1,y1,z1,x2,y2,z2,unk3))
+    print("(%f,%f),(%f,%f),(%f,%f) 0x%X"%(yOffset, texToWorldSize, xMin, zMin, xMax, zMax, unk3))
     
     lastRegionHeader = fin.tell()
     
