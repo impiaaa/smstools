@@ -19,6 +19,8 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
 
+TerrainNames = ["stone", "stn_snd", "marble", "soil_sld", "soil", "sand", "gravel", "woodboard", "wood_thn", "wood", "wood_sq", "metalnet", "metal_vc", "metal_sl", "branch", "tallgrass", "lawn", "straw", "rooftile", "rooftotan", "roof_hood", "wire", "table", "bed", "carpet", "chair", "glass", "kinoko", "carpet2"]
+
 def importFile(fname):
     print("Reading", fname)
     fin = open(fname, 'rb')
@@ -37,7 +39,11 @@ def importFile(fname):
         m = bpy.data.meshes.new('%s-%04x'%(nameBase, group.surfaceId))
         terrainSlots = {}
         for i in sorted(set(group.terrainTypes)):
-            mat = bpy.data.materials.get("terrain"+str(i), None) or bpy.data.materials.new("terrain"+str(i))
+            if i < len(TerrainNames):
+                terrainName = TerrainNames[i]
+            else:
+                terrainName = "terrain"+str(i)
+            mat = bpy.data.materials.get(terrainName, None) or bpy.data.materials.new(terrainName)
             terrainSlots[i] = len(m.materials)
             m.materials.append(mat)
         
