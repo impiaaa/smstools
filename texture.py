@@ -482,7 +482,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
                 dest.tofile(fout)
             else:
-                deblocked = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                deblocked = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': deblocked.byteswap()
                 deblocked.tofile(fout)
 
@@ -571,11 +571,11 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
                     for x in range(0, mipWidth, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
             elif format in (TF.C4, TF.C8, TF.C14X2) and paletteFormat == TL.RGB565:
-                pixelData = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                pixelData = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': pixelData.byteswap()
                 pixelData = array('H', [paletteData[px] for px in deblocked])
             else:
-                pixelData = deblock(format, data[dataOffset:dataOffset+mipSize>>(mipIdx*2)], mipWidth, mipHeight)
+                pixelData = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': pixelData.byteswap()
             fout.write(struct.pack('I', len(pixelData)*pixelData.itemsize))
             pixelData.tofile(fout)

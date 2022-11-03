@@ -25,7 +25,7 @@ class ReadableStruct(Readable): # name???
                 fieldName, fieldType = field
                 setattr(self, fieldName, fieldType(value))
     def write(self, fout):
-        fout.write(self.header.pack([getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields]))
+        fout.write(self.header.pack(*[getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields]))
     def __repr__(self):
         return self.__class__.__name__ + " " + " ".join([(field if isinstance(field, str) else field[0])+"="+repr(getattr(self, (field if isinstance(field, str) else field[0]))) for field in self.fields])
 

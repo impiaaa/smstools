@@ -381,7 +381,7 @@ for colpath in scenedirpath.glob("**/*.col"):
         cols[colpath_rel.stem.lower()] = list(exportCol(col, outcoldir, colpath_rel.stem))
 
 import bmd2unity, bmd
-bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime)
+bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, btitime)
 from bmd import BModel
 from bmd2unity import exportBmd
 
