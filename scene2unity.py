@@ -458,8 +458,10 @@ for baseColliderName in ["map", "building01", "building02"]:
         assert baseName.startswith(baseColliderName)
         baseName = baseName[len(baseColliderName)+1:]
         if baseColliderName == "map":
-            assetName = physName+"asset"
-            center = unityparser.UnityDocument.load_yaml(outpath / "map" / assetName).entry.m_LocalAABB['m_Center']
+            assetPath = outpath / "map" / (physName+"asset")
+            if not assetPath.exists():
+                assetPath = outpath / "map" / (physName+".asset")
+            center = unityparser.UnityDocument.load_yaml(assetPath).entry.m_LocalAABB['m_Center']
             if center['y'] > 8000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
                 # put the rooms in the sky underground
                 baseName += "-interior"
@@ -750,6 +752,91 @@ actorDataTable = {
     "TargetArrow": {"modelName": "TargetArrow", "unk9": 0x10210000, "unk15": 0, "flags16": 0x04},
 }
 
+import csv, os
+AudioRes = pathlib.Path(os.getcwd()) / "AudioRes"
+soundInfos = {int(row["InternalID"], 16): row for row in csv.DictReader(open(AudioRes / "msound.csv"))}
+scenetime = pathlib.Path(__file__).stat().st_mtime
+sounds = {}
+from xml.dom import minidom
+import shutil
+def getSound(soundKey):
+    if soundKey in sounds:
+        return sounds[soundKey]
+    soundInfo = soundInfos[soundKey]
+    commands = open(AudioRes / "se" / soundInfo["Category"] / (soundInfo["Name"]+".txt"))
+    labels = {}
+    loop = False
+    bank = inst = 0
+    volume = 1.0
+    note = 0
+    for i, command in enumerate(commands):
+        command = command.strip()
+        if len(command) == 0 or command[0] == '#': continue
+        if command[0] == ':':
+            labels[command[1:]] = i
+        else:
+            command = command.split()
+            command = [int(p[1:], 16) if p[0] == 'h' else int(p) if p.isdigit() else p for p in command]
+            if command[0] == 'NOTEON2':
+                key, flags, velocity = command[1:4]
+                volume *= velocity/0x7F
+                note += key
+            elif command[0] == 'SET_BANK_INST':
+                bank, inst = command[1:]
+            elif command[0] == 'JMP':
+                label = command[2]
+                if label in labels and labels[label] < i:
+                    loop = True
+            elif command[0] == 'TRANSPOSE':
+                assert command[1] == 0x3C
+                note += command[1]
+            elif command[0] == 'SIMPLEADSR':
+                attackTime, decayTime, decayTime2, sustainLevel, releaseTime = command[1:]
+                volume *= sustainLevel/0xFFFF
+    pitch = 2**((note-0x3C)/12.0)
+    
+    (outpath / "audio").mkdir(parents=True, exist_ok=True)
+    metapath = outpath / "audio" / (soundInfo["Name"]+".wav.meta")
+    destpath = outpath / "audio" / (soundInfo["Name"]+".wav")
+    if metapath.exists() and metapath.stat().st_mtime >= scenetime:
+        parsedInfo = (volume, pitch, loop, unityparser.UnityDocument.load_yaml(metapath).entry['guid'])
+        sounds[soundKey] = parsedInfo
+        return parsedInfo
+    
+    ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
+    for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
+        if int(instrument.getAttribute("program")) == inst:
+            break
+    keyRegions = instrument.getElementsByTagName("key-region")
+    assert len(keyRegions) == 1, keyRegions
+    assert "key" not in keyRegions[0].attributes, keyRegions[0]
+    velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
+    assert len(velocityRegions) == 1, velocityRegions
+    waveId = int(velocityRegions[0].getAttribute("wave-id"))
+    origPath = list((AudioRes / "waves").glob("w2ndLoad_0_%05d.*.wav"%waveId))[0]
+    shutil.copy(origPath, destpath)
+    guid = writeMeta(soundInfo["Name"]+".wav", {
+        "AudioImporter": {
+            "serializedVersion": 6,
+            "defaultSettings": {
+                "loadType": 1,
+                "sampleRateSetting": 0,
+                "compressionFormat": 2,
+                "quality": 1,
+                "conversionMode": 0
+            },
+            "forceToMono": 0,
+            "normalize": 0,
+            "preloadAudioData": 1,
+            "loadInBackground": 0,
+            "ambisonic": 0,
+            "3D": 1
+        }
+    }, outpath / "audio")
+    parsedInfo = (volume, pitch, loop, guid)
+    sounds[soundKey] = parsedInfo
+    return parsedInfo
+
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
     grpObj, grpXfm = setupObject(group)
@@ -827,7 +914,14 @@ for group in strategy.objects:
                         # different terrain types ok?
                         addCol(uuid, objObj)
                 if 'soundKey' in modelEntry:
-                    objObj.getOrCreateComponent(AudioSource)
+                    audioSource = objObj.getOrCreateComponent(AudioSource)
+                    volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
+                    audioSource.m_Enabled = 1
+                    audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
+                    audioSource.m_PlayOnAwake = 1
+                    audioSource.m_Volume = volume
+                    audioSource.m_Pitch = pitch
+                    audioSource.Loop = int(loop)
                 if 'particle' in modelEntry:
                     objObj.getOrCreateComponent(ParticleSystemRenderer)
                     objObj.getOrCreateComponent(ParticleSystem)
