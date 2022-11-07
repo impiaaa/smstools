@@ -14,30 +14,32 @@ def convRotation(rots, scale):
 
 class Ank1(Section):
     header = Struct('>BBHHHHHIIII')
+    fields = [
+        'loopFlags', 'angleMultiplier', 'animationLength',
+        'numJoints', 'scaleCount', 'rotCount', 'transCount',
+        'offsetToJoints', 'offsetToScales', 'offsetToRots', 'offsetToTrans'
+    ]
     def read(self, fin, start, size):
-        self.loopFlags, angleMultiplier, self.animationLength, \
-        numJoints, scaleCount, rotCount, transCount, \
-        offsetToJoints, offsetToScales, offsetToRots, offsetToTrans = self.header.unpack(fin.read(28))
-        
+        super().read(fin, start, size)
         scales = array('f')
-        fin.seek(start+offsetToScales)
-        scales.fromfile(fin, scaleCount)
+        fin.seek(start+self.offsetToScales)
+        scales.fromfile(fin, self.scaleCount)
         if sys.byteorder == 'little': scales.byteswap()
         
         rotations = array('h')
-        fin.seek(start+offsetToRots)
-        rotations.fromfile(fin, rotCount)
+        fin.seek(start+self.offsetToRots)
+        rotations.fromfile(fin, self.rotCount)
         if sys.byteorder == 'little': rotations.byteswap()
 
         translations = array('f')
-        fin.seek(start+offsetToTrans)
-        translations.fromfile(fin, transCount)
+        fin.seek(start+self.offsetToTrans)
+        translations.fromfile(fin, self.transCount)
         if sys.byteorder == 'little': translations.byteswap()
         
-        rotScale = float(1<<angleMultiplier)*math.pi/32768.0
-        fin.seek(start+offsetToJoints)
-        self.anims = [None]*numJoints
-        for i in range(numJoints):
+        rotScale = float(1<<self.angleMultiplier)*math.pi/32768.0
+        fin.seek(start+self.offsetToJoints)
+        self.anims = [None]*self.numJoints
+        for i in range(self.numJoints):
             joint = AnimatedJoint()
             joint.read(fin)
             
@@ -68,12 +70,20 @@ class AnimatedJoint(Readable):
         self.x = AnimComponent(f)
         self.y = AnimComponent(f)
         self.z = AnimComponent(f)
+    def write(self, f):
+        self.x.write(f)
+        self.y.write(f)
+        self.z.write(f)
 
 class AnimComponent(Readable):
     def read(self, f):
         self.s = AnimIndex(f)
         self.r = AnimIndex(f)
         self.t = AnimIndex(f)
+    def write(self, f):
+        self.s.write(f)
+        self.r.write(f)
+        self.t.write(f)
 
 class AnimIndex(ReadableStruct):
     header = Struct('>HHH')

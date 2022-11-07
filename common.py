@@ -24,16 +24,26 @@ class ReadableStruct(Readable): # name???
             else:
                 fieldName, fieldType = field
                 setattr(self, fieldName, fieldType(value))
+    def as_tuple(self):
+        return (getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields)
     def write(self, fout):
-        fout.write(self.header.pack(*[getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields]))
+        fout.write(self.header.pack(*self.as_tuple()))
     def __repr__(self):
         return self.__class__.__name__ + " " + " ".join([(field if isinstance(field, str) else field[0])+"="+repr(getattr(self, (field if isinstance(field, str) else field[0]))) for field in self.fields])
+    def __hash__(self):
+        return hash(self.as_tuple())
 
-class Section(object):
+class Section(ReadableStruct):
     def read(self, fin, start, size):
-        pass
-    def write(self, fout):
-        pass
+        super().read(fin)
+
+def swapArray(a):
+    if sys.byteorder == 'little':
+        b = array(a.typecode, a)
+        b.byteswap()
+        return b
+    else:
+        return a
 
 def getString(pos, f):
     t = f.tell()

@@ -1,20 +1,28 @@
 #!/usr/bin/env python
 
 import sys, struct, array
-from common import BFile, Section
+from common import BFile, Section, swapArray
 from texture import readTextureData, decodeTexturePIL, calcTextureSize, TF
 import os.path
 
 class Gly1(Section):
     header = struct.Struct('>HHHHIhHHhh2x')
+    fields = [
+        'minimumFontCode', 'maximumFontCode',
+        'glyphWidth', 'glyphHeight',
+        'arraySize', ('format', TF), 'columns', 'rows', 'w', 'h'
+    ]
     
     def read(self, fin, start, size):
-        self.minimumFontCode, self.maximumFontCode, self.glyphWidth, self.glyphHeight, self.arraySize, self.format, self.columns, self.rows, self.w, self.h = self.header.unpack(fin.read(self.header.size))
-        self.format = TF(self.format)
+        super().read(fin, start, size)
         self.arrayCount = (size-self.header.size-8)/self.arraySize
         #self.h = (size-0x18)/w
         #if format == 0: self.h *= 2
         self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=self.arrayCount)
+    
+    def write(self, fout):
+        super().write(fout)
+        swapArray(self.data).tofile(fout)
     
     def export(self, name):
         images = decodeTexturePIL(self.data, self.format, self.w, self.h, arrayCount=self.arrayCount)
@@ -24,22 +32,35 @@ class Gly1(Section):
 
 class Map1(Section):
     header = struct.Struct('>hHHH')
+    fields = ['mappingType', 'startingCharacter', 'endingCharacter', 'spanCount']
     def read(self, fin, start, size):
-        self.mappingType, self.startingCharacter, self.endingCharacter, spanCount = self.header.unpack(fin.read(self.header.size))
+        super().read(fin, start, size)
         self.spans = array.array('H')
-        self.spans.fromfile(fin, spanCount)
+        self.spans.fromfile(fin, self.spanCount)
+        if sys.byteorder == 'little': self.spans.byteswap()
+    
+    def write(self, fout):
+        self.spanCount = len(self.spans)
+        super().write(fout)
+        swapArray(self.spans).tofile(fout)
+    
 
 class Inf1(Section):
     header = struct.Struct('>hhhhhH')
-    def read(self, fin, start, size):
-        self.fontType, self.ascent, self.descent, self.width, self.leading, self.defaultCharacterCode = self.header.unpack(fin.read(self.header.size))
+    fields = ['fontType', 'ascent', 'descent', 'width', 'leading', 'defaultCharacterCode']
 
 class Wid1(Section):
     header = struct.Struct('>HH')
+    fields = ['minimumFontCode', 'maximumFontCode']
     def read(self, fin, start, size):
-        self.minimumFontCode, self.maximumFontCode = self.header.unpack(fin.read(self.header.size))
+        super().read(fin, start, size)
         self.widths = array.array('H')
         self.widths.fromfile(fin, (self.maximumFontCode-self.minimumFontCode))
+        if sys.byteorder == 'little': self.widths.byteswap()
+    
+    def write(self, fout):
+        super().write(fout)
+        swapArray(self.widths).tofile(fout)
 
 class BFont(BFile):
     sectionHandlers = {b'GLY1': Gly1, b'MAP1': Map1, b'INF1': Inf1, b'WID1': Wid1}

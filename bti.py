@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, copy
+import sys, os
 from struct import Struct, unpack
 from texture import *
 from common import *
@@ -50,9 +50,7 @@ class Image(ReadableStruct):
     def write(self, fout):
         self.dataOffset = fout.tell()+self.header.size
         super().write(fout)
-        data = copy.copy(self.data)
-        if sys.byteorder == 'little': data.byteswap()
-        data.tofile(fout)
+        swapArray(data).tofile(fout)
     
     def getDataName(self, bmd):
         s = bmd.name+"@"+hex(self.fullDataOffset)
