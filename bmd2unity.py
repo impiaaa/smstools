@@ -511,21 +511,54 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
 def exportTextures(textures, bmddir):
     print("Exporting textures")
     for img in textures:
-        fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
-        decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
-        fout.close()
-        yield writeMeta(img.name+".dds", {
-            "IHVImageFormatImporter": {
-                "textureSettings": {
-                    "serializedVersion": 2,
-                    "wrapU": [1, 0, 2][img.wrapS],
-                    "wrapV": [1, 0, 2][img.wrapT],
-                    "wrapW": [1, 0, 2][img.wrapS],
-                    "filterMode": [0, 1, 0, 1, 0, 1][img.magFilter],
-                    "mipBias": img.lodBias/100
+        textureSettings = {
+            "serializedVersion": 2,
+            "wrapU": [1, 0, 2][img.wrapS],
+            "wrapV": [1, 0, 2][img.wrapT],
+            "wrapW": [1, 0, 2][img.wrapS],
+            "filterMode": [0, 1, 0, 1, 0, 1][img.magFilter],
+            "mipBias": img.lodBias/100
+        }
+        if img.format in (TF.RGBA8, TF.CMPR) or img.mipmapCount > 1:
+            fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
+            decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+            fout.close()
+            yield writeMeta(img.name+".dds", {
+                "IHVImageFormatImporter": {
+                    "textureSettings": textureSettings,
+                    "sRGBTexture": 0
                 }
-            }
-        }, bmddir)
+            }, bmddir)
+        else:
+            decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].save(os.path.join(bmddir, img.name+".png"))
+            yield writeMeta(img.name+".png", {
+                "TextureImporter": {
+                    "serializedVersion": 11,
+                    "textureSettings": textureSettings,
+                    "mipmaps": {
+                        "mipMapMode": 0,
+                        "enableMipMap": 0,
+                        "sRGBTexture": 0,
+                        "linearTexture": 0
+                    },
+                    "textureFormat": 1,
+                    "maxTextureSize": 2048,
+                    "lightmap": 0,
+                    "compressionQuality": 50,
+                    "alphaUsage": 1,
+                    "textureType": 10 if img.format in (TF.I4, TF.I8) else 0,
+                    "textureShape": 1,
+                    "singleChannelComponent": 1,
+                    "platformSettings": [{
+                        "serializedVersion": 3,
+                        "buildTarget": "DefaultTexturePlatform",
+                        "maxTextureSize": 2048,
+                        "textureFormat": 7 if img.format == TF.RGB565 or (img.format in (TF.C4, TF.C8, TF.C14X2) and img.paletteFormat == TL.RGB565) else -1,
+                        "textureCompression": 2,
+                        "compressionQuality": 50
+                    }]
+                }
+            }, bmddir)
     
 def exportMaterials(materials, bmddir, textureIds):
     print("Exporting materials")
@@ -556,6 +589,7 @@ def exportMaterials(materials, bmddir, textureIds):
             "m_TexEnvs": textures,
             "m_Colors": colors
         }
+        uMat.m_Shader = {"fileID": 4800000, "guid": "3e8e64449a2c52eb9b3267898b76ade0", "type": 3}
         asset = unityparser.UnityDocument([uMat])
         assetName = mat.name+".mat"
         asset.dump_yaml(os.path.join(bmddir, assetName))

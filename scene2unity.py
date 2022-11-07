@@ -332,9 +332,12 @@ btis = {}
 for btipath in scenedirpath.glob("**/*.bti"):
     btipath_rel = btipath.relative_to(scenedirpath)
     outbtidir = outpath / btipath_rel.parent
-    metapath = outbtidir / (btipath_rel.stem+".dds.meta")
-    if metapath.exists() and metapath.stat().st_mtime >= btitime:
-        btis[btipath.stem.lower()] = unityparser.UnityDocument.load_yaml(metapath).entry['guid']
+    metapathDds = outbtidir / (btipath_rel.stem+".dds.meta")
+    metapathPng = outbtidir / (btipath_rel.stem+".png.meta")
+    if metapathPng.exists() and metapathPng.stat().st_mtime >= btitime:
+        btis[btipath.stem.lower()] = unityparser.UnityDocument.load_yaml(metapathPng).entry['guid']
+    elif metapathDds.exists() and metapathDds.stat().st_mtime >= btitime:
+        btis[btipath.stem.lower()] = unityparser.UnityDocument.load_yaml(metapathDds).entry['guid']
     else:
         # TODO switch to KTX?
         bti = Image()
@@ -342,23 +345,57 @@ for btipath in scenedirpath.glob("**/*.bti"):
             bti.read(fin, 0, 0, 0)
 
         outbtidir.mkdir(parents=True, exist_ok=True)
-
-        fout = open(outbtidir / (btipath_rel.stem+".dds"), 'wb')
-        decodeTextureDDS(fout, bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)
-        fout.close()
         
-        btis[btipath.stem.lower()] = writeMeta(btipath_rel.stem+".dds", {
-            "IHVImageFormatImporter": {
-                "textureSettings": {
-                    "serializedVersion": 2,
-                    "wrapU": [1, 0, 2][bti.wrapS],
-                    "wrapV": [1, 0, 2][bti.wrapT],
-                    "wrapW": [1, 0, 2][bti.wrapS],
-                    "filterMode": [0, 1, 0, 1, 0, 1][bti.magFilter],
-                    "mipBias": bti.lodBias/100
+        textureSettings = {
+            "serializedVersion": 2,
+            "wrapU": [1, 0, 2][bti.wrapS],
+            "wrapV": [1, 0, 2][bti.wrapT],
+            "wrapW": [1, 0, 2][bti.wrapS],
+            "filterMode": [0, 1, 0, 1, 0, 1][bti.magFilter],
+            "mipBias": bti.lodBias/100
+        }
+
+        if bti.format in (texture.TF.RGBA8, texture.TF.CMPR) or bti.mipmapCount > 1:
+            fout = open(outbtidir / (btipath_rel.stem+".dds"), 'wb')
+            decodeTextureDDS(fout, bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)
+            fout.close()
+            
+            btis[btipath.stem.lower()] = writeMeta(btipath_rel.stem+".dds", {
+                "IHVImageFormatImporter": {
+                    "textureSettings": textureSettings,
+                    "sRGBTexture": 0
                 }
-            }
-        }, outbtidir)
+            }, outbtidir)
+        else:
+            decodeTexturePIL(bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)[0][0].save(outbtidir / (btipath_rel.stem+".png"))
+            btis[btipath.stem.lower()] = writeMeta(btipath_rel.stem+".png", {
+                "TextureImporter": {
+                    "serializedVersion": 11,
+                    "textureSettings": textureSettings,
+                    "mipmaps": {
+                        "mipMapMode": 0,
+                        "enableMipMap": 0,
+                        "sRGBTexture": 0,
+                        "linearTexture": 0
+                    },
+                    "textureFormat": 1,
+                    "maxTextureSize": 2048,
+                    "lightmap": 0,
+                    "compressionQuality": 50,
+                    "alphaUsage": 1,
+                    "textureType": 10 if bti.format in (texture.TF.I4, texture.TF.I8) else 0,
+                    "textureShape": 1,
+                    "singleChannelComponent": 1,
+                    "platformSettings": [{
+                        "serializedVersion": 3,
+                        "buildTarget": "DefaultTexturePlatform",
+                        "maxTextureSize": 2048,
+                        "textureFormat": 7 if bti.format == texture.TF.RGB565 or (bti.format in (texture.TF.C4, texture.TF.C8, texture.TF.C14X2) and bti.paletteFormat == texture.TL.RGB565) else -1,
+                        "textureCompression": 2,
+                        "compressionQuality": 50
+                    }]
+                }
+            }, outbtidir)
 
 import col2unity, col
 coltime = max(pathlib.Path(col2unity.__file__).stat().st_mtime, pathlib.Path(col.__file__).stat().st_mtime)
@@ -398,7 +435,7 @@ for bmdpath in scenedirpath.glob("**/*.bmd"):
     except ValueError as e:
         print(e)
         continue
-    if bmd.name == "map":
+    if 0:#bmd.name == "map":
         pass
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
