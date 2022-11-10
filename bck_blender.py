@@ -210,7 +210,6 @@ def importFile(filepath, context):
                 newKey.value = newData[animDataIndex]
                 # Downside of this whole process is that there's no direct analog to transform the bezier handles.
                 # TODO: Could probably get a good estimate by adding the tangent to the data, re-do the matrix undo, and subtract the undid data
-                newKey.tangent = key.tangent if key.value == 0 else key.tangent*newKey.value/key.value
 
         bone_path = 'pose.bones["%s"]' % bone.name
         
@@ -219,7 +218,7 @@ def importFile(filepath, context):
         doCurve(action, bone_path+'.location', bck.ank1.loopFlags, newAnim[6:9])
     
     # TODO: Shouldn't affect the scene state
-    context.scene.frame_start = 0.0
+    context.scene.frame_start = 0
     context.scene.frame_end = bck.ank1.animationLength
     context.scene.render.fps = 60
     context.scene.render.fps_base = 1.0
