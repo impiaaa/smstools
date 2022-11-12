@@ -14,10 +14,17 @@ def convRotation(rots, scale):
         r.tangentIn *= scale
         r.tangentOut *= scale
 
+class LoopMode(Enum):
+    ONCE = 0
+    ONCE_AND_RESET = 1
+    REPEAT = 2
+    MIRRORED_ONCE = 3
+    MIRRORED_REPEAT = 4
+
 class Ank1(Section):
     header = Struct('>BBHHHHHIIII')
     fields = [
-        'loopFlags', 'angleMultiplier', 'animationLength',
+        ('loopMode', LoopMode), 'angleMultiplier', 'animationLength',
         'numJoints', 'scaleCount', 'rotCount', 'transCount',
         'offsetToJoints', 'offsetToScales', 'offsetToRots', 'offsetToTrans'
     ]
@@ -27,7 +34,6 @@ class Ank1(Section):
         fin.seek(start+self.offsetToScales)
         scales.fromfile(fin, self.scaleCount)
         if sys.byteorder == 'little': scales.byteswap()
-        print(scales)
         
         rotations = array('h')
         fin.seek(start+self.offsetToRots)
@@ -98,7 +104,6 @@ class Ank1(Section):
             
             joints.append(joint)
         
-        print(scales)
         if sys.byteorder == 'little':
             scales.byteswap()
             rotations.byteswap()

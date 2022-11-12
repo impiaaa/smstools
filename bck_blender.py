@@ -22,11 +22,38 @@ import os
 from bisect import bisect
 from bck import *
 
-def doCurve(action, data_path, loopFlags, data):
+def doCurve(action, data_path, loopFlags, animationLength, data):
     for i, subData in enumerate(data):
         curve = action.fcurves.new(data_path=data_path, index=i)
-        if loopFlags == 2:
-            mod = curve.modifiers.new('CYCLES')
+        
+        if loopFlags == LoopMode.ONCE:
+            pass
+        elif loopFlags == LoopMode.ONCE_AND_RESET:
+            repeat = curve.modifiers.new('CYCLES')
+            repeat.mode_before = 'NO_CYCLES'
+            repeat.mode_after = 'REPEAT_MOTION'
+            repeat.cycles_after = 1
+            limit = curve.modifiers.new('LIMITS')
+            limit.use_max_x = True
+            limit.max_x = animationLength
+        elif loopFlags == LoopMode.REPEAT:
+            repeat = curve.modifiers.new('CYCLES')
+            repeat.mode_before = 'NO_CYCLES'
+            repeat.mode_after = 'REPEAT_MOTION'
+            repeat.cycles_after = 0
+        elif loopFlags == LoopMode.MIRRORED_ONCE:
+            repeat = curve.modifiers.new('CYCLES')
+            repeat.mode_before = 'NO_CYCLES'
+            repeat.mode_after = 'REPEAT_MIRRORED'
+            repeat.cycles_after = 2
+            limit = curve.modifiers.new('LIMITS')
+            limit.use_max_x = True
+            limit.max_x = animationLength*2
+        elif loopFlags == LoopMode.MIRRORED_REPEAT:
+            repeat = curve.modifiers.new('CYCLES')
+            repeat.mode_before = 'NO_CYCLES'
+            repeat.mode_after = 'REPEAT_MIRRORED'
+            repeat.cycles_after = 0
         
         curve.keyframe_points.add(len(subData))
         lastKey = lastKeyPoint = None
@@ -61,7 +88,7 @@ def animateSingle(time, keyList):
     else:
         keyBefore = keyList[i-1]
         keyAfter = keyList[i]
-        # TODO: Use bezier animation to figure out the current state.
+        # TODO: Use hermite animation to figure out the current state.
         # Might be overkill just to fix the transformation, so linear is good enough for now.
         return keyBefore.value+(keyAfter.value-keyBefore.value)*(time-keyBefore.time)/(keyAfter.time-keyBefore.time)
 
@@ -99,16 +126,15 @@ def importFile(filepath, context):
         # OKAY SO
         # Here's a problem.
         # BMD stores bone transformation relative to parent.
-        # BCK stores pose transformation "absolute".
-        # Blender does the same thing... for edit bones.
-        # Pose bones have transformation relative to their *rest pose* (i.e., the edit bone)
+        # BCK stores pose transformation relative to posed parent.
+        # Blender pose bones store transformation relative to *their own rest pose* (i.e., the edit bone)
         # So, we can just divide it out. Simple, right?
-        # ha.
+        # Not quite.
         # Pos/rot/scale are keyed separately, so we can't just compose matrix -> re-transform -> add key.
         # Pos/rot are inter-dependent, so we can't just compose a matrix out of one or the other. # XXX scratch that seems to work fine
         # Individual components of pos/rot/scale are inter-dependent, too
         # Pos/rot/scale keys can all be on separate frames, so we can't just grab the nearest one and compose a matrix from that.
-        # Even then, Blender can't key by full matrix (that'd be dumb anyway), so the full matrix has to be decomposed.
+        # Even then, Blender can't key by full matrix (that'd be silly anyway), so the full matrix has to be decomposed.
         # So the strategy is:
         # for each bone:
         #   for each component keyframe:
@@ -119,7 +145,7 @@ def importFile(filepath, context):
         #     decompose the matrix (and pray that it's somewhat sane)
         #     index into the decomposed to find the component this keyframe is for
         #     make a key with the decomposed component at the current time
-        # then, take that NEW list of re-jiggered keyframes, and add them to the animation.
+        # then, take that NEW list of re-transformed keyframes, and add them to the animation.
 
         # get the bone rest pose from the edit bone
         rest = bone.matrix_local
@@ -131,15 +157,16 @@ def importFile(filepath, context):
             s[1][1] = scale[1]
             s[2][2] = scale[2]
             rest = rest@s
-        # make modelspace
+        # from armature-relative to parent-relative
         if bone.parent:
             rest = bone.parent.matrix_local.inverted()@rest
-        #rest = rest@Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))
+        #rest = Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))@rest
         #rest = Matrix(eval(bone['_bmd_rest']))
         #print("local", repr(bone.matrix_local))
         #print("scale", scale)
         #if bone.parent: print("parent", repr(bone.parent.matrix_local))
         #print("target", repr(Matrix(eval(bone['_bmd_rest']))))
+        #print("rest", repr(rest))
         
         # big table of transformation components so that we can index them easily
         animList = (anim.scalesX, anim.scalesY, anim.scalesZ,
@@ -151,47 +178,52 @@ def importFile(filepath, context):
             lastRot = None
             axisIndex = animDataIndex%3
             for animDataSubIndex, key in enumerate(animData):
-                # animate the whole stack - not needed?
-                #scale = animate(key.time, animList[0:3])
-                #rotation = animate(key.time, animList[3:6])
-                #translation = animate(key.time, animList[6:9])
-                
-                #t = Matrix.Translation(translation).to_4x4()
-                #r = Euler(rotation).to_matrix().to_4x4()
-                #s = Matrix()
-                #scale = tuple(scale)
-                #s[0][0] = scale[0]
-                #s[1][1] = scale[1]
-                #s[2][2] = scale[2]
-                #mat = t@r@s
-                if animDataIndex < 3:
-                    # can't just use this component
-                    #mat = Matrix()
-                    #mat[axisIndex][axisIndex] = key.value
-                    #print("XYZ"[axisIndex], "scale =", key.value)
-                    #print("Animated scale", tuple(animate(key.time, animList[0:3])))
+                if 0:
+                    # animate the whole stack - not needed?
                     scale = animate(key.time, animList[0:3])
-                    mat = Matrix()
-                    scale = tuple(scale)
-                    mat[0][0] = scale[0]
-                    mat[1][1] = scale[1]
-                    mat[2][2] = scale[2]
-                elif animDataIndex < 6:
-                    #e = Euler()
-                    #e[axisIndex] = key.value
-                    #mat = e.to_matrix().to_4x4()
-                    #print("XYZ"[axisIndex], "rotation =", key.value)
-                    #print("Animated rotation", tuple(animate(key.time, animList[3:6])))
                     rotation = animate(key.time, animList[3:6])
-                    mat = Euler(rotation).to_matrix().to_4x4()
-                else:
-                    #v = Vector()
-                    #v[axisIndex] = key.value
-                    #mat = Matrix.Translation(v).to_4x4()
-                    #print("XYZ"[axisIndex], "translation =", key.value)
-                    #print("Animated translation", tuple(animate(key.time, animList[6:9])))
                     translation = animate(key.time, animList[6:9])
-                    mat = Matrix.Translation(translation).to_4x4()
+                    
+                    t = Matrix.Translation(translation).to_4x4()
+                    r = Euler(rotation).to_matrix().to_4x4()
+                    s = Matrix()
+                    scale = tuple(scale)
+                    s[0][0] = scale[0]
+                    s[1][1] = scale[1]
+                    s[2][2] = scale[2]
+                    mat = t@r@s
+                else:
+                    if animDataIndex < 3:
+                        # can't just use this component
+                        #mat = Matrix()
+                        #mat[axisIndex][axisIndex] = key.value
+                        #print("XYZ"[axisIndex], "scale =", key.value)
+                        #print("Animated scale", tuple(animate(key.time, animList[0:3])))
+                        scale = animate(key.time, animList[0:3])
+                        mat = Matrix()
+                        scale = tuple(scale)
+                        mat[0][0] = scale[0]
+                        mat[1][1] = scale[1]
+                        mat[2][2] = scale[2]
+                    elif animDataIndex < 6:
+                        #e = Euler()
+                        #e[axisIndex] = key.value
+                        #mat = e.to_matrix().to_4x4()
+                        #print("XYZ"[axisIndex], "rotation =", key.value)
+                        #print("Animated rotation", tuple(animate(key.time, animList[3:6])))
+                        rotation = animate(key.time, animList[3:6])
+                        mat = Euler(rotation).to_matrix().to_4x4()
+                    else:
+                        #v = Vector()
+                        #v[axisIndex] = key.value
+                        #mat = Matrix.Translation(v).to_4x4()
+                        #print("XYZ"[axisIndex], "translation =", key.value)
+                        #print("Animated translation", tuple(animate(key.time, animList[6:9])))
+                        translation = animate(key.time, animList[6:9])
+                        mat = Matrix.Translation(translation).to_4x4()
+                
+                # adjust for bone placement
+                #mat = mat@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
                 
                 # here's where the magic happens
                 mat = rest.inverted()@mat
@@ -213,9 +245,9 @@ def importFile(filepath, context):
 
         bone_path = 'pose.bones["%s"]' % bone.name
         
-        doCurve(action, bone_path+'.scale', bck.ank1.loopFlags, newAnim[0:3])
-        doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopFlags, newAnim[3:6])
-        doCurve(action, bone_path+'.location', bck.ank1.loopFlags, newAnim[6:9])
+        doCurve(action, bone_path+'.scale', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[0:3])
+        doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[3:6])
+        doCurve(action, bone_path+'.location', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[6:9])
     
     # TODO: Shouldn't affect the scene state
     context.scene.frame_start = 0
