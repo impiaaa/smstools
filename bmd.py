@@ -308,6 +308,26 @@ class ColorChanInfo(ReadableStruct):
                (_SHIFTL((self.attenuationFunction>0),10,1))|\
                (_SHIFTL((_SHIFTR(self.litMask,4,4)),11,4))
 
+class LightInfo(ReadableStruct):
+    header = Struct('>ffffffBBBBffffff')
+    fields = [
+        'x', 'y', 'z',
+        'dx', 'dy', 'dz',
+        'r', 'g', 'b', 'a',
+        'a0', 'a1', 'a2',
+        'k0', 'k1', 'k2'
+    ]
+    def read(self, fin):
+        super().read(fin)
+        self.pos = (self.x, self.y, self.z)
+        self.dir = (self.dx, self.dy, self.dz)
+        self.color = (self.r, self.g, self.b, self.a)
+    def write(self, fout):
+        self.x, self.y, self.z = self.pos
+        self.dx, self.dy, self.dz = self.dir
+        self.r, self.g, self.b, self.a = self.color
+        super().write(fout)
+
 class TexGenType(IntEnum):
     MTX3x4 = 0
     MTX2x4 = 1
@@ -659,12 +679,10 @@ class Material(ReadableStruct):
         self.matColorIndices = unpack('>2H', fin.read(4))
         # 0x0C
         self.colorChanIndices = unpack('>4H', fin.read(8))
-
         # 0x14
         self.ambColorIndices = unpack('>2H', fin.read(4))
         # 0x18
         self.lightIndices = unpack('>8H', fin.read(16))
-
         # 0x28
         self.texCoordIndices = unpack('>8H', fin.read(16))
         # 0x38
@@ -701,10 +719,13 @@ class Material(ReadableStruct):
         self.colorChanNum = safeGet(mat3.colorChanNumArray, self.colorChanNumIndex)
         self.texGenNum = safeGet(mat3.texGenNumArray, self.texGenNumIndex)
         self.tevStageNum = safeGet(mat3.tevStageNumArray, self.tevStageNumIndex)
+        self.zCompLoc = safeGet(mat3.zCompLocArray, self.zCompLocIndex)
         self.zMode = safeGet(mat3.zModeArray, self.zModeIndex)
+        self.dither = safeGet(mat3.ditherArray, self.ditherIndex)
         self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
         self.colorChans = [safeGet(mat3.colorChanArray, i) for i in self.colorChanIndices]
         self.ambColors = [safeGet(mat3.ambColorArray, i) for i in self.ambColorIndices]
+        self.lights = [safeGet(mat3.lightArray, i) for i in self.lightIndices]
         self.texCoords = [safeGet(mat3.texCoordArray, i) for i in self.texCoordIndices]
         #self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
         self.texMtxs = [safeGet(mat3.texMtxArray, i) for i in self.texMtxIndices]
@@ -719,6 +740,7 @@ class Material(ReadableStruct):
         self.fog = safeGet(mat3.fogArray, self.fogIndex)
         self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
         self.blend = safeGet(mat3.blendArray, self.blendIndex)
+        #self.nbtScale = safeGet(mat3.nbtScaleArray, self.nbtScaleIndex)
 
     def write(self, fout):
         super().write(fout)
@@ -747,10 +769,13 @@ class Material(ReadableStruct):
         self.colorChanNumIndex = safeIndex(mat3.colorChanNumArray, self.colorChanNum)
         self.texGenNumIndex = safeIndex(mat3.texGenNumArray, self.texGenNum)
         self.tevStageNumIndex = safeIndex(mat3.tevStageNumArray, self.tevStageNum)
+        self.zCompLocIndex = safeIndex(mat3.zCompLocArray, self.zCompLoc)
         self.zModeIndex = safeIndex(mat3.zModeArray, self.zMode)
+        self.ditherIndex = safeIndex(mat3.ditherArray, self.dither)
         self.matColorIndices = [safeIndex(mat3.matColorArray, x) for x in self.matColors]
         self.colorChanIndices = [safeIndex(mat3.colorChanArray, x) for x in self.colorChans]
         self.ambColorIndices = [safeIndex(mat3.ambColorArray, x) for x in self.ambColors]
+        self.lightIndices = [safeIndex(mat3.lightArray, x) for x in self.lights]
         self.texCoordIndices = [safeIndex(mat3.texCoordArray, x) for x in self.texCoords]
         #self.postTexGenIndices = [safeIndex(mat3.postTexGenArray, x) for x in self.postTexGens]
         self.texMtxIndices = [safeIndex(mat3.texMtxArray, x) for x in self.texMtxs]
@@ -765,6 +790,7 @@ class Material(ReadableStruct):
         self.fogIndex = safeIndex(mat3.fogArray, self.fog)
         self.alphaCompIndex = safeIndex(mat3.alphaCompArray, self.alphaComp)
         self.blendIndex = safeIndex(mat3.blendArray, self.blend)
+        #self.nbtScaleIndex = safeIndex(mat3.nbtScaleArray, self.nbtScale)
 
     def debug(self):
         print(self.name)
@@ -772,16 +798,22 @@ class Material(ReadableStruct):
         print("cullMode =", self.cullMode)
         print("colorChanNum =", self.colorChanNum)
         print("texGenNum =", self.texGenNum)
+        print("tevStageNum =", self.tevStageNum)
+        print("zCompLoc =", self.zCompLoc)
         print("zMode =", self.zMode)
+        print("dither =", self.dither)
         print("matColors =", self.matColors)
         print("colorChans =", self.colorChans)
         print("ambColors =", self.ambColors)
+        print("lights =", self.lights)
         print("texCoords =", self.texCoords)
         #print("postTexGens =", self.postTexGens)
         print("texMtxs =", self.texMtxs)
         #print("postTexMtxs =", self.postTexMtxs)
         print("texNos =", self.texNos)
         print("tevKColors =", self.tevKColors)
+        print("tevKColorSels =", self.tevKColorSels)
+        print("tevKAlphaSels =", self.tevKAlphaSels)
         print("tevOrders =", self.tevOrders)
         print("tevColors =", self.tevColors)
         print("tevStages =", self.tevStages)
@@ -790,24 +822,31 @@ class Material(ReadableStruct):
         print("fog =", self.fog)
         print("alphaComp =", self.alphaComp)
         print("blend =", self.blend)
+        #print("nbtScale =", self.nbtScale)
     
     def __hash__(self):
         return hash((
             self.name,
+            self.materialMode,
             self.cullMode,
             self.colorChanNum,
             self.texGenNum,
             self.tevStageNum,
+            self.zCompLoc,
             self.zMode,
+            self.dither,
             tuple(self.matColors),
             tuple(self.colorChans),
             tuple(self.ambColors),
+            tuple(self.lights),
             tuple(self.texCoords),
             #tuple(self.postTexGens),
             tuple(self.texMtxs),
             #tuple(self.postTexMtxs),
             tuple(self.texNos),
             tuple(self.tevKColors),
+            tuple(self.tevKColorSels),
+            tuple(self.tevKAlphaSels),
             tuple(self.tevOrders),
             tuple(self.tevColors),
             tuple(self.tevStages),
@@ -815,7 +854,8 @@ class Material(ReadableStruct):
             tuple(self.tevSwapModeTables),
             self.fog,
             self.alphaComp,
-            self.blend
+            self.blend,
+            #self.nbtScale
         ))
 
 class Mat3(Section):
@@ -869,7 +909,8 @@ class Mat3(Section):
         fin.seek(start+offsets[8])
         self.ambColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)]
 
-        # 9 (lightInfo)
+        fin.seek(start+offsets[9])
+        self.colorChanArray = [LightInfo.try_make(fin) for i in range(lengths[9]//LightInfo.header.size)]
         
         fin.seek(start+offsets[10])
         self.texGenNumArray = array('B')
@@ -924,8 +965,14 @@ class Mat3(Section):
         fin.seek(start+offsets[26])
         self.zModeArray = [ZMode.try_make(fin) for i in range(lengths[26]//ZMode.header.size)]
         
-        # 27 (zCompLoc)
-        # 28 (dither)
+        fin.seek(start+offsets[27])
+        self.zCompLocArray = array('B')
+        self.zCompLocArray.fromfile(fin, lengths[27])
+
+        fin.seek(start+offsets[28])
+        self.ditherArray = array('B')
+        self.ditherArray.fromfile(fin, lengths[28])
+
         # 29 (nbtScale)
         
         for m in self.materials:
@@ -950,7 +997,9 @@ class Mat3(Section):
         self.colorChanArray = list({m.colorChan for m in self.materials})
         offsets[8] = offsets[7]+len(self.colorChanArray)*ColorChanInfo.header.size
         self.ambColorArray = list({m.ambColor for m in self.materials})
-        offsets[10] = offsets[8]+len(self.ambColorArray)*4
+        offsets[9] = offsets[8]+len(self.ambColorArray)*4
+        self.lightInfoArray = list({m.lightInfo for m in self.materials})
+        offsets[10] = offsets[9]+len(self.lightInfoArray)*LightInfo.header.size
         self.texGenNumArray = array('B', {m.texGenNum for m in self.materials})
         offsets[11] = offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize
         self.texCoordArray = list({m.texCoord for m in self.materials})
@@ -1455,12 +1504,40 @@ def computeSectionLengths(offsets, sizeOfSection):
         lengths[i] = length
     return lengths
 
-class Mdl3Dummy(Section):
+class Mdl3(Section):
+    header = Struct('>H2xIIIIII')
+    fields = ['count', 'offset1', 'offset2', 'offset3', 'offset4', 'offset5', 'stringTableOffset']
     def read(self, fin, start, size):
+        super().read(fin, start, size)
         #fout = open("mld3.cdata", 'wb')
-        #fout.write(fin.read(size-8))
+        #fin.seek(start)
+        #fout.write(fin.read(size))
         #fout.close()
-        pass
+        fin.seek(start+self.offset1)
+        self.things1 = [unpack('>II', fin.read(8)) for i in range(self.count)]
+        for subOffset, thing in self.things1:
+            fin.seek(start+self.offset1+subOffset)
+        
+        fin.seek(start+self.offset2)
+        self.things2 = [fin.read(16) for i in range(self.count)]
+        assert fin.tell() <= start+self.offset3
+        
+        fin.seek(start+self.offset3)
+        self.things3 = [fin.read(8) for i in range(self.count)]
+        assert fin.tell() <= start+self.offset4
+        
+        fin.seek(start+self.offset4)
+        self.things4 = array('B')
+        self.things4.fromfile(fin, self.count)
+        assert fin.tell() <= start+self.offset5
+        
+        fin.seek(start+self.offset5)
+        self.things5 = array('H')
+        self.things5.fromfile(fin, self.count)
+        if sys.byteorder == 'little': self.things5.byteswap()
+        assert fin.tell() <= start+self.stringTableOffset
+        
+        self.strings = readstringtable(start+self.stringTableOffset, fin)
 
 class BModel(BFile):
     sectionHandlers = {
@@ -1472,7 +1549,7 @@ class BModel(BFile):
         b'TEX1': Tex1,
         b'EVP1': Evp1,
         b'DRW1': Drw1,
-        b'MDL3': Mdl3Dummy
+        b'MDL3': Mdl3
     }
     
     def readChunks(self, fin):

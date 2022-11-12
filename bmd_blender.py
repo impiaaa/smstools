@@ -198,7 +198,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                 continue
             else:
                 bmat = bpy.data.materials.new(mat.name)
-            mesh.materials.append(bmat)
+            mesh.materials.append(bmat) # TODO orderedMaterials should stay, indexToMatIndex should inform material slot (requires updating drawBatch)
             
             if mat.cullMode is not None:
                 bmat.use_backface_culling = mat.cullMode == 2
@@ -355,7 +355,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         elif tevOrderInfo.chanId == ColorChannelID.COLOR1A1:
                             colorSources.append(colorChannels[1])
                         else:
-                            assert False, tevOrderInfo.chanId
+                            #assert False, tevOrderInfo.chanId
                             colorSources.append(None)
                     elif colorSrc == TevColorArg.ONE:
                         colorSources.append(1.0)
@@ -389,7 +389,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     elif colorSrc == TevColorArg.ZERO:
                         colorSources.append(0.0)
                     else:
-                        assert False, colorSrc
+                        #assert False, colorSrc
                         colorSources.append(None)
                 assert len(colorSources) == 4, (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD, colorSources)
                 
@@ -398,21 +398,21 @@ def importMesh(filePath, bmd, mesh, bm=None):
                     node = placer.addNode('ShaderNodeMixShader')
                     if isinstance(colorSources[2], float):
                         node.inputs['Fac'].default_value = colorSources[2]
-                    else:
+                    elif colorSources[2] is not None:
                         tree.links.new(colorSources[2], node.inputs['Fac'])
                     if isinstance(colorSources[0], float):
                         #node.inputs[1].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
                         rgb = placer.addNode('ShaderNodeRGB')
                         rgb.outputs[0].default_value = (colorSources[0],colorSources[0],colorSources[0],1)
                         tree.links.new(rgb.outputs[0], node.inputs[1])
-                    else:
+                    elif colorSources[0] is not None:
                         tree.links.new(colorSources[0], node.inputs[1])
                     if isinstance(colorSources[1], float):
                         #node.inputs[2].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
                         rgb = placer.addNode('ShaderNodeRGB')
                         rgb.outputs[0].default_value = (colorSources[1],colorSources[1],colorSources[1],1)
                         tree.links.new(rgb.outputs[0], node.inputs[2])
-                    else:
+                    elif colorSources[1] is not None:
                         tree.links.new(colorSources[1], node.inputs[2])
                     
                     placer.nextColumn()
@@ -425,7 +425,7 @@ def importMesh(filePath, bmd, mesh, bm=None):
                         rgb = placer.addNode('ShaderNodeRGB')
                         rgb.outputs[0].default_value = (colorSources[3],colorSources[3],colorSources[3],1)
                         tree.links.new(rgb.outputs[0], node2.inputs[1])
-                    else:
+                    elif colorSources[3] is not None:
                         tree.links.new(colorSources[3], node2.inputs[1])
                     placer.previousColumn()
                     colorReg[0] = node2.outputs[0]
@@ -470,12 +470,14 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
         ts = [bmd.jnt1.frames[node.index].translation for node in sg.children if node.type == 0x10]
         if len(ts) > 0:
             bone.tail = reduce(operator.add, ts)/len(sg.children)
-            if bone.tail.magnitude < 0.0001:
+            if bone.tail.magnitude < 0.01:
                 bone.tail = Vector((0,0,10))
         bone.matrix = effP@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
         #Matrix(((0,1,0,0),(-1,0,0,0),(0,0,1,0),(0,0,0,1)))
         if parent is not None:
             bone.parent = parent
+            bone.use_connect = parent.tail == bone.head
+        # edit bones don't have a scale, so save it here for later animations
         bone['_bmd_rest_scale'] = ','.join([repr(x) for x in f.scale])
         bone['_bmd_rest'] = repr(frameMatrix(f)[:])
     else:
