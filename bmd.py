@@ -204,7 +204,7 @@ class Jnt1(Section):
     fields = [
         'count',
         'jntEntryOffset',
-        'unknownOffset',
+        'remapTableOffset',
         'stringTableOffset'
     ]
     def read(self, fin, start, size):
@@ -223,15 +223,21 @@ class Jnt1(Section):
             f.read(fin)
             f.name = boneNames[i]
             self.frames.append(f)
+        
+        fin.seek(start+remapTableOffset)
+        self.remapTable = array('H')
+        self.remapTable.fromfile(fin, self.count)
+        if sys.byteorder == 'little': self.remapTable.byteswap()
     
     def write(self, fout):
         self.count = len(self.frames)
         self.jntEntryOffset = self.header.size+8
-        self.unknownOffset = 0
-        self.stringTableOffset = self.jntEntryOffset+(self.count*(Jnt1Entry.header.size+bbStruct.size+bbStruct.size))
+        self.remapTableOffs = self.jntEntryOffset+(self.count*(Jnt1Entry.header.size+bbStruct.size+bbStruct.size))
+        self.stringTableOffset = self.remapTableOffs+len(self.remapTable)*self.remapTable.itemsize
         super().write(fout)
         for f in self.frames:
             f.write(fout)
+        swaparray(self.remapTable).tofile(fout)
         writestringtable([f.name for f in self.frames])
 
 class Jnt1Entry(Readable):
@@ -987,7 +993,8 @@ class Mat3(Section):
         self.indexToMatIndex = array('H', range(len(self.materials)))
         offsets[2] = offsets[1]+len(self.indexToMatIndex)*self.indexToMatIndex.itemsize
         self.materialNames = list({m.name for m in self.materials})
-        offsets[4] = offsets[2]+stringtablesize(self.materialNames)
+        offsets[3] = offsets[2]+stringtablesize(self.materialNames)
+        offsets[4] = offsets[3]
         self.cullModeArray = array('I', {m.cullMode for m in self.materials})
         offsets[5] = offsets[4]+len(self.cullModeArray)*self.cullModeArray.itemsize
         self.matColorArray = list({m.matColor for m in self.materials})
@@ -1003,9 +1010,11 @@ class Mat3(Section):
         self.texGenNumArray = array('B', {m.texGenNum for m in self.materials})
         offsets[11] = offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize
         self.texCoordArray = list({m.texCoord for m in self.materials})
-        offsets[13] = offsets[11]+len(self.texCoordArray)*TexGenInfo.header.size
+        offsets[12] = offsets[11]+len(self.texCoordArray)*TexGenInfo.header.size
+        offsets[13] = offsets[12]
         self.texMtxArray = list({m.texMtx for m in self.materials})
-        offsets[15] = offsets[13]+len(self.texMtxArray)*0x64
+        offsets[14] = offsets[13]+len(self.texMtxArray)*0x64
+        offsets[15] = offsets[14]
         self.texNoArray = array('H', {m.texNo for m in self.materials})
         offsets[16] = offsets[15]+len(self.texNoArray)*self.texNoArray.itemsize
         self.tevOrderArray = list({m.tevOrder for m in self.materials})
@@ -1029,6 +1038,11 @@ class Mat3(Section):
         self.blendArray = list({m.blend for m in self.materials})
         offsets[26] = offsets[25]+len(self.blendArray)*BlendInfo.header.size
         self.zModeArray = list({m.zMode for m in self.materials})
+        offsets[27] = offsets[26]+len(self.zModeArray)*ZMode.header.size
+        self.zCompLocArray = array('B', {m.zCompLoc for m in self.materials})
+        offsets[28] = offsets[27]+len(self.zCompLocArray)*self.zCompLocArray.itemsize
+        self.ditherArray = array('B', {m.dither for m in self.materials})
+        offsets[29] = offsets[28]+len(self.ditherArray)*self.ditherArray.itemsize
         super().write(fout)
         fout.write('>30L', *offsets)
         for m in self.materials:
@@ -1041,6 +1055,7 @@ class Mat3(Section):
         self.colorChanNumArray.tofile(fout)
         for x in self.colorChanArray: x.write(fout)
         for x in self.ambColorArray: fout.write(pack('BBBB', *x))
+        for x in self.lightInfoArray: x.write(fout)
         self.texGenNumArray.tofile(fout)
         for x in self.texCoordArray: x.write(fout)
         for x in self.texMtxArray: x.write(fout)
@@ -1056,6 +1071,8 @@ class Mat3(Section):
         for x in self.alphaCompArray: x.write(fout)
         for x in self.blendArray: x.write(fout)
         for x in self.zModeArray: x.write(fout)
+        self.zCompLocArray.tofile(fout)
+        self.ditherArray.tofile(fout)
 
 
 class VtxAttr(Enum):

@@ -103,7 +103,7 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
                 elif curr.type == PrimitiveType.TRIANGLEFAN:
                     b = c
                 else:
-                    warn("Unknown primitive type %d"%curr.type)
+                    warn("Unsupported primitive type %s"%curr.type)
                     continue
 
 def traverseScenegraph(sg, bmverts, bm, bmd, onDown=True, matIndex=0, p=None, indent=0):
@@ -202,10 +202,14 @@ def importMesh(filePath, bmd, mesh, bm=None):
             
             if mat.cullMode is not None:
                 bmat.use_backface_culling = mat.cullMode == 2
-            if mat.blend == BlendMode.NONE:
+            if mat.blend.blendMode == BlendMode.NONE:
                 bmat.blend_method = 'OPAQUE'
-            elif mat.blend == BlendMode.BLEND:
+            elif mat.blend.blendMode == BlendMode.BLEND:
                 bmat.blend_method = 'BLEND'
+            if mat.alphaComp.comp0 == CompareType.GREATER:
+                bmat.alpha_threshold = mat.alphaComp.ref0/255
+            elif mat.alphaComp.comp1 == CompareType.GREATER:
+                bmat.alpha_threshold = mat.alphaComp.ref1/255
             if len(mat.tevColors) > 0 and mat.tevColors[0] is not None:
                 bmat.diffuse_color = color8ToLinear(mat.tevColors[0])
             
