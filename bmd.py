@@ -224,7 +224,7 @@ class Jnt1(Section):
             f.name = boneNames[i]
             self.frames.append(f)
         
-        fin.seek(start+remapTableOffset)
+        fin.seek(start+self.remapTableOffset)
         self.remapTable = array('H')
         self.remapTable.fromfile(fin, self.count)
         if sys.byteorder == 'little': self.remapTable.byteswap()
@@ -731,7 +731,7 @@ class Material(ReadableStruct):
         self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
         self.colorChans = [safeGet(mat3.colorChanArray, i) for i in self.colorChanIndices]
         self.ambColors = [safeGet(mat3.ambColorArray, i) for i in self.ambColorIndices]
-        self.lights = [safeGet(mat3.lightArray, i) for i in self.lightIndices]
+        self.lights = [safeGet(mat3.lightInfoArray, i) for i in self.lightIndices]
         self.texCoords = [safeGet(mat3.texCoordArray, i) for i in self.texCoordIndices]
         #self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
         self.texMtxs = [safeGet(mat3.texMtxArray, i) for i in self.texMtxIndices]
@@ -781,7 +781,7 @@ class Material(ReadableStruct):
         self.matColorIndices = [safeIndex(mat3.matColorArray, x) for x in self.matColors]
         self.colorChanIndices = [safeIndex(mat3.colorChanArray, x) for x in self.colorChans]
         self.ambColorIndices = [safeIndex(mat3.ambColorArray, x) for x in self.ambColors]
-        self.lightIndices = [safeIndex(mat3.lightArray, x) for x in self.lights]
+        self.lightIndices = [safeIndex(mat3.lightInfoArray, x) for x in self.lights]
         self.texCoordIndices = [safeIndex(mat3.texCoordArray, x) for x in self.texCoords]
         #self.postTexGenIndices = [safeIndex(mat3.postTexGenArray, x) for x in self.postTexGens]
         self.texMtxIndices = [safeIndex(mat3.texMtxArray, x) for x in self.texMtxs]
@@ -874,20 +874,20 @@ class Mat3(Section):
         lengths = computeSectionLengths(offsets, size)
 
         fin.seek(start+offsets[0])
-        orderedMaterials = [None]*self.count
+        self.materials = [None]*self.count
         for i in range(self.count):
             m = Material()
             m.read(fin)
-            orderedMaterials[i] = m
+            self.materials[i] = m
         
         fin.seek(start+offsets[1])
-        self.indexToMatIndex = array('H') # remapTable
-        self.indexToMatIndex.fromfile(fin, self.count)
-        if sys.byteorder == 'little': self.indexToMatIndex.byteswap()
+        self.remapTable = array('H')
+        self.remapTable.fromfile(fin, self.count)
+        if sys.byteorder == 'little': self.remapTable.byteswap()
         
-        self.materials = [None]*self.count
-        for i in range(self.count):
-            self.materials[i] = orderedMaterials[self.indexToMatIndex[i]]
+        #self.materials = [None]*self.count
+        #for i in range(self.count):
+        #    self.materials[i] = orderedMaterials[self.remapTable[i]]
         
         self.materialNames = readstringtable(start+offsets[2], fin)
         if self.count != len(self.materialNames):
@@ -916,7 +916,7 @@ class Mat3(Section):
         self.ambColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[8]//4)]
 
         fin.seek(start+offsets[9])
-        self.colorChanArray = [LightInfo.try_make(fin) for i in range(lengths[9]//LightInfo.header.size)]
+        self.lightInfoArray = [LightInfo.try_make(fin) for i in range(lengths[9]//LightInfo.header.size)]
         
         fin.seek(start+offsets[10])
         self.texGenNumArray = array('B')
@@ -990,8 +990,8 @@ class Mat3(Section):
         offsets = [0]*30
         offsets[0] = self.header.size+8
         offsets[1] = offsets[0]+len(self.materials)*0x14C
-        self.indexToMatIndex = array('H', range(len(self.materials)))
-        offsets[2] = offsets[1]+len(self.indexToMatIndex)*self.indexToMatIndex.itemsize
+        #self.remapTable = array('H', range(len(self.materials)))
+        offsets[2] = offsets[1]+len(self.remapTable)*self.remapTable.itemsize
         self.materialNames = list({m.name for m in self.materials})
         offsets[3] = offsets[2]+stringtablesize(self.materialNames)
         offsets[4] = offsets[3]
@@ -1048,7 +1048,7 @@ class Mat3(Section):
         for m in self.materials:
             m.index(self)
             m.write(fout)
-        swapArray(self.indexToMatIndex).tofile(fout)
+        swapArray(self.remapTable).tofile(fout)
         writestringtable(self.materialNames)
         swapArray(self.cullModeArray).tofile(fout)
         for x in self.matColorArray: fout.write(pack('BBBB', *x))

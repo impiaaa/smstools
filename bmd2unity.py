@@ -504,7 +504,8 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
         #}, outputFolderLocation)
         textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
         materialIds = list(exportMaterials(materials, bmddir, textureIds))
-        return meshId, materialIds
+        materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+        return meshId, materialIdInSlot
     else:
         return meshId, []
 
@@ -604,7 +605,7 @@ if __name__ == "__main__":
     bmd.name = os.path.splitext(bmd.name)[0]
     bmd.read(fin)
     fin.close()
-    if bmd.name == "map":
+    if False and bmd.name == "map":
         outputFolderLocation = os.path.join(outputFolderLocation, bmd.name)
         os.makedirs(outputFolderLocation, exist_ok=True)
         for targetMmi, targetFrame in enumerate(bmd.jnt1.frames):
