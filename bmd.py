@@ -291,6 +291,52 @@ class Jnt1Entry(Readable):
         return "{}({}, {}, {}, {})".format(__class__.__name__, repr(self.name), self.scale, self.rotation, self.translation)
 
 
+class IndTexOrder(ReadableStruct):
+    header = Struct('BBxx')
+    fields = ["texCoordId", "texture"]
+
+class IndTexMtx(ReadableStruct):
+    def read(self, fin):
+        p = unpack('>6f', fin.read(0x18))
+        exponent, = unpack('Bxxx', fin.read(4))
+        scale = 2**exponent
+        self.m = [
+            p[0]*scale, p[1]*scale, p[2]*scale, scale,
+            p[3]*scale, p[4]*scale, p[5]*scale, 0.0
+        ]
+    def write(self, fout):
+        p = [
+            self.m[0], self.m[1], self.m[2],
+            self.m[4], self.m[5], self.m[6]
+        ]
+        fout.write(pack('>6f', *p))
+        fout.write(b'\0\0\0\0')
+
+class IndTexCoordScale(ReadableStruct):
+    header = Struct('BBxx')
+    fields = ["scaleS", "scaleT"]
+
+class IndTevStage(ReadableStruct):
+    header = Struct('BBBBBBBBBxxx')
+    fields = ["indTexId", "format", "bias", "mtxId", "wrapS", "wrapT", "addPrev", ("unmodifiedTexCoordLod", bool), "a"]
+
+class IndirectInfo(ReadableStruct):
+    header = Struct('BBxx')
+    fields = [("hasIndirect", bool), "indTexStageNum"]
+    def read(self, fin):
+        super().read(fin)
+        self.indTexOrder = [IndTexOrder(fin) for i in range(4)]
+        self.indTexMtx = [IndTexMtx(fin) for i in range(3)]
+        self.indTexCoordScale = [IndTexCoordScale(fin) for i in range(4)]
+        self.indTevStage = [IndTevStage(fin) for i in range(16)]
+    def write(self, fout):
+        super().write(fout)
+        for x in self.indTexOrder: x.write(fout)
+        for x in self.indTexMtx: x.write(fout)
+        for x in self.indTexCoordScale: x.write(fout)
+        for x in self.indTevStage: x.write(fout)
+
+
 class ColorSrc(Enum):
     REG = 0
     VTX = 1
@@ -910,7 +956,8 @@ class Mat3(Section):
         for m, n in zip(self.materials, self.materialNames):
             m.name = n
         
-        # 3 (indirect)
+        fin.seek(start+offsets[3])
+        self.indirectArray = [IndirectInfo.try_make(fin) for i in range(lengths[3]//0x138)]
 
         fin.seek(start+offsets[4])
         self.cullModeArray = array('I')
