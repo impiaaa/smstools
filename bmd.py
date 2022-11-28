@@ -11,24 +11,38 @@ from bti import Image
 
 bbStruct = Struct('>fff')
 
-stringTableCountStruct = Struct('>H2x')
-stringTableOffsetStruct = Struct('>HH')
-def readstringtable(pos, f):
+stringTableHeaderStruct = Struct('>H2x')
+stringTableEntryStruct = Struct('>HH')
+def readStringTable(pos, f):
     dest = []
     oldPos = f.tell()
 
     f.seek(pos)
 
-    count, = stringTableCountStruct.unpack(f.read(4))
+    count, = stringTableHeaderStruct.unpack(f.read(4))
 
     for i in range(count):
-        unknown, stringOffset = stringTableOffsetStruct.unpack(f.read(4))
+        keyCode, stringOffset = stringTableEntryStruct.unpack(f.read(4))
         s = getString(pos + stringOffset, f)
         dest.append(s)
 
     f.seek(oldPos)
     return dest
 
+def stringTableSize(strings):
+    return stringTableHeaderStruct.size+(len(strings)*stringTableEntryStruct.size)+sum([len(s.encode('shift-jis'))+1 for s in strings])
+
+def writeStringTable(f, strings):
+    f.write(stringTableHeaderStruct.pack(len(strings)))
+    table = bytes()
+    offsets = []
+    strings = [s.encode('shift-jis') for s in strings]
+    for s in strings:
+        offsets.append(len(table)+stringTableHeaderStruct.size)
+        table += s+b'\0'
+    for s, offset in zip(strings, offsets):
+        f.write(stringTableEntryStruct.pack(calcKeyCode(s), offset))
+    f.write(table)
 
 class Drw1(Section):
     header = Struct('>H2xLL')
@@ -209,7 +223,7 @@ class Jnt1(Section):
     ]
     def read(self, fin, start, size):
         super().read(fin, start, size)
-        boneNames = readstringtable(start+self.stringTableOffset, fin)
+        boneNames = readStringTable(start+self.stringTableOffset, fin)
         if len(boneNames) != self.count: warn("number of strings doesn't match number of joints")
 
         fin.seek(start+self.jntEntryOffset)
@@ -237,8 +251,8 @@ class Jnt1(Section):
         super().write(fout)
         for f in self.frames:
             f.write(fout)
-        swaparray(self.remapTable).tofile(fout)
-        writestringtable([f.name for f in self.frames])
+        swapArray(self.remapTable).tofile(fout)
+        writeStringTable(fout, [f.name for f in self.frames])
 
 class Jnt1Entry(Readable):
     header = Struct('>HBxfffhhh2xffff')
@@ -249,11 +263,11 @@ class Jnt1Entry(Readable):
         if translation is not None: self.translation = translation
     
     def read(self, fin):
-        unknown, unknown3, \
+        self.flags, self.calcFlags, \
             sx, sy, sz, \
             rx, ry, rz, \
             tx, ty, tz, \
-            unknown2 = self.header.unpack(fin.read(40))
+            self.boundingSphereRadius = self.header.unpack(fin.read(40))
         self.scale = Vector((sx, sy, sz))
         self.rotation = Euler((rx/0x8000*math.pi, ry/0x8000*math.pi, rz/0x8000*math.pi))
         self.translation = Vector((tx, ty, tz))
@@ -261,16 +275,17 @@ class Jnt1Entry(Readable):
         self.bbMax = bbStruct.unpack(fin.read(bbStruct.size))
     
     def write(self, fout):
-        fout.write(header.pack(
-            0, 0,
+        fout.write(self.header.pack(
+            self.flags, self.calcFlags,
             self.scale.x, self.scale.y, self.scale.z,
             int(self.rotation.x*0x8000/math.pi),
             int(self.rotation.y*0x8000/math.pi),
             int(self.rotation.z*0x8000/math.pi),
-            self.translation.x, self.translation.y, self.translation.z
+            self.translation.x, self.translation.y, self.translation.z,
+            self.boundingSphereRadius
         ))
-        fout.write(bbStruct.pack(self.bbMin))
-        fout.write(bbStruct.pack(self.bbMax))
+        fout.write(bbStruct.pack(*self.bbMin))
+        fout.write(bbStruct.pack(*self.bbMax))
     
     def __repr__(self):
         return "{}({}, {}, {}, {})".format(__class__.__name__, repr(self.name), self.scale, self.rotation, self.translation)
@@ -889,12 +904,12 @@ class Mat3(Section):
         #for i in range(self.count):
         #    self.materials[i] = orderedMaterials[self.remapTable[i]]
         
-        self.materialNames = readstringtable(start+offsets[2], fin)
+        self.materialNames = readStringTable(start+offsets[2], fin)
         if self.count != len(self.materialNames):
             warn("mat3: number of strings (%d) doesn't match number of elements (%d)"%len(self.materialNames), self.count)
         for m, n in zip(self.materials, self.materialNames):
             m.name = n
-
+        
         # 3 (indirect)
 
         fin.seek(start+offsets[4])
@@ -993,7 +1008,7 @@ class Mat3(Section):
         #self.remapTable = array('H', range(len(self.materials)))
         offsets[2] = offsets[1]+len(self.remapTable)*self.remapTable.itemsize
         self.materialNames = list({m.name for m in self.materials})
-        offsets[3] = offsets[2]+stringtablesize(self.materialNames)
+        offsets[3] = offsets[2]+stringTableSize(self.materialNames)
         offsets[4] = offsets[3]
         self.cullModeArray = array('I', {m.cullMode for m in self.materials})
         offsets[5] = offsets[4]+len(self.cullModeArray)*self.cullModeArray.itemsize
@@ -1049,7 +1064,7 @@ class Mat3(Section):
             m.index(self)
             m.write(fout)
         swapArray(self.remapTable).tofile(fout)
-        writestringtable(self.materialNames)
+        writeStringTable(fout, self.materialNames)
         swapArray(self.cullModeArray).tofile(fout)
         for x in self.matColorArray: fout.write(pack('BBBB', *x))
         self.colorChanNumArray.tofile(fout)
@@ -1208,6 +1223,10 @@ class Packet:
         self.matrixTable = array('H')
         self.matrixTable.fromfile(fin, count)
         if sys.byteorder == 'little': self.matrixTable.byteswap()
+    
+    #def writeMatrixData(self, fout):
+    
+    #def writeLocation(self, fout):
 
 class BatchAttrib(ReadableStruct):
     header = Struct('>II')
@@ -1224,8 +1243,8 @@ class Batch(ReadableStruct):
     
     def write(self, fout):
         super().write(fout)
-        fout.write(bbStruct.pack(self.bbMin))
-        fout.write(bbStruct.pack(self.bbMax))
+        fout.write(bbStruct.pack(*self.bbMin))
+        fout.write(bbStruct.pack(*self.bbMax))
 
     def getBatchAttribs(self, fin, baseOffset, offsetToBatchAttribs):
         old = fin.tell()
@@ -1301,15 +1320,15 @@ class Shp1(Section):
         self.offsetToMatrixTable = offset
         for batch in self.batches:
             for packet in batch.packets:
-                offset += packet.matrixTable.itemSize*len(packet.matrixTable)
+                offset += packet.matrixTable.itemsize*len(packet.matrixTable)
         self.offsetData = offset
         for batch in self.batches:
             for packet in batch.packets:
                 for primitive in packet.primitives:
                     offset += primitive.header.size
                     for currPoint in primitive.points:
-                        for attrib in self.attribs:
-                            offset += Index.sizeStructs[attrib.dataType]
+                        for attrib in batch.attribs:
+                            offset += Index.sizeStructs[attrib.dataType].size
         self.offsetToMatrixData = offset
         for batch in self.batches:
             offset += len(batch.packets)*Packet.matrixInfoHeader.size
@@ -1328,7 +1347,7 @@ class Shp1(Section):
                 for primitive in packet.primitives:
                     offset += primitive.header.size
                     for currPoint in primitive.points:
-                        currPoint.write(fout, self.attribs)
+                        currPoint.write(fout, batch.attribs)
         for batch in self.batches:
             for packet in batch.packets:
                 packet.writeMatrixData(fout)
@@ -1354,7 +1373,7 @@ class Tex1(Section):
     fields = ['texCount', 'textureHeaderOffset', 'stringTableOffset']
     def read(self, fin, start, length):
         super().read(fin, start, length)
-        try: textureNames = readstringtable(start+self.stringTableOffset, fin)
+        try: textureNames = readStringTable(start+self.stringTableOffset, fin)
         except StructError: textureNames = []
         fin.seek(start+self.textureHeaderOffset)
         self.textures = []
@@ -1370,7 +1389,7 @@ class Tex1(Section):
         super().write(fout)
         for im in self.textures:
             im.writeHeader(fout)
-        writestringtable(fout)
+        writeStringTable(fout, [im.name for im in self.textures])
 
 
 class Vtx1(Section):
@@ -1554,7 +1573,7 @@ class Mdl3(Section):
         if sys.byteorder == 'little': self.things5.byteswap()
         assert fin.tell() <= start+self.stringTableOffset
         
-        self.strings = readstringtable(start+self.stringTableOffset, fin)
+        self.strings = readStringTable(start+self.stringTableOffset, fin)
 
 class BModel(BFile):
     sectionHandlers = {

@@ -4,6 +4,7 @@ import io
 import sys
 import struct
 import warnings
+from array import array
 
 class Readable(object):
     def __init__(self, fin=None, pos=None):
@@ -113,4 +114,12 @@ class BFile(Readable):
         self.chunkCount = len(self.chunks)
         self.writeHeader(fout)
         fout.write(data)
+
+def calcKeyCode(name):
+    if isinstance(name, str):
+        name = name.encode('shift-jis')
+    x = 0
+    for c in name:
+        x = (c + x*3)&0xFFFF
+    return x
 

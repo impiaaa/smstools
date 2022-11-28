@@ -2,12 +2,7 @@ import struct
 from struct import unpack
 import sys, io, pathlib
 from warnings import warn
-
-def calcKeyCode(name):
-    x = 0
-    for c in name.encode('shift-jis'):
-        x = (c + x*3)&0xFFFF
-    return x
+from common import calcKeyCode
 
 def readString(fin):
     length, = unpack('>H', fin.read(2))
