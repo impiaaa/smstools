@@ -2,7 +2,7 @@
 
 from struct import unpack
 import sys, os
-from texture import TF, readTextureData, decodeTexturePIL
+from texture import TexFmt, readTextureData, decodeTexturePIL
 
 if len(sys.argv) != 2:
 	sys.stderr.write("Usage: %s ymap.ymp\n"%sys.argv[0])
@@ -36,9 +36,9 @@ for i in range(nRegions):
     lastRegionHeader = fin.tell()
     
     fin.seek(dataOffset)
-    data = readTextureData(fin, TF.I8, width, height)
+    data = readTextureData(fin, TexFmt.I8, width, height)
     
-    images = decodeTexturePIL(data, TF.I8, width, height, 0, None)
+    images = decodeTexturePIL(data, TexFmt.I8, width, height, 0, None)
     images[0][0].save(os.path.splitext(sys.argv[1])[0]+"-%d-%X.png"%(i, unk3))
     
     fin.seek(lastRegionHeader)

@@ -2,7 +2,7 @@
 
 import sys, struct, array
 from common import BFile, Section, swapArray
-from texture import readTextureData, decodeTexturePIL, calcTextureSize, TF
+from texture import readTextureData, decodeTexturePIL, calcTextureSize, TexFmt
 import os.path
 
 class Gly1(Section):
@@ -10,7 +10,7 @@ class Gly1(Section):
     fields = [
         'minimumFontCode', 'maximumFontCode',
         'glyphWidth', 'glyphHeight',
-        'arraySize', ('format', TF), 'columns', 'rows', 'w', 'h'
+        'arraySize', ('format', TexFmt), 'columns', 'rows', 'w', 'h'
     ]
     
     def read(self, fin, start, size):

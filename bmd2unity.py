@@ -520,7 +520,7 @@ def exportTextures(textures, bmddir):
             "filterMode": [0, 1, 0, 1, 0, 1][img.magFilter],
             "mipBias": img.lodBias/100
         }
-        if img.format in (TF.RGBA8, TF.CMPR) or img.mipmapCount > 1:
+        if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
             fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
             decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
             fout.close()
@@ -547,14 +547,14 @@ def exportTextures(textures, bmddir):
                     "lightmap": 0,
                     "compressionQuality": 50,
                     "alphaUsage": 1,
-                    "textureType": 10 if img.format in (TF.I4, TF.I8) else 0,
+                    "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
                     "textureShape": 1,
                     "singleChannelComponent": 1,
                     "platformSettings": [{
                         "serializedVersion": 3,
                         "buildTarget": "DefaultTexturePlatform",
                         "maxTextureSize": 2048,
-                        "textureFormat": 7 if img.format == TF.RGB565 or (img.format in (TF.C4, TF.C8, TF.C14X2) and img.paletteFormat == TL.RGB565) else -1,
+                        "textureFormat": 7 if img.format == TexFmt.RGB565 or (img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565) else -1,
                         "textureCompression": 2,
                         "compressionQuality": 50
                     }]

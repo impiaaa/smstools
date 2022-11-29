@@ -6,16 +6,22 @@ from texture import *
 from common import *
 
 class Image(ReadableStruct):
-    header = Struct('>BxHHBBxBHI4xBBBBBxHI')
+    header = Struct('>BBHHBBBBHIBBBBBBBBBxHI')
     fields = [
-        ("format", TF),
+        ("format", TexFmt),
+        "transparency",
         "width",
         "height",
         "wrapS",
         "wrapT",
-        ("paletteFormat", TL),
+        ("usePalette", bool),
+        ("paletteFormat", TlutFmt),
         "paletteNumEntries",
         "paletteOffset",
+        ("isMipmap", bool),
+        ("edgeLod", bool),
+        ("biasClamp", bool),
+        "maxAniso",
         "minFilter",
         "magFilter",
         "minLod",
@@ -27,10 +33,10 @@ class Image(ReadableStruct):
     def read(self, fin, start=None, textureHeaderOffset=None, texIndex=None):
         super().read(fin)
         self.mipmapCount = max(self.mipmapCount, 1)
-        if self.format in (TF.C4, TF.C8, TF.C14X2):
-            self.hasAlpha = self.paletteFormat in (TL.IA8, TL.RGB5A3)
+        if self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
+            self.hasAlpha = self.paletteFormat in (TlutFmt.IA8, TlutFmt.RGB5A3)
         else:
-            self.hasAlpha = self.format in (TF.IA4, TF.IA8, TF.RGB5A3, TF.RGBA8)
+            self.hasAlpha = self.format in (TexFmt.IA4, TexFmt.IA8, TexFmt.RGB5A3, TexFmt.RGBA8)
         if start is not None:
             nextHeader = fin.tell()
             
@@ -38,7 +44,7 @@ class Image(ReadableStruct):
             fin.seek(self.fullDataOffset)
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
-            if self.format in (TF.C4, TF.C8, TF.C14X2):
+            if self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
                 self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
                 fin.seek(self.fullPaletteOffset)
                 self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
@@ -49,12 +55,14 @@ class Image(ReadableStruct):
     
     def write(self, fout):
         self.dataOffset = fout.tell()+self.header.size
+        self.paletteOffset = self.dataOffset + len(self.data)*self.data.itemsize
         super().write(fout)
         swapArray(self.data).tofile(fout)
+        if self.palette is not None: swapArray(self.palette).tofile(fout)
     
     def getDataName(self, bmd):
         s = bmd.name+"@"+hex(self.fullDataOffset)
-        if self.format in (TF.C4, TF.C8, TF.C14X2):
+        if self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
             s += "p"+hex(self.fullPaletteOffset)
         return s
 

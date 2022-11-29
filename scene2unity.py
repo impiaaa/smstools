@@ -355,7 +355,7 @@ for btipath in scenedirpath.glob("**/*.bti"):
             "mipBias": bti.lodBias/100
         }
 
-        if bti.format in (texture.TF.RGBA8, texture.TF.CMPR) or bti.mipmapCount > 1:
+        if bti.format in (texture.TexFmt.RGBA8, texture.TexFmt.CMPR) or bti.mipmapCount > 1:
             fout = open(outbtidir / (btipath_rel.stem+".dds"), 'wb')
             decodeTextureDDS(fout, bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)
             fout.close()
@@ -383,14 +383,14 @@ for btipath in scenedirpath.glob("**/*.bti"):
                     "lightmap": 0,
                     "compressionQuality": 50,
                     "alphaUsage": 1,
-                    "textureType": 10 if bti.format in (texture.TF.I4, texture.TF.I8) else 0,
+                    "textureType": 10 if bti.format in (texture.TexFmt.I4, texture.TexFmt.I8) else 0,
                     "textureShape": 1,
                     "singleChannelComponent": 1,
                     "platformSettings": [{
                         "serializedVersion": 3,
                         "buildTarget": "DefaultTexturePlatform",
                         "maxTextureSize": 2048,
-                        "textureFormat": 7 if bti.format == texture.TF.RGB565 or (bti.format in (texture.TF.C4, texture.TF.C8, texture.TF.C14X2) and bti.paletteFormat == texture.TL.RGB565) else -1,
+                        "textureFormat": 7 if bti.format == texture.TexFmt.RGB565 or (bti.format in (texture.TexFmt.C4, texture.TexFmt.C8, texture.TexFmt.C14X2) and bti.paletteFormat == texture.TlutFmt.RGB565) else -1,
                         "textureCompression": 2,
                         "compressionQuality": 50
                     }]

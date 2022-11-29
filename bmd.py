@@ -1462,10 +1462,26 @@ class TextureBlock(Section):
     def write(self, fout):
         self.texCount = len(self.textures)
         self.textureHeaderOffset = self.header.size+8
-        self.stringTableOffset = self.textureHeaderOffset+Image.header.size*len(self.textures)
+        datas = list({swapArray(im.data).tobytes() for im in self.textures})
+        dataOffsets = [sum(map(len, datas[:i])) for i in range(len(datas))]
+        palettes = list({swapArray(im.palette).tobytes() for im in self.textures if im.palette is not None})
+        paletteOffsets = [sum(map(len, palettes[:i])) for i in range(len(palettes))]
+        for im in self.textures:
+            i = datas.index(swapArray(im.data).tobytes())
+            im.dataOffset = dataOffsets[i]
+            if im.palette is not None:
+                i = palettes.index(swapArray(im.palette).tobytes())
+                im.paletteOffset = paletteOffsets[i]
+            else:
+                im.paletteOffset = dataOffsets[i]+len(im.data)*im.data.itemsize
+        self.stringTableOffset = Image.header.size*len(self.textures) + self.textureHeaderOffset + max(dataOffsets) + len(datas[-1])
         super().write(fout)
         for im in self.textures:
-            im.write(fout)
+            super(Image, im).write(fout)
+        for data in datas:
+            fout.write(data)
+        for palette in palettes:
+            fout.write(palette)
         writeStringTable(fout, [im.name for im in self.textures])
 
 
@@ -1761,4 +1777,9 @@ def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
 
     for node in sg.children:
         buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
+
+if __name__ == "__main__":
+    bmd = BModel()
+    bmd.read(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1.bmd", 'rb'))
+    bmd.write(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1_reexport.bmd", 'wb'))
 
