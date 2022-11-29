@@ -76,10 +76,9 @@ class DrawBlock(Section):
 
 
 class EnvelopBlock(Section):
-    header = Struct('>HH4I')
+    header = Struct('>H2xIIII')
     fields = [
         'count',
-        'pad',
         'boneCountOffset',
         'weightedIndicesOffset',
         'boneWeightsTableOffset',
@@ -96,7 +95,7 @@ class EnvelopBlock(Section):
         for i in range(self.count):
             self.weightedIndices[i].fromfile(fin, counts[i])
             if sys.byteorder == 'little': self.weightedIndices[i].byteswap()
-        numMatrices = max(list(map(max, self.weightedIndices)))+1 if self.count > 0 else 0
+        #numMatrices = max(list(map(max, self.weightedIndices)))+1 if self.count > 0 else 0
 
         fin.seek(start+self.boneWeightsTableOffset)
         self.weightedWeights = [array('f') for i in range(self.count)]
@@ -106,7 +105,7 @@ class EnvelopBlock(Section):
 
         fin.seek(start+self.matrixTableOffset)
         self.matrices = []
-        for i in range(numMatrices):
+        while fin.tell() <= start+size-0x30:
             m = Matrix()
             for j in range(3):
                 m[j] = unpack('>ffff', fin.read(16))
@@ -116,15 +115,17 @@ class EnvelopBlock(Section):
         self.count = len(self.weightedIndices)
         self.boneCountOffset = self.header.size+8
         self.weightedIndicesOffset = self.boneCountOffset+self.count
-        self.boneWeightsTableOffset = self.weightedIndicesOffset+(2*sum(map(len, self.weightedIndices)))
-        self.matrixTableOffset = self.boneWeightsTableOffset+(4*sum(map(len, self.weightedWeights)))
+        self.boneWeightsTableOffset = alignOffset(self.weightedIndicesOffset+(2*sum(map(len, self.weightedIndices))))
+        self.matrixTableOffset = alignOffset(self.boneWeightsTableOffset+(4*sum(map(len, self.weightedWeights))))
         super().write(fout)
         counts = array('B', map(len, self.weightedIndices))
         counts.tofile(fout)
         for indices in self.weightedIndices:
             swapArray(indices).tofile(fout)
+        alignFile(fout)
         for weights in self.weightedWeights:
             swapArray(weights).tofile(fout)
+        alignFile(fout)
         for m in self.matrices:
             for row in m[:3]:
                 fout.write(pack('>ffff', *row))
@@ -247,11 +248,12 @@ class JointBlock(Section):
         self.count = len(self.frames)
         self.jntEntryOffset = self.header.size+8
         self.remapTableOffs = self.jntEntryOffset+(self.count*(Jnt1Entry.header.size+bbStruct.size+bbStruct.size))
-        self.stringTableOffset = self.remapTableOffs+len(self.remapTable)*self.remapTable.itemsize
+        self.stringTableOffset = alignOffset(self.remapTableOffs+len(self.remapTable)*self.remapTable.itemsize)
         super().write(fout)
         for f in self.frames:
             f.write(fout)
         swapArray(self.remapTable).tofile(fout)
+        alignFile(fout)
         writeStringTable(fout, [f.name for f in self.frames])
 
 class Jnt1Entry(Readable):

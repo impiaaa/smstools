@@ -104,7 +104,7 @@ class BFile(Readable):
         for chunk in self.chunks:
             buffer = io.BytesIO()
             chunk.write(buffer)
-            buffer.write(b"This is padding data to alignme"[:((32-(buffer.tell()+8))%32)])
+            buffer.write(Padding[:alignAmt(buffer.tell()+8, 32)])
             data = buffer.getvalue()
             fout.write(struct.pack('>4sL', chunk.chunkId, len(data)+8))
             fout.write(data)
@@ -117,6 +117,17 @@ class BFile(Readable):
         self.chunkCount = len(self.chunks)
         self.writeHeader(fout)
         fout.write(data)
+
+Padding = b"This is padding data to alignme"
+
+def alignAmt(pos, alignment):
+    return (alignment-pos)%alignment
+
+def alignOffset(offset, alignment=4):
+    return offset+alignAmt(offset, alignment)
+
+def alignFile(fout, alignment=4):
+    fout.write(Padding[:alignAmt(fout.tell(), alignment)])
 
 def calcKeyCode(name):
     if isinstance(name, str):
