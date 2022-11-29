@@ -82,7 +82,9 @@ class BFile(Readable):
             if chunkId in self.sectionHandlers:
                 chunk = self.sectionHandlers[chunkId]()
                 chunk.read(fin, start, size)
-                setattr(self, self.sectionHandlers[chunkId].__name__.lower(), chunk)
+                className = self.sectionHandlers[chunkId].__name__
+                setattr(self, className[0].lower()+className[1:], chunk)
+                setattr(self, chunkId.decode().lower(), chunk)
                 self.chunks.append(chunk)
             else:
                 warnings.warn("Unsupported section %r" % chunkId)

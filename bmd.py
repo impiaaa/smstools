@@ -44,7 +44,7 @@ def writeStringTable(f, strings):
         f.write(stringTableEntryStruct.pack(calcKeyCode(s), offset))
     f.write(table)
 
-class Drw1(Section):
+class DrawBlock(Section):
     header = Struct('>H2xLL')
     fields = [
         'count',
@@ -75,7 +75,7 @@ class Drw1(Section):
         swapArray(self.data).tofile(fout)
 
 
-class Evp1(Section):
+class EnvelopBlock(Section):
     header = Struct('>HH4I')
     fields = [
         'count',
@@ -130,11 +130,11 @@ class Evp1(Section):
                 fout.write(pack('>ffff', *row))
 
 
-class Node(ReadableStruct):
+class ModelHierarchy(ReadableStruct):
     header = Struct('>HH')
     fields = ["type", "index"]
 
-class Inf1(Section):
+class ModelInfoBlock(Section):
     header = Struct('>H2xIII')
     fields = [
         'loadFlags',
@@ -146,11 +146,11 @@ class Inf1(Section):
         super().read(fin, start, size)
         fin.seek(start+self.offsetToEntries)
         self.scenegraph = []
-        n = Node()
+        n = ModelHierarchy()
         n.read(fin)
         while n.type != 0:
             self.scenegraph.append(n)
-            n = Node()
+            n = ModelHierarchy()
             n.read(fin)
     
     def write(self, fout):
@@ -213,7 +213,7 @@ def buildSceneGraph(inf1, sg, j=0):
 
 
 
-class Jnt1(Section):
+class JointBlock(Section):
     header = Struct('>H2xIII')
     fields = [
         'count',
@@ -320,7 +320,7 @@ class IndTevStage(ReadableStruct):
     header = Struct('BBBBBBBBBxxx')
     fields = ["indTexId", "format", "bias", "mtxId", "wrapS", "wrapT", "addPrev", ("unmodifiedTexCoordLod", bool), "a"]
 
-class IndirectInfo(ReadableStruct):
+class IndInitData(ReadableStruct):
     header = Struct('BBxx')
     fields = [("hasIndirect", bool), "indTexStageNum"]
     def read(self, fin):
@@ -454,7 +454,7 @@ class TexGenMatrix(IntEnum):
     PNMTX8 = 24
     PNMTX9 = 27
 
-class TexGenInfo(ReadableStruct):
+class TexCoordInfo(ReadableStruct):
     header = Struct('>BBBx')
     fields = [
         ("type", TexGenType),
@@ -528,7 +528,7 @@ class AlphaOp(Enum):
     XOR = 2
     XNOR = 3
 
-class AlphaCompare(ReadableStruct):
+class AlphaCompInfo(ReadableStruct):
     header = Struct('>BBBBB3x')
     fields = [
         ("comp0", CompareType),
@@ -581,13 +581,17 @@ class BlendInfo(ReadableStruct):
         ("logicOp", LogicOp)
     ]
 
-class ZMode(ReadableStruct):
+class ZModeInfo(ReadableStruct):
     header = Struct('>BBBx')
     fields = [
         ("enable", bool),
         ("func", CompareType),
         ("write", bool)
     ]
+
+class NBTScaleInfo(ReadableStruct):
+    header = Struct('>Bxxx3f')
+    fields = [("enable", bool), "x", "y", "z"]
 
 class TevColorArg(Enum):
     CPREV = 0 # Use the color value from previous TEV stage
@@ -702,11 +706,11 @@ class TevKColorSel(IntEnum):
     K2_A = 0x1E # K2[AAA] register
     K3_A = 0x1F # K3[AAA] register
 
-class TevSwapMode(ReadableStruct):
+class TevSwapModeInfo(ReadableStruct):
     header = Struct('>BB2x')
     fields = ["rasSel", "texSel"]
 
-class TevSwapModeTable(ReadableStruct):
+class TevSwapModeTableInfo(ReadableStruct):
     header = Struct('>BBBB')
     fields = ["rSel", "gSel", "bSel", "aSel"]
 
@@ -736,7 +740,7 @@ def safeIndex(arr, val):
     except ValueError:
         return 0xFFFF
 
-class Material(ReadableStruct):
+class MaterialInitData(ReadableStruct):
     header = Struct('>BBBBBBBB')
     fields = ["materialMode", "cullModeIndex", "colorChanNumIndex", "texGenNumIndex",
         "tevStageNumIndex", "zCompLocIndex", "zModeIndex", "ditherIndex"]
@@ -807,7 +811,7 @@ class Material(ReadableStruct):
         self.fog = safeGet(mat3.fogArray, self.fogIndex)
         self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
         self.blend = safeGet(mat3.blendArray, self.blendIndex)
-        #self.nbtScale = safeGet(mat3.nbtScaleArray, self.nbtScaleIndex)
+        self.nbtScale = safeGet(mat3.nbtScaleArray, self.nbtScaleIndex)
 
     def write(self, fout):
         super().write(fout)
@@ -857,7 +861,7 @@ class Material(ReadableStruct):
         self.fogIndex = safeIndex(mat3.fogArray, self.fog)
         self.alphaCompIndex = safeIndex(mat3.alphaCompArray, self.alphaComp)
         self.blendIndex = safeIndex(mat3.blendArray, self.blend)
-        #self.nbtScaleIndex = safeIndex(mat3.nbtScaleArray, self.nbtScale)
+        self.nbtScaleIndex = safeIndex(mat3.nbtScaleArray, self.nbtScale)
 
     def debug(self):
         print(self.name)
@@ -889,7 +893,7 @@ class Material(ReadableStruct):
         print("fog =", self.fog)
         print("alphaComp =", self.alphaComp)
         print("blend =", self.blend)
-        #print("nbtScale =", self.nbtScale)
+        print("nbtScale =", self.nbtScale)
     
     def __hash__(self):
         return hash((
@@ -922,10 +926,10 @@ class Material(ReadableStruct):
             self.fog,
             self.alphaComp,
             self.blend,
-            #self.nbtScale
+            self.nbtScale
         ))
 
-class Mat3(Section):
+class MaterialBlock(Section):
     header = Struct('>H2x')
     fields = ['count']
     def read(self, fin, start, size):
@@ -937,7 +941,7 @@ class Mat3(Section):
         fin.seek(start+offsets[0])
         self.materials = [None]*self.count
         for i in range(self.count):
-            m = Material()
+            m = MaterialInitData()
             m.read(fin)
             self.materials[i] = m
         
@@ -957,7 +961,7 @@ class Mat3(Section):
             m.name = n
         
         fin.seek(start+offsets[3])
-        self.indirectArray = [IndirectInfo.try_make(fin) for i in range(lengths[3]//0x138)]
+        self.indirectArray = [IndInitData.try_make(fin) for i in range(lengths[3]//0x138)]
 
         fin.seek(start+offsets[4])
         self.cullModeArray = array('I')
@@ -985,14 +989,16 @@ class Mat3(Section):
         self.texGenNumArray.fromfile(fin, lengths[10])
 
         fin.seek(start+offsets[11])
-        self.texCoordArray = [TexGenInfo.try_make(fin) for i in range(lengths[11]//TexGenInfo.header.size)]
-
-        # 12 (postTexGen)
+        self.texCoordArray = [TexCoordInfo.try_make(fin) for i in range(lengths[11]//TexCoordInfo.header.size)]
         
-        fin.seek(start + offsets[13])
+        # postTexGen
+        fin.seek(start+offsets[12])
+        
+        fin.seek(start+offsets[13])
         self.texMtxArray = [TexMtxInfo.try_make(fin) for i in range(lengths[13]//100)]
         
-        # 14 (postTexMtx)
+        # postTexMtx
+        fin.seek(start+offsets[14])
         
         fin.seek(start+offsets[15])
         self.texNoArray = array('H')
@@ -1016,22 +1022,22 @@ class Mat3(Section):
         self.tevStageArray = [TevStageInfo.try_make(fin) for i in range(lengths[20]//TevStageInfo.header.size)]
         
         fin.seek(start+offsets[21])
-        self.tevSwapModeArray = [TevSwapMode.try_make(fin) for i in range(lengths[21]//TevSwapMode.header.size)]
+        self.tevSwapModeArray = [TevSwapModeInfo.try_make(fin) for i in range(lengths[21]//TevSwapModeInfo.header.size)]
         
         fin.seek(start+offsets[22])
-        self.tevSwapModeTableArray = [TevSwapModeTable.try_make(fin) for i in range(lengths[22]//TevSwapModeTable.header.size)]
+        self.tevSwapModeTableArray = [TevSwapModeTableInfo.try_make(fin) for i in range(lengths[22]//TevSwapModeTableInfo.header.size)]
 
         fin.seek(start+offsets[22])
         self.fogArray = [FogInfo.try_make(fin) for i in range(lengths[23]//44)]
         
         fin.seek(start+offsets[24])
-        self.alphaCompArray = [AlphaCompare.try_make(fin) for i in range(lengths[24]//AlphaCompare.header.size)]
+        self.alphaCompArray = [AlphaCompInfo.try_make(fin) for i in range(lengths[24]//AlphaCompInfo.header.size)]
 
         fin.seek(start+offsets[25])
         self.blendArray = [BlendInfo.try_make(fin) for i in range(lengths[25]//BlendInfo.header.size)]
 
         fin.seek(start+offsets[26])
-        self.zModeArray = [ZMode.try_make(fin) for i in range(lengths[26]//ZMode.header.size)]
+        self.zModeArray = [ZModeInfo.try_make(fin) for i in range(lengths[26]//ZModeInfo.header.size)]
         
         fin.seek(start+offsets[27])
         self.zCompLocArray = array('B')
@@ -1041,7 +1047,8 @@ class Mat3(Section):
         self.ditherArray = array('B')
         self.ditherArray.fromfile(fin, lengths[28])
 
-        # 29 (nbtScale)
+        fin.seek(start+offsets[29])
+        self.nbtScaleArray = [NBTScaleInfo.try_make(fin) for i in range(lengths[29]//NBTScaleInfo.header.size)]
         
         for m in self.materials:
             m.resolve(self)
@@ -1072,7 +1079,7 @@ class Mat3(Section):
         self.texGenNumArray = array('B', {m.texGenNum for m in self.materials})
         offsets[11] = offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize
         self.texCoordArray = list({m.texCoord for m in self.materials})
-        offsets[12] = offsets[11]+len(self.texCoordArray)*TexGenInfo.header.size
+        offsets[12] = offsets[11]+len(self.texCoordArray)*TexCoordInfo.header.size
         offsets[13] = offsets[12]
         self.texMtxArray = list({m.texMtx for m in self.materials})
         offsets[14] = offsets[13]+len(self.texMtxArray)*0x64
@@ -1090,17 +1097,17 @@ class Mat3(Section):
         self.tevStageArray = list({m.tevStage for m in self.materials})
         offsets[21] = offsets[20]+len(self.tevStageArray)*TevStageInfo.header.size
         self.tevSwapModeArray = list({m.tevSwapMode for m in self.materials})
-        offsets[22] = offsets[21]+len(self.tevSwapModeArray)*TevSwapMode.header.size
+        offsets[22] = offsets[21]+len(self.tevSwapModeArray)*TevSwapModeInfo.header.size
         self.tevSwapModeTableArray = list({m.tevSwapModeTable for m in self.materials})
-        offsets[23] = offsets[22]+len(self.tevSwapModeTableArray)*TevSwapModeTable.header.size
+        offsets[23] = offsets[22]+len(self.tevSwapModeTableArray)*TevSwapModeTableInfo.header.size
         self.fogArray = list({m.fog for m in self.materials})
         offsets[24] = offsets[23]+len(self.fogArray)*44
         self.alphaCompArray = list({m.alphaComp for m in self.materials})
-        offsets[25] = offsets[24]+len(self.alphaCompArray)*AlphaCompare.header.size
+        offsets[25] = offsets[24]+len(self.alphaCompArray)*AlphaCompInfo.header.size
         self.blendArray = list({m.blend for m in self.materials})
         offsets[26] = offsets[25]+len(self.blendArray)*BlendInfo.header.size
         self.zModeArray = list({m.zMode for m in self.materials})
-        offsets[27] = offsets[26]+len(self.zModeArray)*ZMode.header.size
+        offsets[27] = offsets[26]+len(self.zModeArray)*ZModeInfo.header.size
         self.zCompLocArray = array('B', {m.zCompLoc for m in self.materials})
         offsets[28] = offsets[27]+len(self.zCompLocArray)*self.zCompLocArray.itemsize
         self.ditherArray = array('B', {m.dither for m in self.materials})
@@ -1161,21 +1168,14 @@ class VtxAttr(Enum):
     TEX7       = 20
     NONE       = 0xFF
 
-class CompSize(Enum):
-    U8     = 0 # Unsigned 8-bit integer
-    S8     = 1 # Signed 8-bit integer
-    U16    = 2 # Unsigned 16-bit integer
-    S16    = 3 # Signed 16-bit integer
-    F32    = 4 # 32-bit floating-point
-    RGB565 = 0 # 16-bit RGB
-    RGB8   = 1 # 24-bit RGB
-    RGBX8  = 2 # 32-bit RGBX
-    RGBA4  = 3 # 16-bit RGBA
-    RGBA6  = 4 # 24-bit RGBA
-    RGBA8  = 5 # 32-bit RGBA
+class VtxAttrIn(Enum):
+    NONE = 0
+    DIRECT = 1
+    INDEX8 = 2
+    INDEX16 = 3
 
 class Index:
-    sizeStructs = {CompSize.S8: Struct('>B'), CompSize.S16: Struct('>H')}
+    sizeStructs = {VtxAttrIn.INDEX8: Struct('B'), VtxAttrIn.INDEX16: Struct('>H')}
     def __init__(self):
         super().__init__()
         self.indices = [INVALID_INDEX]*21
@@ -1183,7 +1183,12 @@ class Index:
     def read(self, fin, attribs):
         for attrib in attribs:
             #get value
-            s = self.sizeStructs[attrib.dataType]
+            if attrib.dataType == VtxAttrIn.NONE:
+                continue
+            elif attrib.dataType == VtxAttrIn.DIRECT:
+                s = Struct('b') # XXX Not correct, assuming it's only for PTNMTXIDX and assuming PTNMTXIDX only uses S8
+            else:
+                s = self.sizeStructs[attrib.dataType]
             val, = s.unpack(fin.read(s.size))
             
             if attrib.attrib.value < len(self.indices):
@@ -1197,7 +1202,12 @@ class Index:
     
     def write(self, fout, attribs):
         for attrib in attribs:
-            s = self.sizeStructs[attrib.dataType]
+            if attrib.dataType == VtxAttrIn.NONE:
+                continue
+            elif attrib.dataType == VtxAttrIn.DIRECT:
+                s = Struct('b')
+            else:
+                s = self.sizeStructs[attrib.dataType]
             fout.write(s.pack(self.indices[attrib.attrib.value]))
 
     @property
@@ -1252,37 +1262,43 @@ class Primitive(ReadableStruct):
         for currPoint in self.points:
             currPoint.write(fout, attribs)
 
+class ShapeDrawInitData(ReadableStruct):
+    header = Struct('>II')
+    fields = ["size", "offset"]
+
+class ShapeMtxInitData(ReadableStruct):
+    header = Struct('>HHI')
+    fields = ["useMtxIndex", "count", "firstIndex"]
+
 class Packet:
-    locationHeader = Struct('>II')
-    matrixInfoHeader = Struct('>HHI')
-    def read(self, fin, baseOffset, offsetData, offsetToMatrixData, \
-            firstMatrixData, packetIndex, offsetToMatrixTable, attribs):
-        locationSize, locationOffset = self.locationHeader.unpack(fin.read(8))
+    def read(self, fin, baseOffset, offsetData, mtxInitDataOffset, \
+            shapeMtxInitDataIndex, packetIndex, offsetToMatrixTable, attribs):
+        location = ShapeDrawInitData(fin)
 
-        fin.seek(baseOffset+offsetData+locationOffset)
-        self.primitives = dumpPacketPrimitives(attribs, locationSize, fin)
+        fin.seek(baseOffset+offsetData+location.offset)
+        self.primitives = dumpPacketPrimitives(attribs, location.size, fin)
 
-        fin.seek(baseOffset+offsetToMatrixData+(firstMatrixData+packetIndex)*8)
-        useMtxIndex, count, firstIndex = self.matrixInfoHeader.unpack(fin.read(8))
-        if count > 10: raise ValueError("%d is more than 10 matrix slots"%count)
+        fin.seek(baseOffset+mtxInitDataOffset+(shapeMtxInitDataIndex+packetIndex)*8)
+        matrixInfo = ShapeMtxInitData(fin)
+        if matrixInfo.count > 10: raise ValueError("%d is more than 10 matrix slots"%matrixInfo.count)
 
-        fin.seek(baseOffset+offsetToMatrixTable+2*firstIndex)
+        fin.seek(baseOffset+offsetToMatrixTable+2*matrixInfo.firstIndex)
         self.matrixTable = array('H')
-        self.matrixTable.fromfile(fin, count)
+        self.matrixTable.fromfile(fin, matrixInfo.count)
         if sys.byteorder == 'little': self.matrixTable.byteswap()
     
     #def writeMatrixData(self, fout):
     
     #def writeLocation(self, fout):
 
-class BatchAttrib(ReadableStruct):
+class VtxDesc(ReadableStruct):
     header = Struct('>II')
-    fields = [("attrib", VtxAttr), ("dataType", CompSize)]
+    fields = [("attrib", VtxAttr), ("dataType", VtxAttrIn)]
 
-class Batch(ReadableStruct):
+class ShapeInitData(ReadableStruct):
     header = Struct('>BxHHHH2xf')
-    fields = ["displayFlags", "packetCount", "offsetToAttribs", "firstMatrixData",
-        "firstPacketLocation", "boundingSphereRadius"]
+    fields = ["displayFlags", "packetCount", "offsetToAttribs", "shapeMtxInitDataIndex",
+        "shapeDrawInitDataIndex", "boundingSphereRadius"]
     def read(self, fin):
         super().read(fin)
         self.bbMin = bbStruct.unpack(fin.read(12))
@@ -1293,27 +1309,24 @@ class Batch(ReadableStruct):
         fout.write(bbStruct.pack(*self.bbMin))
         fout.write(bbStruct.pack(*self.bbMax))
 
-    def getBatchAttribs(self, fin, baseOffset, offsetToBatchAttribs):
+    def getBatchAttribs(self, fin, baseOffset, vtxDescOffset):
         old = fin.tell()
-        fin.seek(baseOffset+offsetToBatchAttribs+self.offsetToAttribs)
+        fin.seek(baseOffset+vtxDescOffset+self.offsetToAttribs)
         self.attribs = []
-        a = BatchAttrib(fin)
+        a = VtxDesc(fin)
         while a.attrib != VtxAttr.NONE:
             self.attribs.append(a)
-            a = BatchAttrib(fin)
+            a = VtxDesc(fin)
         fin.seek(old)
 
-    def dumpBatch(self, fin, baseOffset, offsetToBatchAttribs, \
-            offsetToPacketLocations, \
-            offsetData, offsetToMatrixData, \
+    def dumpBatch(self, fin, baseOffset, vtxDescOffset, \
+            drawInitDataOffset, \
+            offsetData, mtxInitDataOffset, \
             batchIndex, offsetToMatrixTable):
         self.hasMatrixIndices = self.hasPositions = self.hasNormals = False
         self.hasColors = [False]*2
         self.hasTexCoords = [False]*8
         for a in self.attribs:
-            if a.dataType != CompSize.S8 and a.dataType != CompSize.S16:
-                warn("shp1, dumpBatch(): unknown attrib data type %s, skipping batch" % a.dataType)
-                return
             if a.attrib == VtxAttr.PTNMTXIDX:
                 self.hasMatrixIndices = True
             elif a.attrib == VtxAttr.POS:
@@ -1329,41 +1342,41 @@ class Batch(ReadableStruct):
 
         self.packets = []
         for j in range(self.packetCount):
-            fin.seek(baseOffset+offsetToPacketLocations+(self.firstPacketLocation + j)*8)
+            fin.seek(baseOffset+drawInitDataOffset+(self.shapeDrawInitDataIndex + j)*8)
             p = Packet()
-            p.read(fin, baseOffset, offsetData, offsetToMatrixData, \
-                self.firstMatrixData, j, offsetToMatrixTable, self.attribs)
+            p.read(fin, baseOffset, offsetData, mtxInitDataOffset, \
+                self.shapeMtxInitDataIndex, j, offsetToMatrixTable, self.attribs)
             self.packets.append(p)
 
-class Shp1(Section):
+class ShapeBlock(Section):
     header = Struct('>H2xIIIIIIII')
     fields = [
-        'batchCount', 'offsetToBatches', 'offsetToRemapTable', 'offsetToNameTable',
-        'offsetToBatchAttribs', 'offsetToMatrixTable', 'offsetData',
-        'offsetToMatrixData', 'offsetToPacketLocations'
+        'shapeCount', 'shapeInitDataOffset', 'remapTableOffset', 'shapeNameTableOffset',
+        'vtxDescOffset', 'offsetToMatrixTable', 'offsetData',
+        'mtxInitDataOffset', 'drawInitDataOffset'
     ]
     
     def read(self, fin, start, size):
         super().read(fin, start, size)
         self.batches = []
-        fin.seek(start+self.offsetToBatches)
-        for i in range(self.batchCount):
-            batch = Batch()
+        fin.seek(start+self.shapeInitDataOffset)
+        for i in range(self.shapeCount):
+            batch = ShapeInitData()
             batch.read(fin)
             nextBatch = fin.tell()
-            batch.getBatchAttribs(fin, start, self.offsetToBatchAttribs)
-            batch.dumpBatch(fin, start, self.offsetToBatchAttribs, self.offsetToPacketLocations, self.offsetData, self.offsetToMatrixData, i, self.offsetToMatrixTable)
+            batch.getBatchAttribs(fin, start, self.vtxDescOffset)
+            batch.dumpBatch(fin, start, self.vtxDescOffset, self.drawInitDataOffset, self.offsetData, self.mtxInitDataOffset, i, self.offsetToMatrixTable)
             self.batches.append(batch)
             fin.seek(nextBatch)
     
     def write(self, fout):
-        self.batchCount = len(self.batches)
-        self.offsetToBatches = self.header.size+8
-        self.offsetToBatchAttribs = self.offsetToBatches + (Batch.header.size+24)*len(self.batches)
+        self.shapeCount = len(self.batches)
+        self.shapeInitDataOffset = self.header.size+8
+        self.vtxDescOffset = self.shapeInitDataOffset + (ShapeInitData.header.size+24)*len(self.batches)
         offset = 0
         for batch in self.batches:
             batch.offsetToAttribs = offset
-            offset += (len(batch.attribs)+1)*BatchAttrib.header.size
+            offset += (len(batch.attribs)+1)*VtxDesc.header.size
         self.offsetToMatrixTable = offset
         for batch in self.batches:
             for packet in batch.packets:
@@ -1375,11 +1388,16 @@ class Shp1(Section):
                     offset += primitive.header.size
                     for currPoint in primitive.points:
                         for attrib in batch.attribs:
-                            offset += Index.sizeStructs[attrib.dataType].size
-        self.offsetToMatrixData = offset
+                            if attrib.dataType == VtxAttrIn.NONE:
+                                continue
+                            elif attrib.dataType == VtxAttrIn.DIRECT:
+                                offset += 1
+                            else:
+                                offset += Index.sizeStructs[attrib.dataType].size
+        self.mtxInitDataOffset = offset
         for batch in self.batches:
-            offset += len(batch.packets)*Packet.matrixInfoHeader.size
-        self.offsetToPacketLocations = offset
+            offset += len(batch.packets)*ShapeMtxInitData.header.size
+        self.drawInitDataOffset = offset
         super().write(fout)
         for batch in self.batches:
             batch.write(fout)
@@ -1415,7 +1433,7 @@ def dumpPacketPrimitives(attribs, dataSize, fin):
     return primitives
 
 
-class Tex1(Section):
+class TextureBlock(Section):
     header = Struct('>H2xII')
     fields = ['texCount', 'textureHeaderOffset', 'stringTableOffset']
     def read(self, fin, start, length):
@@ -1439,7 +1457,7 @@ class Tex1(Section):
         writeStringTable(fout, [im.name for im in self.textures])
 
 
-class Vtx1(Section):
+class VertexBlock(Section):
     header = Struct('>L')
     fields = ['arrayFormatOffset']
     def __init__(self):
@@ -1569,6 +1587,19 @@ class CompType(Enum):
     TEX_S    = 0  # One texture dimension
     TEX_ST   = 1  # Two texture dimensions
 
+class CompSize(Enum):
+    U8     = 0 # Unsigned 8-bit integer
+    S8     = 1 # Signed 8-bit integer
+    U16    = 2 # Unsigned 16-bit integer
+    S16    = 3 # Signed 16-bit integer
+    F32    = 4 # 32-bit floating-point
+    RGB565 = 0 # 16-bit RGB
+    RGB8   = 1 # 24-bit RGB
+    RGBX8  = 2 # 32-bit RGBX
+    RGBA4  = 3 # 16-bit RGBA
+    RGBA6  = 4 # 24-bit RGBA
+    RGBA8  = 5 # 32-bit RGBA
+
 class ArrayFormat(ReadableStruct):
     header = Struct('>IIIBBH')
     fields = [("arrayType", VtxAttr), ("componentCount", CompType), ("dataType", CompSize), "decimalPoint", "unknown3", "unknown4"]
@@ -1587,7 +1618,7 @@ def computeSectionLengths(offsets, sizeOfSection):
         lengths[i] = length
     return lengths
 
-class Mdl3(Section):
+class MaterialDLBlock(Section):
     header = Struct('>H2xIIIIII')
     fields = ['count', 'offset1', 'offset2', 'offset3', 'offset4', 'offset5', 'stringTableOffset']
     def read(self, fin, start, size):
@@ -1624,15 +1655,15 @@ class Mdl3(Section):
 
 class BModel(BFile):
     sectionHandlers = {
-        b'INF1': Inf1,
-        b'VTX1': Vtx1,
-        b'JNT1': Jnt1,
-        b'SHP1': Shp1,
-        b'MAT3': Mat3,
-        b'TEX1': Tex1,
-        b'EVP1': Evp1,
-        b'DRW1': Drw1,
-        b'MDL3': Mdl3
+        b'INF1': ModelInfoBlock,
+        b'VTX1': VertexBlock,
+        b'JNT1': JointBlock,
+        b'SHP1': ShapeBlock,
+        b'MAT3': MaterialBlock,
+        b'TEX1': TextureBlock,
+        b'EVP1': EnvelopBlock,
+        b'DRW1': DrawBlock,
+        b'MDL3': MaterialDLBlock
     }
     
     def readChunks(self, fin):
@@ -1718,4 +1749,9 @@ def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
 
     for node in sg.children:
         buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
+
+if __name__ == "__main__":
+    bmd = BModel()
+    bmd.read(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1.bmd", 'rb'))
+    bmd.write(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1_reexport", 'wb'))
 
