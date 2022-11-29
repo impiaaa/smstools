@@ -1494,17 +1494,20 @@ class VertexBlock(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         offsets = unpack('>13L', fin.read(52))
-        numArrays = 0
-        for i in range(13):
-            if offsets[i] != 0: numArrays += 1
+        
         fin.seek(start+self.arrayFormatOffset)
-        self.formats = [ArrayFormat(fin) for i in range(numArrays)]
+        self.formats = [None]*13
+        for i in range(13):
+            if offsets[i] != 0:
+                self.formats[i] = ArrayFormat(fin)
         self.originalData = []
         self.asFloat = []
-        j = 0
         for i in range(13):
-            if offsets[i] == 0: continue
-            currFormat = self.formats[j]
+            if offsets[i] == 0:
+                self.originalData.append(None)
+                self.asFloat.append(None)
+                continue
+            currFormat = self.formats[i]
             startOffset = offsets[i]
             length = size-startOffset
             for k in range(i+1, 13):
@@ -1534,7 +1537,6 @@ class VertexBlock(Section):
                 data.extend([float(tmp[k]) for k in range(0, length)])
             else:
                 warn("vtx1: unknown array data type %s"%dataType)
-                j += 1
                 self.originalData.append(None)
                 self.asFloat.append(None)
                 continue
@@ -1600,8 +1602,32 @@ class VertexBlock(Section):
 
             else:
                 warn("vtx1: unknown array type %s"%currFormat.arrayType)
-
-            j += 1
+    
+    def write(self, fout):
+        self.arrayFormatOffset = self.header.size + 8 + 13*4
+        super().write(fout)
+        offset = self.arrayFormatOffset + (len(self.formats)-self.formats.count(None)+1)*ArrayFormat.header.size
+        for data in self.originalData:
+            if data is None:
+                fout.write(pack('>L', 0))
+            else:
+                fout.write(pack('>L', offset))
+                offset += len(data)*data.itemsize
+        
+        for fmt in self.formats:
+            if fmt is not None:
+                fmt.write(fout)
+        
+        dummyFmt = ArrayFormat()
+        dummyFmt.arrayType = VtxAttr.NONE
+        dummyFmt.componentCount = CompType.POS_XYZ
+        dummyFmt.dataType = CompSize.U8
+        dummyFmt.decimalPoint = 0
+        dummyFmt.write(fout)
+        
+        for data in self.originalData:
+            if data is not None:
+                swapArray(data).tofile(fout)
 
 
 class CompType(Enum):
@@ -1629,8 +1655,8 @@ class CompSize(Enum):
     RGBA8  = 5 # 32-bit RGBA
 
 class ArrayFormat(ReadableStruct):
-    header = Struct('>IIIBBH')
-    fields = [("arrayType", VtxAttr), ("componentCount", CompType), ("dataType", CompSize), "decimalPoint", "unknown3", "unknown4"]
+    header = Struct('>IIIB3x')
+    fields = [("arrayType", VtxAttr), ("componentCount", CompType), ("dataType", CompSize), "decimalPoint"]
 
 
 def computeSectionLengths(offsets, sizeOfSection):
