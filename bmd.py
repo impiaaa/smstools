@@ -1465,7 +1465,7 @@ class TextureBlock(Section):
         self.stringTableOffset = self.textureHeaderOffset+Image.header.size*len(self.textures)
         super().write(fout)
         for im in self.textures:
-            im.writeHeader(fout)
+            im.write(fout)
         writeStringTable(fout, [im.name for im in self.textures])
 
 
@@ -1761,9 +1761,4 @@ def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
 
     for node in sg.children:
         buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
-
-if __name__ == "__main__":
-    bmd = BModel()
-    bmd.read(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1.bmd", 'rb'))
-    bmd.write(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1_reexport", 'wb'))
 

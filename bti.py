@@ -50,7 +50,7 @@ class Image(ReadableStruct):
     def write(self, fout):
         self.dataOffset = fout.tell()+self.header.size
         super().write(fout)
-        swapArray(data).tofile(fout)
+        swapArray(self.data).tofile(fout)
     
     def getDataName(self, bmd):
         s = bmd.name+"@"+hex(self.fullDataOffset)

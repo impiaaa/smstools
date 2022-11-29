@@ -82,6 +82,7 @@ class BFile(Readable):
                 break
             if chunkId in self.sectionHandlers:
                 chunk = self.sectionHandlers[chunkId]()
+                chunk.chunkId = chunkId
                 chunk.read(fin, start, size)
                 className = self.sectionHandlers[chunkId].__name__
                 setattr(self, className[0].lower()+className[1:], chunk)
@@ -101,12 +102,11 @@ class BFile(Readable):
     
     def writeChunks(self, fout):
         for chunk in self.chunks:
-            chunkId = type(chunk).__name__.upper().encode()
             buffer = io.BytesIO()
             chunk.write(buffer)
-            buffer.write(b'\0'*((32-(buffer.tell()+8))%32))
+            buffer.write(b"This is padding data to alignme"[:((32-(buffer.tell()+8))%32)])
             data = buffer.getvalue()
-            fout.write(struct.pack('>4sL', chunkId, len(data)+8))
+            fout.write(struct.pack('>4sL', chunk.chunkId, len(data)+8))
             fout.write(data)
     
     def write(self, fout):
