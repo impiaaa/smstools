@@ -5,6 +5,7 @@ import sys
 import struct
 import warnings
 from array import array
+from enum import Enum
 
 class Readable(object):
     def __init__(self, fin=None, pos=None):
@@ -26,7 +27,7 @@ class ReadableStruct(Readable): # name???
                 fieldName, fieldType = field
                 setattr(self, fieldName, fieldType(value))
     def as_tuple(self):
-        return (getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value for field in self.fields)
+        return tuple(getattr(self, field) if isinstance(field, str) else getattr(self, field[0]).value if isinstance(getattr(self, field[0]), Enum) else int(getattr(self, field[0])) for field in self.fields)
     def write(self, fout):
         fout.write(self.header.pack(*self.as_tuple()))
     def __repr__(self):
