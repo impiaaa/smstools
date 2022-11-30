@@ -5,6 +5,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, CollectionProperty
 from bpy.types import Operator, OperatorFileListElement
 import os.path
+import tempfile, os
 from bmd import *
 
 
@@ -35,11 +36,11 @@ def drawBatch(bmd, index, mdef, matIndex, bmverts, bm, indent=0):
     matrixTable = [(Matrix(), [], []) for i in range(10)]
     for mat, mmi, mmw in matrixTable:
         mat.identity()
-    for i, packet in enumerate(batch.packets):
+    for i, (shapeDraw, shapeMatrix) in enumerate(batch.matrixGroups):
         # draw packet
-        updateMatrixTable(bmd, packet, matrixTable)
+        updateMatrixTable(bmd, shapeMatrix, matrixTable)
         mat, mmi, mmw = matrixTable[0]
-        for curr in packet.primitives:
+        for curr in shapeDraw.primitives:
             a = 0
             b = 1
             flip = True
@@ -168,24 +169,25 @@ class NodePlacer:
         if col.maxWidth < node.bl_width_default: col.maxWidth = node.bl_width_default
         return node
 
-def importMesh(filePath, bmd, mesh, bm=None):
+def importMesh(filePath, bmd, mesh, bm):
     btextures = []
     if hasattr(bmd, "tex1"):
         print("Importing textures")
         for texture in bmd.tex1.textures:
-            imageName = texture.name#getDataName(bmd)
-            if imageName in bpy.data.images:
-                image = bpy.data.images[imageName]
+            if texture.name in bpy.data.images:
+                image = bpy.data.images[texture.name]
             else:
-                fileName = "/tmp/" + imageName + ".png"
-                try:
-                    image = bpy.data.images.load(fileName)
-                except RuntimeError as e:
-                    imgs = decodeTexturePIL(texture.data, texture.format, texture.width, texture.height, texture.paletteFormat, texture.palette, mipmapCount=texture.mipmapCount)
-                    imgs[0][0].save(fileName)
-                    image = bpy.data.images.load(fileName)
-                    image.pack()
-                image.name = imageName
+                imgs = decodeTexturePIL(texture.data, texture.format, texture.width, texture.height, texture.paletteFormat, texture.palette, mipmapCount=texture.mipmapCount)
+                # in PIL, only PNG, Targa, and TIFF support all required pixel formats. PNG is required to be compressed (waste of time), and Blender doesn't load the alpha channel in monochrome TGAs
+                f = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
+                imgs[0][0].save(f)
+                f.close()
+                image = bpy.data.images.load(f.name)
+                image.pack()
+                image.name = texture.name
+                image.filepath = "//textures/"+texture.name+".tif"
+                image.packed_files[0].filepath = "//textures/"+texture.name+".tif"
+                os.remove(f.name)
             btextures.append(image)
 
     if hasattr(bmd, "mat3"):
@@ -523,7 +525,7 @@ bl_info = {
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 
-def importFile(filepath):
+def importFile(filepath, context):
     fin = open(filepath, 'rb')
     print("Reading", filepath)
     bmd = BModel()
@@ -542,11 +544,11 @@ def importFile(filepath):
     armObject.rotation_euler = Vector((math.pi/2,0,0))
     armMod = meshObject.modifiers.new('Armature', 'ARMATURE')
     armMod.object = armObject
-    bpy.context.scene.collection.objects.link(meshObject)
-    bpy.context.scene.collection.objects.link(armObject)
+    context.scene.collection.objects.link(meshObject)
+    context.scene.collection.objects.link(armObject)
 
     if hasattr(bmd, "jnt1"):
-        bpy.context.view_layer.objects.active = armObject
+        context.view_layer.objects.active = armObject
         bpy.ops.object.mode_set(mode='EDIT')
 
         for i, f in enumerate(bmd.jnt1.frames):
@@ -560,7 +562,7 @@ def importFile(filepath):
     #armObject["scenegraph"] = repr(bmd.scenegraph.to_dict(bmd))
     
     bm = bmesh.new()
-    bm.from_object(meshObject, bpy.context.evaluated_depsgraph_get())
+    bm.from_object(meshObject, context.evaluated_depsgraph_get())
     importMesh(filepath, bmd, mesh, bm)
 
     if 0:
@@ -601,7 +603,7 @@ def importFile(filepath):
         armMod.object = armObject
         bm.to_mesh(mesh)
         bm.free()
-        bpy.context.scene.collection.objects.link(meshObject)
+        context.scene.collection.objects.link(meshObject)
 
 class ImportBMD(Operator, ImportHelper):
     files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
@@ -622,7 +624,7 @@ class ImportBMD(Operator, ImportHelper):
         context.window_manager.progress_begin(0, len(self.files))
         for i, file in enumerate(self.files):
             context.window_manager.progress_update(i)
-            importFile(os.path.join(self.directory, file.name))
+            importFile(os.path.join(self.directory, file.name), context)
         context.window_manager.progress_end()
         return {'FINISHED'}
 
