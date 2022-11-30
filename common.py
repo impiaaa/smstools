@@ -34,6 +34,8 @@ class ReadableStruct(Readable): # name???
         return self.__class__.__name__ + " " + " ".join([(field if isinstance(field, str) else field[0])+"="+repr(getattr(self, (field if isinstance(field, str) else field[0]))) for field in self.fields])
     def __hash__(self):
         return hash(self.as_tuple())
+    def __eq__(self, other):
+        return isinstance(other, __class__) and self.as_tuple() == other.as_tuple()
 
 class Section(ReadableStruct):
     def read(self, fin, start, size):
@@ -104,7 +106,7 @@ class BFile(Readable):
         for chunk in self.chunks:
             buffer = io.BytesIO()
             chunk.write(buffer)
-            buffer.write(Padding[:alignAmt(buffer.tell()+8, 32)])
+            alignFile(buffer, 32, 8)
             data = buffer.getvalue()
             fout.write(struct.pack('>4sL', chunk.chunkId, len(data)+8))
             fout.write(data)
@@ -126,8 +128,8 @@ def alignAmt(pos, alignment):
 def alignOffset(offset, alignment=4):
     return offset+alignAmt(offset, alignment)
 
-def alignFile(fout, alignment=4):
-    fout.write(Padding[:alignAmt(fout.tell(), alignment)])
+def alignFile(fout, alignment=4, offset=0):
+    fout.write(Padding[:alignAmt(fout.tell()+offset, alignment)])
 
 def calcKeyCode(name):
     if isinstance(name, str):
@@ -136,4 +138,25 @@ def calcKeyCode(name):
     for c in name:
         x = (c + x*3)&0xFFFF
     return x
+
+def arrayStringSearch(haystack, needle):
+    # could use something like Boyer-Moore, or could hack into Python's built-in
+    # string search, but whatever
+    if len(needle) <= 1:
+        jump = 1
+    else:
+        try:
+            jump = needle.index(needle[0], 1)
+        except ValueError:
+            jump = 1
+    i = 0
+    while i < len(haystack)-len(needle)+1:
+        try:
+            i = haystack.index(needle[0], i)
+        except ValueError:
+            return None
+        if tuple(haystack[i:i+len(needle)]) == tuple(needle):
+            return i
+        i += jump
+    return None
 

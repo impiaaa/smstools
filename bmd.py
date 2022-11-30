@@ -41,7 +41,7 @@ def writeStringTable(f, strings):
         offsets.append(len(table)+stringTableHeaderStruct.size)
         table += s+b'\0'
     for s, offset in zip(strings, offsets):
-        f.write(stringTableEntryStruct.pack(calcKeyCode(s), offset))
+        f.write(stringTableEntryStruct.pack(calcKeyCode(s), offset+len(offsets)*stringTableEntryStruct.size))
     f.write(table)
 
 class DrawBlock(Section):
@@ -271,7 +271,7 @@ class Jnt1Entry(Readable):
             tx, ty, tz, \
             self.boundingSphereRadius = self.header.unpack(fin.read(40))
         self.scale = Vector((sx, sy, sz))
-        self.rotation = Euler((rx/0x8000*math.pi, ry/0x8000*math.pi, rz/0x8000*math.pi))
+        self.rotation = Euler((rx*math.pi/0x8000, ry*math.pi/0x8000, rz*math.pi/0x8000))
         self.translation = Vector((tx, ty, tz))
         self.bbMin = bbStruct.unpack(fin.read(bbStruct.size))
         self.bbMax = bbStruct.unpack(fin.read(bbStruct.size))
@@ -280,9 +280,9 @@ class Jnt1Entry(Readable):
         fout.write(self.header.pack(
             self.flags, self.calcFlags,
             self.scale.x, self.scale.y, self.scale.z,
-            int(self.rotation.x*0x8000/math.pi),
-            int(self.rotation.y*0x8000/math.pi),
-            int(self.rotation.z*0x8000/math.pi),
+            round(self.rotation.x*0x8000/math.pi),
+            round(self.rotation.y*0x8000/math.pi),
+            round(self.rotation.z*0x8000/math.pi),
             self.translation.x, self.translation.y, self.translation.z,
             self.boundingSphereRadius
         ))
@@ -1326,19 +1326,19 @@ class Shape(ReadableStruct):
             drawInitDataOffset, displayListOffset, \
             mtxInitDataOffset, matrixTableOffset):
         
-        draws = []
-        for i in range(self.mtxGroupCount):
-            fin.seek(baseOffset+drawInitDataOffset+(self.shapeDrawInitDataIndex + i)*ShapeDraw.header.size)
-            drawInitData = ShapeDraw()
-            drawInitData.read(fin, baseOffset+displayListOffset, self.attribs)
-            draws.append(drawInitData)
-        
         matrices = []
         for i in range(self.mtxGroupCount):
             fin.seek(baseOffset+mtxInitDataOffset+(self.shapeMtxInitDataIndex + i)*ShapeMtx.header.size)
             matrixInfo = ShapeMtx()
             matrixInfo.read(fin, baseOffset+matrixTableOffset)
             matrices.append(matrixInfo)
+        
+        draws = []
+        for i in range(self.mtxGroupCount):
+            fin.seek(baseOffset+drawInitDataOffset+(self.shapeDrawInitDataIndex + i)*ShapeDraw.header.size)
+            drawInitData = ShapeDraw()
+            drawInitData.read(fin, baseOffset+displayListOffset, self.attribs)
+            draws.append(drawInitData)
         
         self.matrixGroups = list(map(tuple, zip(draws, matrices)))
 
@@ -1374,77 +1374,98 @@ class ShapeBlock(Section):
         
         for shape in self.batches:
             shape.readVtxDesc(fin, start+self.vtxDescTableOffset)
+        
+        for shape in self.batches:
             shape.readMatrixGroups(fin, start, self.drawInitDataOffset, self.displayListOffset, self.mtxInitDataOffset, self.matrixTableOffset)
     
     def write(self, fout):
         self.shapeCount = len(self.batches)
         self.shapeInitDataOffset = self.header.size+8
         self.remapTableOffset = self.shapeInitDataOffset + (Shape.header.size+24)*len(self.batches)
-        self.shapeNameTableOffset = self.remapTableOffset + self.remapTable.itemsize*len(self.remapTable)
+        shapeNames = [shape.name for shape in self.batches if shape.name is not None]
+        if len(shapeNames) == 0:
+            self.shapeNameTableOffset = 0
+            self.vtxDescTableOffset = alignOffset(self.remapTableOffset + self.remapTable.itemsize*len(self.remapTable), 8)
+        else:
+            self.shapeNameTableOffset = alignOffset(self.remapTableOffset + self.remapTable.itemsize*len(self.remapTable), 2)
+            self.vtxDescTableOffset = alignOffset(self.shapeNameTableOffset + stringTableSize(shapeNames), 8)
         
-        self.vtxDescTableOffset = self.shapeNameTableOffset + stringTableSize([shape.name for shape in self.batches if shape.name is not None])
-        
-        offset = 0
+        vtxDescSets = []
+        dummyVtxDesc = VtxDesc()
+        dummyVtxDesc.attrib = VtxAttr.NONE
+        dummyVtxDesc.dataType = VtxAttrIn.NONE
         for shape in self.batches:
-            shape.vtxDescIndex = offset
-            offset += (len(shape.attribs)+1)*VtxDesc.header.size
+            idx = arrayStringSearch(vtxDescSets, shape.attribs)
+            if idx is None:
+                idx = len(vtxDescSets)
+                vtxDescSets.extend(shape.attribs)
+                vtxDescSets.append(dummyVtxDesc)
+            shape.vtxDescIndex = idx*VtxDesc.header.size
         
-        self.matrixTableOffset = self.vtxDescTableOffset + offset
+        self.matrixTableOffset = self.vtxDescTableOffset + len(vtxDescSets)*VtxDesc.header.size
+        
+        matrixTableSets = array('H')
+        for shape in self.batches:
+            for shapeDraw, shapeMatrix in shape.matrixGroups:
+                shapeMatrix.firstIndex = arrayStringSearch(matrixTableSets, shapeMatrix.matrixTable)
+                if shapeMatrix.firstIndex is None:
+                    shapeMatrix.firstIndex = len(matrixTableSets)
+                    matrixTableSets.extend(shapeMatrix.matrixTable)
+        
+        self.displayListOffset = alignOffset(self.matrixTableOffset + len(matrixTableSets)*matrixTableSets.itemsize+8, 32)
         
         offset = 0
         for shape in self.batches:
             for shapeDraw, shapeMatrix in shape.matrixGroups:
-                offset += shapeMatrix.matrixTable.itemsize*len(shapeMatrix.matrixTable)
-        
-        self.displayListOffset = self.matrixTableOffset + offset
-        
-        offset = 0
-        for shape in self.batches:
-            for shapeDraw, shapeMatrix in shape.matrixGroups:
+                shapeDraw.displayListStart = offset
+                shapeDraw.displayListSize = 0
                 for primitive in shapeDraw.primitives:
-                    offset += primitive.header.size
+                    shapeDraw.displayListSize += primitive.header.size
                     for currPoint in primitive.points:
                         for attrib in shape.attribs:
-                            offset += Index.sizeStructs[attrib.dataType].size
+                            shapeDraw.displayListSize += Index.sizeStructs[attrib.dataType].size
+                shapeDraw.displayListSize = alignOffset(shapeDraw.displayListSize, 32)
+                offset += shapeDraw.displayListSize
         
         self.mtxInitDataOffset = self.displayListOffset + offset
         
         offset = 0
-        for shape in self.batches:
-            shape.shapeMtxInitDataIndex = offset
+        for i, shape in enumerate(self.batches):
+            shape.shapeMtxInitDataIndex = i
             offset += len(shape.matrixGroups)*ShapeMtx.header.size
         
         self.drawInitDataOffset = self.mtxInitDataOffset + offset
         
-        offset = 0
+        shapeDrawSets = []
         for shape in self.batches:
-            shape.shapeDrawInitDataIndex = offset
-            offset += len(shape.matrixGroups)*ShapeDraw.header.size
+            shapeDraws = [shapeDraw for shapeDraw, shapeMatrix in shape.matrixGroups]
+            shape.shapeDrawInitDataIndex = arrayStringSearch(shapeDrawSets, shapeDraws)
+            if shape.shapeDrawInitDataIndex is None:
+                shape.shapeDrawInitDataIndex = len(shapeDrawSets)
+                shapeDrawSets.extend(shapeDraws)
         
         super().write(fout)
         for shape in self.batches:
             shape.write(fout)
         swapArray(self.remapTable).tofile(fout)
-        writeStringTable(fout, [shape.name for shape in self.batches if shape.name is not None])
-        for shape in self.batches:
-            for attrib in shape.attribs:
-                attrib.write(fout)
-            fout.write(b'\0'*VtxDesc.header.size)
-        for shape in self.batches:
-            for shapeDraw, shapeMatrix in shape.matrixGroups:
-                shapeMatrix.matrixTable.tofile(fout)
+        if len(shapeNames) != 0:
+            alignFile(fout, 2)
+            writeStringTable(fout, shapeNames)
+        alignFile(fout, 8)
+        for attrib in vtxDescSets:
+            attrib.write(fout)
+        swapArray(matrixTableSets).tofile(fout)
+        alignFile(fout, 32, 8)
         for shape in self.batches:
             for shapeDraw, shapeMatrix in shape.matrixGroups:
                 for primitive in shapeDraw.primitives:
-                    offset += primitive.header.size
-                    for currPoint in primitive.points:
-                        currPoint.write(fout, shape.attribs)
+                    primitive.write(fout, shape.attribs)
+                alignFile(fout, 32, 8)
         for shape in self.batches:
             for shapeDraw, shapeMatrix in shape.matrixGroups:
                 shapeMatrix.write(fout)
-        for shape in self.batches:
-            for shapeDraw, shapeMatrix in shape.matrixGroups:
-                shapeDraw.write(fout)
+        for shapeDraw in shapeDrawSets:
+            shapeDraw.write(fout)
 
 
 class TextureBlock(Section):

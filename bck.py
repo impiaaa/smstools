@@ -217,27 +217,6 @@ def readComp(src, index):
     
     return dst
 
-def arrayStringSearch(haystack, needle):
-    # could use something like Boyer-Moore, or could hack into Python's built-in
-    # string search, but whatever
-    if len(needle) <= 1:
-        jump = 1
-    else:
-        try:
-            jump = needle.index(needle[0], 1)
-        except ValueError:
-            jump = 1
-    i = 0
-    while i < len(haystack)-len(needle)+1:
-        try:
-            i = haystack.index(needle[0], i)
-        except ValueError:
-            return None
-        if tuple(haystack[i:i+len(needle)]) == tuple(needle):
-            return i
-        i += jump
-    return None
-
 def addComp(idx: AnimIndex, keys: list[Key], out, scale=1.0, cnv=float):
     idx.count = len(keys)
     tangentSimple = all([key.tangentIn == key.tangentOut for key in keys])
