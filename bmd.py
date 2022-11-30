@@ -1059,13 +1059,13 @@ class MaterialBlock(Section):
     def write(self, fout):
         self.count = len(self.materials)
         offsets = [0]*30
-        offsets[0] = self.header.size+8
+        offsets[0] = 8+self.header.size+120
         offsets[1] = offsets[0]+len(self.materials)*0x14C
         #self.remapTable = array('H', range(len(self.materials)))
-        offsets[2] = offsets[1]+len(self.remapTable)*self.remapTable.itemsize
+        offsets[2] = alignOffset(offsets[1]+len(self.remapTable)*self.remapTable.itemsize)
         self.materialNames = list({m.name for m in self.materials if m.name is not None})
-        offsets[3] = offsets[2]+stringTableSize(self.materialNames)
-        offsets[4] = offsets[3]
+        offsets[3] = alignOffset(offsets[2]+stringTableSize(self.materialNames))
+        offsets[4] = offsets[3]+len(self.indirectArray)*0x138
         self.cullModeArray = array('I', {m.cullMode for m in self.materials if m.cullMode is not None})
         offsets[5] = offsets[4]+len(self.cullModeArray)*self.cullModeArray.itemsize
         self.matColorArray = list({x for m in self.materials for x in m.matColors if x is not None})
@@ -1120,7 +1120,10 @@ class MaterialBlock(Section):
             m.index(self)
             m.write(fout)
         swapArray(self.remapTable).tofile(fout)
+        alignFile(fout)
         writeStringTable(fout, self.materialNames)
+        alignFile(fout)
+        for x in self.indirectArray: x.write(fout)
         swapArray(self.cullModeArray).tofile(fout)
         for x in self.matColorArray: fout.write(pack('BBBB', *x))
         self.colorChanNumArray.tofile(fout)
@@ -1484,21 +1487,31 @@ class TextureBlock(Section):
             self.textures.append(im)
     def write(self, fout):
         self.texCount = len(self.textures)
-        self.textureHeaderOffset = self.header.size+8
-        datas = list({swapArray(im.data).tobytes() for im in self.textures})
-        dataOffsets = [sum(map(len, datas[:i])) for i in range(len(datas))]
-        palettes = list({swapArray(im.palette).tobytes() for im in self.textures if im.palette is not None})
-        paletteOffsets = [sum(map(len, palettes[:i])) for i in range(len(palettes))]
+        self.textureHeaderOffset = alignOffset(self.header.size+8, 16)
+        
+        datas = []
         for im in self.textures:
-            i = datas.index(swapArray(im.data).tobytes())
-            im.dataOffset = dataOffsets[i]
-            if im.palette is not None:
-                i = palettes.index(swapArray(im.palette).tobytes())
-                im.paletteOffset = paletteOffsets[i]
-            else:
-                im.paletteOffset = dataOffsets[i]+len(im.data)*im.data.itemsize
+            b = swapArray(im.data).tobytes()
+            if b not in datas:
+                datas.append(b)
+        dataOffsets = [sum(map(len, datas[:i])) for i in range(len(datas))]
+        
+        palettes = []
+        for im in self.textures:
+            b = swapArray(im.palette).tobytes()
+            if b not in datas:
+                palettes.append(b)
+        paletteOffsets = [sum(map(len, palettes[:i])) for i in range(len(palettes))]
+        
+        for texNo, im in enumerate(self.textures):
+            dataIdx = datas.index(swapArray(im.data).tobytes())
+            im.dataOffset = dataOffsets[dataIdx] + paletteOffsets[-1] + 32*(len(self.textures) - texNo)
+            palIdx = palettes.index(swapArray(im.palette).tobytes())
+            im.paletteOffset = paletteOffsets[palIdx] + 32*(len(self.textures) - texNo)
         self.stringTableOffset = Image.header.size*len(self.textures) + self.textureHeaderOffset + max(dataOffsets) + len(datas[-1])
+        
         super().write(fout)
+        alignFile(fout, 16, 8)
         for im in self.textures:
             super(Image, im).write(fout)
         for data in datas:

@@ -44,12 +44,9 @@ class Image(ReadableStruct):
             fin.seek(self.fullDataOffset)
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
-            if self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
-                self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
-                fin.seek(self.fullPaletteOffset)
-                self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
-            else:
-                self.palette = None
+            self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
+            fin.seek(self.fullPaletteOffset)
+            self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
             
             fin.seek(nextHeader)
     
