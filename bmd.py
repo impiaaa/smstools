@@ -54,6 +54,7 @@ class DrawBlock(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         fin.seek(start+self.offsetToIsWeighted)
+        self.offsetToIsWeighted = None
         bisWeighted = array('B')
         bisWeighted.fromfile(fin, self.count)
         if not all([x in (0,1) for x in bisWeighted]):
@@ -61,8 +62,10 @@ class DrawBlock(Section):
         self.isWeighted = list([x == 1 for x in bisWeighted])
 
         fin.seek(start+self.offsetToData)
+        self.offsetToData = None
         self.data = array('H')
         self.data.fromfile(fin, self.count)
+        self.count = None
         if sys.byteorder == 'little': self.data.byteswap()
         
     def write(self, fout):
@@ -87,10 +90,12 @@ class EnvelopBlock(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         fin.seek(start+self.boneCountOffset)
+        self.boneCountOffset = None
         counts = array('B')
         counts.fromfile(fin, self.count)
 
         fin.seek(start+self.weightedIndicesOffset)
+        self.weightedIndicesOffset = None
         self.weightedIndices = [array('H') for i in range(self.count)]
         for i in range(self.count):
             self.weightedIndices[i].fromfile(fin, counts[i])
@@ -98,12 +103,15 @@ class EnvelopBlock(Section):
         #numMatrices = max(list(map(max, self.weightedIndices)))+1 if self.count > 0 else 0
 
         fin.seek(start+self.boneWeightsTableOffset)
+        self.boneWeightsTableOffset = None
         self.weightedWeights = [array('f') for i in range(self.count)]
         for i in range(self.count):
             self.weightedWeights[i].fromfile(fin, counts[i])
             if sys.byteorder == 'little': self.weightedWeights[i].byteswap()
+        self.count = None
 
         fin.seek(start+self.matrixTableOffset)
+        self.matrixTableOffset = None
         self.matrices = []
         while fin.tell() <= start+size-0x30:
             m = Matrix()
@@ -113,6 +121,7 @@ class EnvelopBlock(Section):
     
     def write(self, fout):
         self.count = len(self.weightedIndices)
+        if self.count != len(self.weightedWeights): raise ValueError()
         self.boneCountOffset = self.header.size+8
         self.weightedIndicesOffset = self.boneCountOffset+self.count
         self.boneWeightsTableOffset = alignOffset(self.weightedIndicesOffset+(2*sum(map(len, self.weightedIndices))))
@@ -146,6 +155,7 @@ class ModelInfoBlock(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         fin.seek(start+self.offsetToEntries)
+        self.offsetToEntries = None
         self.scenegraph = []
         n = ModelHierarchy()
         n.read(fin)
@@ -228,6 +238,7 @@ class JointBlock(Section):
         if len(boneNames) != self.count: warn("number of strings doesn't match number of joints")
 
         fin.seek(start+self.jntEntryOffset)
+        self.jntEntryOffset = None
         self.matrices = [Matrix() for i in range(self.count)]
         for m in self.matrices:
             m.zero()
@@ -240,15 +251,18 @@ class JointBlock(Section):
             self.frames.append(f)
         
         fin.seek(start+self.remapTableOffset)
+        self.remapTableOffset = None
         self.remapTable = array('H')
         self.remapTable.fromfile(fin, self.count)
+        self.count = None
         if sys.byteorder == 'little': self.remapTable.byteswap()
     
     def write(self, fout):
         self.count = len(self.frames)
+        if self.count != len(self.matrices): raise ValueError()
         self.jntEntryOffset = self.header.size+8
-        self.remapTableOffs = self.jntEntryOffset+(self.count*(Jnt1Entry.header.size+bbStruct.size+bbStruct.size))
-        self.stringTableOffset = alignOffset(self.remapTableOffs+len(self.remapTable)*self.remapTable.itemsize)
+        self.remapTableOffset = self.jntEntryOffset+(self.count*(Jnt1Entry.header.size+bbStruct.size+bbStruct.size))
+        self.stringTableOffset = alignOffset(self.remapTableOffset+len(self.remapTable)*self.remapTable.itemsize)
         super().write(fout)
         for f in self.frames:
             f.write(fout)
@@ -297,7 +311,7 @@ class IndTexOrder(ReadableStruct):
     header = Struct('BBxx')
     fields = ["texCoordId", "texture"]
 
-class IndTexMtx(ReadableStruct):
+class IndTexMtx(Readable):
     def read(self, fin):
         p = unpack('>6f', fin.read(0x18))
         self.exponent, = unpack('Bxxx', fin.read(4))
@@ -790,31 +804,57 @@ class Material(ReadableStruct):
     
     def resolve(self, mat3):
         self.cullMode = safeGet(mat3.cullModeArray, self.cullModeIndex)
+        self.cullModeIndex = None
         self.colorChanNum = safeGet(mat3.colorChanNumArray, self.colorChanNumIndex)
+        self.colorChanNumIndex = None
         self.texGenNum = safeGet(mat3.texGenNumArray, self.texGenNumIndex)
+        self.texGenNumIndex = None
         self.tevStageNum = safeGet(mat3.tevStageNumArray, self.tevStageNumIndex)
+        self.tevStageNumIndex = None
         self.zCompLoc = safeGet(mat3.zCompLocArray, self.zCompLocIndex)
+        self.zCompLocIndex = None
         self.zMode = safeGet(mat3.zModeArray, self.zModeIndex)
+        self.zModeIndex = None
         self.dither = safeGet(mat3.ditherArray, self.ditherIndex)
+        self.ditherIndex = None
         self.matColors = [safeGet(mat3.matColorArray, i) for i in self.matColorIndices]
+        self.matColorIndices = None
         self.colorChans = [safeGet(mat3.colorChanArray, i) for i in self.colorChanIndices]
+        self.colorChanIndices = None
         self.ambColors = [safeGet(mat3.ambColorArray, i) for i in self.ambColorIndices]
+        self.ambColorIndices = None
         self.lightInfos = [safeGet(mat3.lightInfoArray, i) for i in self.lightInfoIndices]
+        self.lightInfoIndices = None
         self.texCoords = [safeGet(mat3.texCoordArray, i) for i in self.texCoordIndices]
-        #self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
+        self.texCoordIndices = None
+        self.postTexGens = [safeGet(mat3.postTexGenArray, i) for i in self.postTexGenIndices]
+        self.postTexGenIndices = None
         self.texMtxs = [safeGet(mat3.texMtxArray, i) for i in self.texMtxIndices]
-        #self.postTexMtxs = [safeGet(mat3.postTexMtxArray, i) for i in self.postTexMtxIndices]
+        self.texMtxIndices = None
+        self.postTexMtxs = [safeGet(mat3.postTexMtxArray, i) for i in self.postTexMtxIndices]
+        self.postTexMtxIndices = None
         self.texNos = [safeGet(mat3.texNoArray, i) for i in self.texNoIndices]
+        self.texNoIndices = None
         self.tevKColors = [safeGet(mat3.tevKColorArray, i) for i in self.tevKColorIndices]
+        self.tevKColorIndices = None
         self.tevOrders = [safeGet(mat3.tevOrderArray, i) for i in self.tevOrderIndices]
+        self.tevOrderIndices = None
         self.tevColors = [safeGet(mat3.tevColorArray, i) for i in self.tevColorIndices]
+        self.tevColorIndices = None
         self.tevStages = [safeGet(mat3.tevStageArray, i) for i in self.tevStageIndices]
+        self.tevStageIndices = None
         self.tevSwapModes = [safeGet(mat3.tevSwapModeArray, i) for i in self.tevSwapModeIndices]
+        self.tevSwapModeIndices = None
         self.tevSwapModeTables = [safeGet(mat3.tevSwapModeTableArray, i) for i in self.tevSwapModeTableIndices]
+        self.tevSwapModeTableIndices = None
         self.fog = safeGet(mat3.fogArray, self.fogIndex)
+        self.fogIndex = None
         self.alphaComp = safeGet(mat3.alphaCompArray, self.alphaCompIndex)
+        self.alphaCompIndex = None
         self.blend = safeGet(mat3.blendArray, self.blendIndex)
+        self.blendIndex = None
         self.nbtScale = safeGet(mat3.nbtScaleArray, self.nbtScaleIndex)
+        self.nbtScaleIndex = None
 
     def write(self, fout):
         super().write(fout)
@@ -851,9 +891,9 @@ class Material(ReadableStruct):
         self.ambColorIndices = [safeIndex(mat3.ambColorArray, x) for x in self.ambColors]
         self.lightInfoIndices = [safeIndex(mat3.lightInfoArray, x) for x in self.lightInfos]
         self.texCoordIndices = [safeIndex(mat3.texCoordArray, x) for x in self.texCoords]
-        #self.postTexGenIndices = [safeIndex(mat3.postTexGenArray, x) for x in self.postTexGens]
+        self.postTexGenIndices = [safeIndex(mat3.postTexGenArray, x) for x in self.postTexGens]
         self.texMtxIndices = [safeIndex(mat3.texMtxArray, x) for x in self.texMtxs]
-        #self.postTexMtxIndices = [safeIndex(mat3.postTexMtxArray, x) for x in self.postTexMtxs]
+        self.postTexMtxIndices = [safeIndex(mat3.postTexMtxArray, x) for x in self.postTexMtxs]
         self.texNoIndices = [safeIndex(mat3.texNoArray, x) for x in self.texNos]
         self.tevKColorIndices = [safeIndex(mat3.tevKColorArray, x) for x in self.tevKColors]
         self.tevOrderIndices = [safeIndex(mat3.tevOrderArray, x) for x in self.tevOrders]
@@ -881,9 +921,9 @@ class Material(ReadableStruct):
         print("ambColors =", self.ambColors)
         print("lightInfos =", self.lightInfos)
         print("texCoords =", self.texCoords)
-        #print("postTexGens =", self.postTexGens)
+        print("postTexGens =", self.postTexGens)
         print("texMtxs =", self.texMtxs)
-        #print("postTexMtxs =", self.postTexMtxs)
+        print("postTexMtxs =", self.postTexMtxs)
         print("texNos =", self.texNos)
         print("tevKColors =", self.tevKColors)
         print("tevKColorSels =", self.tevKColorSels)
@@ -914,9 +954,9 @@ class Material(ReadableStruct):
             tuple(self.ambColors),
             tuple(self.lightInfos),
             tuple(self.texCoords),
-            #tuple(self.postTexGens),
+            tuple(self.postTexGens),
             tuple(self.texMtxs),
-            #tuple(self.postTexMtxs),
+            tuple(self.postTexMtxs),
             tuple(self.texNos),
             tuple(self.tevKColors),
             tuple(self.tevKColorSels),
@@ -962,6 +1002,7 @@ class MaterialBlock(Section):
             warn("mat3: number of strings (%d) doesn't match number of elements (%d)"%len(self.materialNames), self.count)
         for m, n in zip(self.materials, self.materialNames):
             m.name = n
+        self.count = None
         
         fin.seek(start+offsets[3])
         self.indirectArray = [IndInitData.try_make(fin) for i in range(lengths[3]//0x138)]
@@ -994,14 +1035,14 @@ class MaterialBlock(Section):
         fin.seek(start+offsets[11])
         self.texCoordArray = [TexCoordInfo.try_make(fin) for i in range(lengths[11]//TexCoordInfo.header.size)]
         
-        # postTexGen
         fin.seek(start+offsets[12])
+        self.postTexGenArray = [TexCoordInfo.try_make(fin) for i in range(lengths[12]//TexCoordInfo.header.size)]
         
         fin.seek(start+offsets[13])
         self.texMtxArray = [TexMtxInfo.try_make(fin) for i in range(lengths[13]//100)]
         
-        # postTexMtx
         fin.seek(start+offsets[14])
+        self.postTexMtxArray = [TexMtxInfo.try_make(fin) for i in range(lengths[14]//100)]
         
         fin.seek(start+offsets[15])
         self.texNoArray = array('H')
@@ -1083,10 +1124,12 @@ class MaterialBlock(Section):
         offsets[11] = alignOffset(offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize)
         self.texCoordArray = list({x for m in self.materials for x in m.texCoords if x is not None})
         offsets[12] = offsets[11]+len(self.texCoordArray)*TexCoordInfo.header.size
-        offsets[13] = offsets[12]
+        self.postTexGenArray = list({x for m in self.materials for x in m.postTexGens if x is not None})
+        offsets[13] = offsets[12]+len(self.postTexGenArray)*TexCoordInfo.header.size
         self.texMtxArray = list({x for m in self.materials for x in m.texMtxs if x is not None})
         offsets[14] = offsets[13]+len(self.texMtxArray)*0x64
-        offsets[15] = offsets[14]
+        self.postTexMtxArray = list({x for m in self.materials for x in m.postTexMtxs if x is not None})
+        offsets[15] = offsets[14]+len(self.postTexMtxArray)*0x64
         self.texNoArray = array('H', {x for m in self.materials for x in m.texNos if x is not None})
         offsets[16] = offsets[15]+len(self.texNoArray)*self.texNoArray.itemsize
         self.tevOrderArray = list({x for m in self.materials for x in m.tevOrders if x is not None})
@@ -1135,7 +1178,9 @@ class MaterialBlock(Section):
         self.texGenNumArray.tofile(fout)
         alignFile(fout)
         for x in self.texCoordArray: x.write(fout)
+        for x in self.postTexGenArray: x.write(fout)
         for x in self.texMtxArray: x.write(fout)
+        for x in self.postTexMtxArray: x.write(fout)
         swapArray(self.texNoArray).tofile(fout)
         for x in self.tevOrderArray: x.write(fout)
         for x in self.tevColorArray: fout.write(pack('>HHHH', *x))
@@ -1254,11 +1299,13 @@ class Primitive(ReadableStruct):
         if self.type == PrimitiveType.NONE: return
 
         self.points = [Index() for jkl in range(self.count)]
+        self.count = None
 
         for currPoint in self.points:
             currPoint.read(fin, attribs)
     
     def write(self, fout, attribs):
+        self.count = len(self.points)
         super().write(fout)
         if self.type == PrimitiveType.NONE: return
         for currPoint in self.points:
@@ -1277,6 +1324,7 @@ class ShapeDraw(ReadableStruct):
             if currPrimitive.type == PrimitiveType.NONE:
                 break
             self.primitives.append(currPrimitive)
+        self.displayListStart = self.displayListSize = None
 
 class ShapeMtx(ReadableStruct):
     header = Struct('>HHI')
@@ -1285,9 +1333,14 @@ class ShapeMtx(ReadableStruct):
         super().read(fin)
         if self.count > 10: raise ValueError("%d is more than 10 matrix slots"%self.count)
         fin.seek(base+2*self.firstIndex)
+        self.firstIndex = None
         self.matrixTable = array('H')
         self.matrixTable.fromfile(fin, self.count)
+        self.count = None
         if sys.byteorder == 'little': self.matrixTable.byteswap()
+    def write(self, fout):
+        self.count = len(self.matrixTable)
+        super().write(fout)
 
 class VtxDesc(ReadableStruct):
     header = Struct('>II')
@@ -1303,12 +1356,14 @@ class Shape(ReadableStruct):
         self.bbMax = bbStruct.unpack(fin.read(12))
     
     def write(self, fout):
+        self.mtxGroupCount = len(self.matrixGroups)
         super().write(fout)
         fout.write(bbStruct.pack(*self.bbMin))
         fout.write(bbStruct.pack(*self.bbMax))
 
     def readVtxDesc(self, fin, vtxDescTableOffset):
         fin.seek(vtxDescTableOffset+self.vtxDescIndex)
+        self.vtxDescIndex = None
         self.attribs = []
         a = VtxDesc(fin)
         while a.attrib != VtxAttr.NONE:
@@ -1342,6 +1397,7 @@ class Shape(ReadableStruct):
             matrixInfo = ShapeMtx()
             matrixInfo.read(fin, baseOffset+matrixTableOffset)
             matrices.append(matrixInfo)
+        self.shapeMtxInitDataIndex = None
         
         draws = []
         for i in range(self.mtxGroupCount):
@@ -1349,6 +1405,7 @@ class Shape(ReadableStruct):
             drawInitData = ShapeDraw()
             drawInitData.read(fin, baseOffset+displayListOffset, self.attribs)
             draws.append(drawInitData)
+        self.shapeDrawInitDataIndex = self.mtxGroupCount = None
         
         self.matrixGroups = list(map(tuple, zip(draws, matrices)))
 
@@ -1364,14 +1421,17 @@ class ShapeBlock(Section):
         super().read(fin, start, size)
         self.batches = []
         fin.seek(start+self.shapeInitDataOffset)
+        self.shapeInitDataOffset = None
         for i in range(self.shapeCount):
             shape = Shape()
             shape.read(fin)
             self.batches.append(shape)
         
         fin.seek(start+self.remapTableOffset)
+        self.remapTableOffset = None
         self.remapTable = array('H')
         self.remapTable.fromfile(fin, self.shapeCount)
+        self.shapeCount = None
         if sys.byteorder == 'little': self.remapTable.byteswap()
         
         if self.shapeNameTableOffset == 0:
@@ -1381,14 +1441,18 @@ class ShapeBlock(Section):
             shapeNames = readStringTable(start+self.shapeNameTableOffset, fin)
             for name, shape in zip(shapeNames, self.batches):
                 shape.name = name
+        self.shapeNameTableOffset = None
         
         for shape in self.batches:
             shape.readVtxDesc(fin, start+self.vtxDescTableOffset)
+        self.vtxDescTableOffset = None
         
         for shape in self.batches:
             shape.readMatrixGroups(fin, start, self.drawInitDataOffset, self.displayListOffset, self.mtxInitDataOffset, self.matrixTableOffset)
+        self.drawInitDataOffset = self.displayListOffset = self.mtxInitDataOffset = self.matrixTableOffset = None
     
     def write(self, fout):
+        if len(self.batches) != len(self.remapTable): raise ValueError()
         self.shapeCount = len(self.batches)
         self.shapeInitDataOffset = self.header.size+8
         self.remapTableOffset = self.shapeInitDataOffset + (Shape.header.size+24)*len(self.batches)
@@ -1483,8 +1547,9 @@ class TextureBlock(Section):
     fields = ['texCount', 'textureHeaderOffset', 'stringTableOffset']
     def read(self, fin, start, length):
         super().read(fin, start, length)
-        try: textureNames = readStringTable(start+self.stringTableOffset, fin)
-        except StructError: textureNames = []
+        textureNames = readStringTable(start+self.stringTableOffset, fin)
+        if len(textureNames) != self.texCount: raise ValueError()
+        self.texCount = None
         fin.seek(start+self.textureHeaderOffset)
         self.textures = []
         for i, name in enumerate(textureNames):
@@ -1492,6 +1557,7 @@ class TextureBlock(Section):
             im.name = name
             im.read(fin, start, self.textureHeaderOffset, i)
             self.textures.append(im)
+        self.textureHeaderOffset = None
     def write(self, fout):
         self.texCount = len(self.textures)
         self.textureHeaderOffset = alignOffset(self.header.size+8, 16)
@@ -1539,6 +1605,7 @@ class VertexBlock(Section):
         offsets = unpack('>13L', fin.read(52))
         
         fin.seek(start+self.arrayFormatOffset)
+        self.arrayFormatOffset = None
         self.formats = [None]*13
         for i in range(13):
             if offsets[i] != 0:
@@ -1725,30 +1792,54 @@ class MaterialDLBlock(Section):
         #fout.write(fin.read(size))
         #fout.close()
         fin.seek(start+self.offset1)
+        self.offset1 = None
         self.things1 = [unpack('>II', fin.read(8)) for i in range(self.count)]
         for subOffset, thing in self.things1:
             fin.seek(start+self.offset1+subOffset)
         
         fin.seek(start+self.offset2)
+        self.offset2 = None
         self.things2 = [fin.read(16) for i in range(self.count)]
         assert fin.tell() <= start+self.offset3
         
         fin.seek(start+self.offset3)
+        self.offset3 = None
         self.things3 = [fin.read(8) for i in range(self.count)]
         assert fin.tell() <= start+self.offset4
         
         fin.seek(start+self.offset4)
+        self.offset4 = None
         self.things4 = array('B')
         self.things4.fromfile(fin, self.count)
         assert fin.tell() <= start+self.offset5
         
         fin.seek(start+self.offset5)
+        self.offset5 = None
         self.things5 = array('H')
         self.things5.fromfile(fin, self.count)
+        self.count = None
         if sys.byteorder == 'little': self.things5.byteswap()
         assert fin.tell() <= start+self.stringTableOffset
         
         self.strings = readStringTable(start+self.stringTableOffset, fin)
+        self.stringTableOffset = None
+    
+    def write(self, fout):
+        self.count = len(self.things1)
+        if self.count != len(self.things2) or self.count != len(self.things3) or self.count != len(self.things4) or self.count != len(self.things5): raise ValueError()
+        self.offset1 = self.header.size+8
+        self.offset2 = self.offset1 + len(self.things1)*8
+        self.offset3 = self.offset2 + len(self.things2)*16
+        self.offset4 = self.offset3 + len(self.things3)*8
+        self.offset5 = self.offset4 + len(self.things4)*self.things4.itemsize
+        self.stringTableOffset = self.offset5 + len(self.things5)*self.things5.itemsize
+        super().write(fout)
+        for x in self.things1: fout.write(pack('>II', *x))
+        for x in self.things2: fout.write(x)
+        for x in self.things3: fout.write(x)
+        swapArray(self.things4).tofile(fout)
+        swapArray(self.things5).tofile(fout)
+        writeStringTable(fout, self.strings)
 
 class BModel(BFile):
     sectionHandlers = {
