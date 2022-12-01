@@ -300,19 +300,20 @@ class IndTexOrder(ReadableStruct):
 class IndTexMtx(ReadableStruct):
     def read(self, fin):
         p = unpack('>6f', fin.read(0x18))
-        exponent, = unpack('Bxxx', fin.read(4))
-        scale = 2**exponent
+        self.exponent, = unpack('Bxxx', fin.read(4))
+        scale = 2**self.exponent
         self.m = [
             p[0]*scale, p[1]*scale, p[2]*scale, scale,
             p[3]*scale, p[4]*scale, p[5]*scale, 0.0
         ]
     def write(self, fout):
+        scale = 2**self.exponent
         p = [
-            self.m[0], self.m[1], self.m[2],
-            self.m[4], self.m[5], self.m[6]
+            self.m[0]/scale, self.m[1]/scale, self.m[2]/scale,
+            self.m[4]/scale, self.m[5]/scale, self.m[6]/scale
         ]
         fout.write(pack('>6f', *p))
-        fout.write(b'\0\0\0\0')
+        fout.write(pack('Bxxx', self.exponent))
 
 class IndTexCoordScale(ReadableStruct):
     header = Struct('BBxx')
@@ -1071,7 +1072,7 @@ class MaterialBlock(Section):
         self.matColorArray = list({x for m in self.materials for x in m.matColors if x is not None})
         offsets[6] = offsets[5]+len(self.matColorArray)*4
         self.colorChanNumArray = array('B', {m.colorChanNum for m in self.materials if m.colorChanNum is not None})
-        offsets[7] = offsets[6]+len(self.colorChanNumArray)*self.colorChanNumArray.itemsize
+        offsets[7] = alignOffset(offsets[6]+len(self.colorChanNumArray)*self.colorChanNumArray.itemsize)
         self.colorChanArray = list({x for m in self.materials for x in m.colorChans if x is not None})
         offsets[8] = offsets[7]+len(self.colorChanArray)*ColorChanInfo.header.size
         self.ambColorArray = list({x for m in self.materials for x in m.ambColors if x is not None})
@@ -1079,7 +1080,7 @@ class MaterialBlock(Section):
         self.lightInfoArray = list({x for m in self.materials for x in m.lightInfos if x is not None})
         offsets[10] = offsets[9]+len(self.lightInfoArray)*LightInfo.header.size
         self.texGenNumArray = array('B', {m.texGenNum for m in self.materials if m.texGenNum is not None})
-        offsets[11] = offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize
+        offsets[11] = alignOffset(offsets[10]+len(self.texGenNumArray)*self.texGenNumArray.itemsize)
         self.texCoordArray = list({x for m in self.materials for x in m.texCoords if x is not None})
         offsets[12] = offsets[11]+len(self.texCoordArray)*TexCoordInfo.header.size
         offsets[13] = offsets[12]
@@ -1095,7 +1096,7 @@ class MaterialBlock(Section):
         self.tevKColorArray = list({x for m in self.materials for x in m.tevKColors if x is not None})
         offsets[19] = offsets[18]+len(self.tevKColorArray)*4
         self.tevStageNumArray = array('B', {m.tevStageNum for m in self.materials if m.tevStageNum is not None})
-        offsets[20] = offsets[19]+len(self.tevStageNumArray)*self.tevStageNumArray.itemsize
+        offsets[20] = alignOffset(offsets[19]+len(self.tevStageNumArray)*self.tevStageNumArray.itemsize)
         self.tevStageArray = list({x for m in self.materials for x in m.tevStages if x is not None})
         offsets[21] = offsets[20]+len(self.tevStageArray)*TevStageInfo.header.size
         self.tevSwapModeArray = list({x for m in self.materials for x in m.tevSwapModes if x is not None})
@@ -1111,9 +1112,9 @@ class MaterialBlock(Section):
         self.zModeArray = list({m.zMode for m in self.materials if m.zMode is not None})
         offsets[27] = offsets[26]+len(self.zModeArray)*ZModeInfo.header.size
         self.zCompLocArray = array('B', {m.zCompLoc for m in self.materials if m.zCompLoc is not None})
-        offsets[28] = offsets[27]+len(self.zCompLocArray)*self.zCompLocArray.itemsize
+        offsets[28] = alignOffset(offsets[27]+len(self.zCompLocArray)*self.zCompLocArray.itemsize)
         self.ditherArray = array('B', {m.dither for m in self.materials if m.dither is not None})
-        offsets[29] = offsets[28]+len(self.ditherArray)*self.ditherArray.itemsize
+        offsets[29] = alignOffset(offsets[28]+len(self.ditherArray)*self.ditherArray.itemsize)
         super().write(fout)
         fout.write(pack('>30L', *offsets))
         for m in self.materials:
@@ -1127,10 +1128,12 @@ class MaterialBlock(Section):
         swapArray(self.cullModeArray).tofile(fout)
         for x in self.matColorArray: fout.write(pack('BBBB', *x))
         self.colorChanNumArray.tofile(fout)
+        alignFile(fout)
         for x in self.colorChanArray: x.write(fout)
         for x in self.ambColorArray: fout.write(pack('BBBB', *x))
         for x in self.lightInfoArray: x.write(fout)
         self.texGenNumArray.tofile(fout)
+        alignFile(fout)
         for x in self.texCoordArray: x.write(fout)
         for x in self.texMtxArray: x.write(fout)
         swapArray(self.texNoArray).tofile(fout)
@@ -1138,6 +1141,7 @@ class MaterialBlock(Section):
         for x in self.tevColorArray: fout.write(pack('>HHHH', *x))
         for x in self.tevKColorArray: fout.write(pack('BBBB', *x))
         self.tevStageNumArray.tofile(fout)
+        alignFile(fout)
         for x in self.tevStageArray: x.write(fout)
         for x in self.tevSwapModeArray: x.write(fout)
         for x in self.tevSwapModeTableArray: x.write(fout)
@@ -1146,7 +1150,10 @@ class MaterialBlock(Section):
         for x in self.blendArray: x.write(fout)
         for x in self.zModeArray: x.write(fout)
         self.zCompLocArray.tofile(fout)
+        alignFile(fout)
         self.ditherArray.tofile(fout)
+        alignFile(fout)
+        for x in self.nbtScaleArray: x.write(fout)
 
 
 class VtxAttr(Enum):
@@ -1839,9 +1846,4 @@ def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
 
     for node in sg.children:
         buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
-
-if __name__ == "__main__":
-    bmd = BModel()
-    bmd.read(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1.bmd", 'rb'))
-    bmd.write(open("/media/spencer/ExtraData/Game extracts/sms/mario/bmd/ma_mdl1_reexport.bmd", 'wb'))
 
