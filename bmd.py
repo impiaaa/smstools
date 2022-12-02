@@ -449,17 +449,6 @@ class TexGenSrc(IntEnum):
     COLOR1 = 20
 
 class TexGenMatrix(IntEnum):
-    IDENTITY = 60
-    TEXMTX0 = 30
-    TEXMTX1 = 33
-    TEXMTX2 = 36
-    TEXMTX3 = 39
-    TEXMTX4 = 42
-    TEXMTX5 = 45
-    TEXMTX6 = 48
-    TEXMTX7 = 51
-    TEXMTX8 = 54
-    TEXMTX9 = 57
     PNMTX0 = 0
     PNMTX1 = 3
     PNMTX2 = 6
@@ -470,6 +459,38 @@ class TexGenMatrix(IntEnum):
     PNMTX7 = 21
     PNMTX8 = 24
     PNMTX9 = 27
+    TEXMTX0 = 30
+    TEXMTX1 = 33
+    TEXMTX2 = 36
+    TEXMTX3 = 39
+    TEXMTX4 = 42
+    TEXMTX5 = 45
+    TEXMTX6 = 48
+    TEXMTX7 = 51
+    TEXMTX8 = 54
+    TEXMTX9 = 57
+    IDENTITY = 60
+    DTTMTX0 = 64
+    DTTMTX1 = 67
+    DTTMTX2 = 70
+    DTTMTX3 = 73
+    DTTMTX4 = 76
+    DTTMTX5 = 79
+    DTTMTX6 = 82
+    DTTMTX7 = 85
+    DTTMTX8 = 88
+    DTTMTX9 = 91
+    DTTMTX10 = 94
+    DTTMTX11 = 97
+    DTTMTX12 = 100
+    DTTMTX13 = 103
+    DTTMTX14 = 106
+    DTTMTX15 = 109
+    DTTMTX16 = 112
+    DTTMTX17 = 115
+    DTTMTX18 = 118
+    DTTMTX19 = 121
+    DTTIDENTITY = 125
 
 class TexCoordInfo(ReadableStruct):
     header = Struct('>BBBx')

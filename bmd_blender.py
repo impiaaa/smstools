@@ -7,6 +7,7 @@ from bpy.types import Operator, OperatorFileListElement
 import os.path
 import tempfile, os
 from bmd import *
+import math
 
 
 def flipY(vec):
@@ -147,7 +148,7 @@ class NodePlacer:
         self.tree = tree
         self.columns = [Column()]
         self.colIdx = 0
-        self.margin = 10
+        self.margin = 40
     
     def nextColumn(self):
         if self.colIdx >= len(self.columns)-1:
@@ -159,6 +160,12 @@ class NodePlacer:
     def previousColumn(self):
         self.colIdx -= 1
     
+    def goToColumn(self, tgt):
+        while self.colIdx < tgt:
+            self.nextColumn()
+        while self.colIdx > tgt:
+            self.previousColumn()
+    
     def addNode(self, type):
         col = self.columns[self.colIdx]
         node = self.tree.nodes.new(type)
@@ -168,6 +175,45 @@ class NodePlacer:
         col.bottom -= node.bl_height_max+self.margin
         if col.maxWidth < node.bl_width_default: col.maxWidth = node.bl_width_default
         return node
+
+def placeTexMatrix(out, matrix, placer, tree, frame, mat):
+    if matrix >= TexGenMatrix.PNMTX0 and matrix <= TexGenMatrix.PNMTX9:
+        node = placer.addNode('ShaderNodeVectorTransform')
+        node.parent = frame
+        node.lable = "Position/normal matrix "+str(matrix-TexGenMatrix.PNMTX0)
+        node.vector_type = 'POINT'
+        node.convert_from = 'OBJECT'
+        node.convert_to = 'WORLD'
+        if out is not None: tree.links.new(out, node.inputs[0])
+        return node.outputs[0]
+    elif (matrix >= TexGenMatrix.TEXMTX0 and matrix <= TexGenMatrix.TEXMTX9) or \
+         (matrix >= TexGenMatrix.DTTMTX0 and matrix <= TexGenMatrix.DTTMTX19):
+        node = placer.addNode('ShaderNodeMapping')
+        node.parent = frame
+        node.vector_type = 'POINT'
+        if matrix >= TexGenMatrix.TEXMTX0 and matrix <= TexGenMatrix.TEXMTX9:
+            node.label = "Texture matrix "+str(matrix-TexGenMatrix.TEXMTX0)
+            texMtx = mat.texMtxs[(matrix-TexGenMatrix.TEXMTX0)//3]
+        elif matrix >= TexGenMatrix.DTTMTX0 and matrix <= TexGenMatrix.DTTMTX19:
+            node.label = "Post-transform texture matrix "+str(matrix-TexGenMatrix.DTTMTX0)
+            texMtx = mat.postTexMtxs[(matrix-TexGenMatrix.DTTMTX0)//3]
+        if texMtx is not None:
+            node.inputs['Location'].default_value = texMtx.translation+(0,)
+            node.inputs['Rotation'].default_value = (0,0,texMtx.rotation*math.pi)
+            node.inputs['Scale'].default_value = texMtx.scale+(1,)
+        if out is not None: tree.links.new(out, node.inputs[0])
+        return node.outputs[0]
+    elif matrix == TexGenMatrix.IDENTITY or matrix == TexGenMatrix.DTTIDENTITY:
+        node = placer.addNode('NodeReroute')
+        node.parent = frame
+        if matrix == TexGenMatrix.IDENTITY:
+            node.label = "Identity texture matrix"
+        elif matrix == TexGenMatrix.DTTIDENTITY:
+            node.label = "Identity post-transform texture matrix"
+        if out is not None: tree.links.new(out, node.inputs[0])
+        return node.outputs[0]
+    else:
+        return None
 
 def importMesh(filePath, bmd, mesh, bm):
     btextures = []
@@ -220,14 +266,172 @@ def importMesh(filePath, bmd, mesh, bm):
             
             placer = NodePlacer(tree)
             
+            # Color channels
+            colorChannels = []
+            colIdx = placer.colIdx
+            for j in range(2):
+                placer.goToColumn(colIdx)
+                frame = tree.nodes.new('NodeFrame')
+                frame.label = "Color channel %d"%j
+                if j < len(mat.matColors) and mat.matColors[j] is not None:
+                    node = placer.addNode('ShaderNodeRGB')
+                    node.outputs[0].default_value = color8ToLinear(mat.matColors[j])
+                    node.label = 'Material'
+                    node.parent = frame
+                    matColorReg = node.outputs[0]
+                else:
+                    matColorReg = None
+                if j < len(mat.ambColors) and mat.ambColors[j] is not None:
+                    node = placer.addNode('ShaderNodeRGB')
+                    node.outputs[0].default_value = color8ToLinear(mat.ambColors[j])
+                    node.label = 'Ambient'
+                    node.parent = frame
+                    ambColorReg = node.outputs[0]
+                else:
+                    ambColorReg = None
+                if j < len(bmd.vtx1.colors) and bmd.vtx1.colors[j] is not None:
+                    node = placer.addNode('ShaderNodeVertexColor')
+                    node.layer_name = str(j)
+                    node.parent = frame
+                    vtxColor = node.outputs['Color']
+                else:
+                    vtxColor = None
+                placer.nextColumn()
+                if j < mat.colorChanNum and mat.colorChans[j*2] is not None:
+                    colorChannel = mat.colorChans[j*2]
+                    matColorSource = {ColorSrc.REG: matColorReg, ColorSrc.VTX: vtxColor}[colorChannel.matColorSource]
+                    ambColorSource = {ColorSrc.REG: ambColorReg, ColorSrc.VTX: vtxColor}[colorChannel.ambColorSource]
+                    if colorChannel.lightingEnabled and colorChannel.litMask != 0:
+                        if colorChannel.attenuationFunction == 0:
+                            node = placer.addNode('ShaderNodeBsdfGlossy')
+                            if matColorSource is not None: tree.links.new(matColorSource, node.inputs['Color'])
+                            node.distribution = 'SHARP'
+                            node.inputs['Roughness'].default_value = 0.0
+                            out = node.outputs['BSDF']
+                        else:
+                            if colorChannel.diffuseFunction == DiffuseFunction.NONE:
+                                out = matColorSource
+                            else:
+                                node = placer.addNode('ShaderNodeBsdfDiffuse')
+                                if matColorSource is not None: tree.links.new(matColorSource, node.inputs['Color'])
+                                out = node.outputs['BSDF']
+                        node.parent = frame
+                        placer.nextColumn()
+
+                        node = placer.addNode('ShaderNodeAddShader')
+                        node.parent = frame
+                        tree.links.new(out, node.inputs[0])
+                        if ambColorSource is not None: tree.links.new(ambColorSource, node.inputs[1])
+                        out = node.outputs['Shader']
+                        placer.nextColumn()
+
+                        node = placer.addNode('ShaderNodeShaderToRGB')
+                        node.parent = frame
+                        tree.links.new(out, node.inputs['Shader'])
+                        out = node.outputs['Color']
+                        placer.nextColumn()
+
+                        node = placer.addNode('ShaderNodeMixRGB')
+                        node.parent = frame
+                        tree.links.new(out, node.inputs[1])
+                        node.use_clamp = True
+                        node.inputs[0].default_value = 0
+                        colorChannels.append(node.outputs['Color'])
+                    else:
+                        node = placer.addNode('NodeReroute')
+                        node.parent = frame
+                        if matColorSource is not None: tree.links.new(matColorSource, node.inputs[0])
+                        colorChannels.append(node.outputs[0])
+                else:
+                    colorChannels.append(None)
+            placer.goToColumn(colIdx+5)
+            
+            # Texgen stages
+            texGens = []
+            colIdx = placer.colIdx
+            for j, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
+                placer.goToColumn(colIdx)
+                frame = tree.nodes.new('NodeFrame')
+                frame.label = "Texture coordinate generator " + str(j)
+                if texGen is None:
+                    texGens.append(None)
+                    continue
+                if texGen.source == TexGenSrc.POS:
+                    node = placer.addNode('ShaderNodeNewGeometry')
+                    texGenSrc = node.outputs['Position']
+                elif texGen.source == TexGenSrc.NRM:
+                    node = placer.addNode('ShaderNodeNewGeometry')
+                    texGenSrc = node.outputs['Normal']
+                elif texGen.source == TexGenSrc.BINRM:
+                    node1 = placer.addNode('ShaderNodeNewGeometry')
+                    node1.parent = frame
+                    placer.nextColumn()
+                    node = placer.addNode('ShaderNodeVectorMath')
+                    tree.links.new(node1.outputs['Normal'], node.inputs[0])
+                    tree.links.new(node1.outputs['Tangent'], node.inputs[1])
+                    node.operation = 'CROSS_PRODUCT'
+                    texGenSrc = node.outputs['Vector']
+                elif texGen.source == TexGenSrc.TANGENT:
+                    node = placer.addNode('ShaderNodeNewGeometry')
+                    texGenSrc = node.outputs['Tangent']
+                elif texGen.source >= TexGenSrc.TEX0 and texGen.source <= TexGenSrc.TEX7:
+                    node = placer.addNode('ShaderNodeUVMap')
+                    node.uv_map = str(texGen.source-TexGenSrc.TEX0)
+                    texGenSrc = node.outputs['UV']
+                elif texGen.source >= TexGenSrc.TEXCOORD0 and texGen.source <= TexGenSrc.TEXCOORD6:
+                    node = placer.addNode('NodeReroute')
+                    if texGens[texGen.source-TexGenSrc.TEXCOORD0] is not None: tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
+                    texGenSrc = node.outputs[0]
+                elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
+                    node = placer.addNode('NodeReroute')
+                    if colorChannels[texGen.source-TexGenSrc.COLOR0] is not None: tree.links.new(colorChannels[texGen.source-TexGenSrc.COLOR0], node.inputs[0])
+                    texGenSrc = node.outputs[0]
+                else:
+                    texGenSrc = None
+                node.parent = frame
+                placer.nextColumn()
+                if texGen.type == TexGenType.MTX3x4 or texGen.type == TexGenType.MTX2x4:
+                    if texGen.type == TexGenType.MTX2x4:
+                        node = placer.addNode('ShaderNodeVectorMath')
+                        node.parent = frame
+                        node.operation = 'MULTIPLY_ADD'
+                        if texGenSrc is not None: tree.links.new(texGenSrc, node.inputs[0])
+                        node.inputs[1].default_value = (1,1,0)
+                        node.inputs[2].default_value = (0,0,1)
+                        out = node.outputs[0]
+                        placer.nextColumn()
+                    else:
+                        out = texGenSrc
+                    out = placeTexMatrix(out, texGen.matrix, placer, tree, frame, mat)
+                    if texGen.type == TexGenType.MTX3x4:
+                        placer.nextColumn()
+                        node1 = placer.addNode('ShaderNodeSeparateXYZ')
+                        node1.parent = frame
+                        if out is not None: tree.links.new(out, node1.inputs[0])
+                        placer.nextColumn()
+                        node = placer.addNode('ShaderNodeVectorMath')
+                        node.parent = frame
+                        node.operation = 'DIVIDE'
+                        if out is not None: tree.links.new(out, node.inputs[0])
+                        tree.links.new(node1.outputs[2], node.inputs[1])
+                        out = node.outputs[0]
+                elif texGen.type == TexGenType.SRTG:
+                    out = texGenSrc
+                else:
+                    out = None
+                
+                postTexGen = mat.postTexGens[j]
+                if postTexGen is not None:
+                    placer.nextColumn()
+                    out = placeTexMatrix(out, postTexGen.matrix, placer, tree, frame, mat)
+                
+                texGens.append(out)
+            placer.goToColumn(colIdx+4)
+            
             # Shader variables
-            colorMatReg = []
-            colorAmbReg = []
             konstColorReg = []
             colorReg = []
             for values, name, out in [
-                (mat.matColors, "Material", colorMatReg),
-                (mat.ambColors, "Ambient", colorAmbReg),
                 (mat.tevKColors, "Constant", konstColorReg),
                 (mat.tevColors, "Base", colorReg)
             ]:
@@ -239,103 +443,6 @@ def importMesh(filePath, bmd, mesh, bm):
                         node.outputs[0].default_value = color8ToLinear(color)
                         node.label = name + ' ' + str(j)
                         out.append(node.outputs[0])
-            colorVtxReg = []
-            for j in range(mat.colorChanNum):
-                node = placer.addNode('ShaderNodeVertexColor')
-                node.layer_name = str(j)
-                colorVtxReg.append(node.outputs['Color']) # TODO alpha
-            placer.nextColumn()
-            
-            # Light channels
-            colorChannels = []
-            for j in range(mat.colorChanNum):
-                colorChannel = safeGet(mat.colorChans, j*2)
-                if colorChannel is None:
-                    colorChannels.append(None)
-                    continue
-                #alphaChannel = safeGet(mat.colorChans, j*2+1)
-                matSource = {ColorSrc.REG: colorMatReg, ColorSrc.VTX: colorVtxReg}[colorChannel.matColorSource][j]
-                ambSource = {ColorSrc.REG: colorAmbReg, ColorSrc.VTX: colorVtxReg}[colorChannel.ambColorSource][j]
-                if colorChannel.lightingEnabled and colorChannel.litMask != 0:
-                    if colorChannel.attenuationFunction in (0, 1):
-                        node = placer.addNode('ShaderNodeEeveeSpecular')
-                        if matSource is not None: tree.links.new(matSource, node.inputs['Specular'])
-                        if ambSource is not None: tree.links.new(ambSource, node.inputs['Emissive Color'])
-                        #if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-                        node.inputs['Base Color'].default_value = (0,0,0,0)
-                        #else:
-                        #    tree.links.new(matSource, node.inputs['Base Color'])
-                        node.inputs['Roughness'].default_value = 0.0
-                        out = node.outputs['BSDF']
-                    else:
-                        if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-                            out = matSource
-                        else:
-                            node = placer.addNode('ShaderNodeBsdfDiffuse')
-                            if matSource is not None: tree.links.new(matSource, node.inputs['Color'])
-                            out = node.outputs['BSDF']
-                        placer.nextColumn()
-                        node = placer.addNode('ShaderNodeAddShader')
-                        if ambSource is not None: tree.links.new(ambSource, node.inputs[0])
-                        tree.links.new(out, node.inputs[1])
-                        placer.previousColumn()
-                        out = node.outputs['Shader']
-                    node.label = "Light channel %d"%j
-                    colorChannels.append(out)
-                else:
-                    colorChannels.append(matSource) # TODO add ambient?
-            placer.nextColumn()
-            
-            # Texgen stages
-            texGens = []
-            for j, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
-                if texGen is None:
-                    texGens.append(None)
-                    continue
-                if texGen.source == TexGenSrc.POS:
-                    node = placer.addNode('ShaderNodeNewGeometry')
-                    out = node.outputs['Position']
-                elif texGen.source == TexGenSrc.NRM:
-                    node = placer.addNode('ShaderNodeNewGeometry')
-                    out = node.outputs['Normal']
-                elif texGen.source == TexGenSrc.BINRM:
-                    node1 = placer.addNode('ShaderNodeNewGeometry')
-                    placer.nextColumn()
-                    node = placer.addNode('ShaderNodeVectorMath')
-                    placer.previousColumn()
-                    tree.links.new(node1.outputs['Normal'], node.inputs[0])
-                    tree.links.new(node1.outputs['Tangent'], node.inputs[1])
-                    out = node.outputs['Vector']
-                elif texGen.source == TexGenSrc.TANGENT:
-                    node = placer.addNode('ShaderNodeNewGeometry')
-                    out = node.outputs['Tangent']
-                elif texGen.source >= TexGenSrc.TEX0 and texGen.source <= TexGenSrc.TEX7:
-                    node = placer.addNode('ShaderNodeUVMap')
-                    out = node.outputs['UV']
-                    node.uv_map = str(texGen.source-TexGenSrc.TEX0)
-                elif texGen.source >= TexGenSrc.TEXCOORD0 and texGen.source <= TexGenSrc.TEXCOORD6:
-                    node = placer.addNode('NodeReroute')
-                    out = node.outputs[0]
-                    tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
-                elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
-                    node = placer.addNode('ShaderNodeShaderToRGB')
-                    out = node.outputs[0]
-                    tree.links.new(colorChannels[texGen.source-TexGenSrc.COLOR0], node.inputs[0])
-                node.label = "Texture coordinate generation source %d"%j
-                placer.nextColumn()
-                if texGen.type == TexGenType.MTX3x4 or texGen.type == TexGenType.MTX2x4:
-                    node = placer.addNode('ShaderNodeMapping')
-                    node.vector_type = 'POINT'
-                    if texGen.matrix >= TexGenMatrix.TEXMTX0 and texGen.matrix <= TexGenMatrix.TEXMTX9 and mat.texMtxs[texGen.matrix-TexGenMatrix.TEXMTX0] is not None:
-                        texMtx = mat.texMtxs[texGen.matrix-TexGenMatrix.TEXMTX0]
-                        node.inputs['Location'].default_value = texMtx.translation+(0,)
-                        node.inputs['Rotation'].default_value = (0,0,texMtx.rotation) # TODO what units
-                        node.inputs['Scale'].default_value = texMtx.scale+(1,)
-                    tree.links.new(out, node.inputs[0])
-                    out = node.outputs[0]
-                placer.previousColumn()
-                texGens.append(out)
-            placer.nextColumn()
             placer.nextColumn()
             
             for j in range(0 if mat.tevStageNum is None else mat.tevStageNum):
