@@ -99,16 +99,16 @@ def halfToFloat(hbits):
 
 def getBatchTriangles(bmd, batch, indexMap, targetMmi):
     matrixTable = [(Matrix(), [], []) for i in range(10)]
-    for packet in batch.packets:
+    for shapeDraw, shapeMatrix in batch.matrixGroups:
         if targetMmi is not None:
             assert not batch.hasMatrixIndices
-            index = packet.matrixTable[0]
+            index = shapeMatrix.matrixTable[0]
             assert index != 0xffff
             assert not bmd.drw1.isWeighted[index]
             mmi = bmd.drw1.data[index]
             if mmi != targetMmi:
                 continue
-        for primitive in packet.primitives:
+        for primitive in shapeDraw.primitives:
             a = 0
             b = 1
             flip = True
@@ -157,10 +157,10 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
             matrixTable = [(Matrix(), [], []) for i in range(10)]
             for mat, mmi, mmw in matrixTable:
                 mat.identity()
-            for i, packet in enumerate(batch.packets):
-                updateMatrixTable(bmd, packet, matrixTable)
+            for i, (shapeDraw, shapeMatrix) in enumerate(batch.matrixGroups):
+                updateMatrixTable(bmd, shapeMatrix, matrixTable)
                 mat, mmi, mmw = matrixTable[0]
-                for curr in packet.primitives:
+                for curr in shapeDraw.primitives:
                     for p in curr.points:
                         if batch.hasMatrixIndices:
                             mat, mmi, mmw = matrixTable[p.matrixIndex//3]
@@ -297,18 +297,18 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
     uniqueVertices = []
     indexMap = {}
     for batch in bmd.shp1.batches:
-        for packet in batch.packets:
+        for shapeDraw, shapeMatrix in batch.matrixGroups:
             mmi = [0]*maxWeightCount
             mmw = [1.0]+[0.0]*(maxWeightCount-1)
             if targetMmi is not None:
                 assert not batch.hasMatrixIndices
-                index = packet.matrixTable[0]
+                index = shapeMatrix.matrixTable[0]
                 assert index != 0xffff
                 assert not bmd.drw1.isWeighted[index]
                 mmi = bmd.drw1.data[index]
                 if mmi != targetMmi:
                     continue
-            for primitive in packet.primitives:
+            for primitive in shapeDraw.primitives:
                 for point in primitive.points:
                     if point.indices not in indexMap:
                         uniqueVertex = []
@@ -331,9 +331,9 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
                                 uniqueVertex.extend(data[point.indices[arrayType]])
                         if doBones:
                             if batch.hasMatrixIndices:
-                                index = packet.matrixTable[point.matrixIndex//3]
+                                index = shapeMatrix.matrixTable[point.matrixIndex//3]
                             else:
-                                index = packet.matrixTable[0]
+                                index = shapeMatrix.matrixTable[0]
                             if index != 0xffff:
                                 if bmd.drw1.isWeighted[index]:
                                     mmi = boneIndices[bmd.drw1.data[index]]
@@ -367,16 +367,16 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
             batch = bmd.shp1.batches[batchIndex]
             subMeshTriangles[materialIndex].extend(getBatchTriangles(bmd, batch, indexMap, targetMmi))
             # TODO mesh metrics
-            for packet in batch.packets:
+            for shapeDraw, shapeMatrix in batch.matrixGroups:
                 if targetMmi is not None:
                     assert not batch.hasMatrixIndices
-                    index = packet.matrixTable[0]
+                    index = shapeMatrix.matrixTable[0]
                     assert index != 0xffff
                     assert not bmd.drw1.isWeighted[index]
                     mmi = bmd.drw1.data[index]
                     if mmi != targetMmi:
                         continue
-                subMeshVertices[materialIndex].extend([transformedPositions[point.posIndex] for primitive in packet.primitives for point in primitive.points])
+                subMeshVertices[materialIndex].extend([transformedPositions[point.posIndex] for primitive in shapeDraw.primitives for point in primitive.points])
         else:
             raise ValueError(node.type)
     

@@ -807,7 +807,7 @@ class Material(ReadableStruct):
         # 0x9C
         self.tevKColorSels = [TevKColorSel(x) if x < 0x20 else x for x in unpack('>16B', fin.read(16))]
         # 0xAC
-        self.tevKAlphaSels = unpack('>16B', fin.read(16))
+        self.tevKAlphaSels = [TevKColorSel(x) if x < 0x20 else x for x in unpack('>16B', fin.read(16))]
         # 0xBC
         self.tevOrderIndices = unpack('>16H', fin.read(32))
         # 0xDC
