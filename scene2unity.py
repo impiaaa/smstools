@@ -327,9 +327,10 @@ import texture, bti
 btitime = max(pathlib.Path(texture.__file__).stat().st_mtime, pathlib.Path(bti.__file__).stat().st_mtime)
 from texture import decodeTextureDDS
 from bti import Image
+from bmd2unity import exportTexture
 
 btis = {}
-for btipath in scenedirpath.glob("**/*.bti"):
+for btipath in scenedirpath.rglob("*.bti"):
     btipath_rel = btipath.relative_to(scenedirpath)
     outbtidir = outpath / btipath_rel.parent
     metapathDds = outbtidir / (btipath_rel.stem+".dds.meta")
@@ -343,59 +344,10 @@ for btipath in scenedirpath.glob("**/*.bti"):
         bti = Image()
         with btipath.open('rb') as fin:
             bti.read(fin, 0, 0, 0)
+        bti.name = btipath_rel.stem
 
         outbtidir.mkdir(parents=True, exist_ok=True)
-        
-        textureSettings = {
-            "serializedVersion": 2,
-            "wrapU": [1, 0, 2][bti.wrapS],
-            "wrapV": [1, 0, 2][bti.wrapT],
-            "wrapW": [1, 0, 2][bti.wrapS],
-            "filterMode": [0, 1, 0, 1, 0, 1][bti.magFilter],
-            "mipBias": bti.lodBias/100
-        }
-
-        if bti.format in (texture.TexFmt.RGBA8, texture.TexFmt.CMPR) or bti.mipmapCount > 1:
-            fout = open(outbtidir / (btipath_rel.stem+".dds"), 'wb')
-            decodeTextureDDS(fout, bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)
-            fout.close()
-            
-            btis[btipath.stem.lower()] = writeMeta(btipath_rel.stem+".dds", {
-                "IHVImageFormatImporter": {
-                    "textureSettings": textureSettings,
-                    "sRGBTexture": 0
-                }
-            }, outbtidir)
-        else:
-            decodeTexturePIL(bti.data, bti.format, bti.width, bti.height, bti.paletteFormat, bti.palette, bti.mipmapCount)[0][0].save(outbtidir / (btipath_rel.stem+".png"))
-            btis[btipath.stem.lower()] = writeMeta(btipath_rel.stem+".png", {
-                "TextureImporter": {
-                    "serializedVersion": 11,
-                    "textureSettings": textureSettings,
-                    "mipmaps": {
-                        "mipMapMode": 0,
-                        "enableMipMap": 0,
-                        "sRGBTexture": 0,
-                        "linearTexture": 0
-                    },
-                    "textureFormat": 1,
-                    "maxTextureSize": 2048,
-                    "lightmap": 0,
-                    "compressionQuality": 50,
-                    "alphaUsage": 1,
-                    "textureType": 10 if bti.format in (texture.TexFmt.I4, texture.TexFmt.I8) else 0,
-                    "textureShape": 1,
-                    "singleChannelComponent": 1,
-                    "platformSettings": [{
-                        "serializedVersion": 3,
-                        "buildTarget": "DefaultTexturePlatform",
-                        "maxTextureSize": 2048,
-                        "textureFormat": 7 if bti.format == texture.TexFmt.RGB565 or (bti.format in (texture.TexFmt.C4, texture.TexFmt.C8, texture.TexFmt.C14X2) and bti.paletteFormat == texture.TlutFmt.RGB565) else -1,
-                        "textureCompression": 2,
-                        "compressionQuality": 50
-                    }]
-                }
-            }, outbtidir)
+        btis[btipath.stem.lower()] = exportTexture(bti, outbtidir)
 
 import col2unity, col
 coltime = max(pathlib.Path(col2unity.__file__).stat().st_mtime, pathlib.Path(col.__file__).stat().st_mtime)
@@ -403,7 +355,7 @@ from col import ColReader
 from col2unity import exportCol
 
 cols = {}
-for colpath in scenedirpath.glob("**/*.col"):
+for colpath in scenedirpath.rglob("*.col"):
     colpath_rel = colpath.relative_to(scenedirpath)
     print(colpath_rel)
     outcoldir = outpath / colpath_rel.parent
@@ -423,7 +375,7 @@ from bmd import BModel
 from bmd2unity import exportBmd
 
 bmds = {}
-for bmdpath in scenedirpath.glob("**/*.bmd"):
+for bmdpath in scenedirpath.rglob("*.bmd"):
     bmdpath_rel = bmdpath.relative_to(scenedirpath)
     print(bmdpath_rel)
     outbmddir = outpath / bmdpath_rel.parent
@@ -440,7 +392,7 @@ for bmdpath in scenedirpath.glob("**/*.bmd"):
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[str(bmdpath_rel).lower()] = unityparser.UnityDocument.load_yaml(metapath).entry['guid'], [unityparser.UnityDocument.load_yaml(outbmddir / bmdpath_rel.stem / (mat.name+".mat.meta")).entry['guid'] for mat in bmd.mat3.materials]
+            bmds[str(bmdpath_rel).lower()] = unityparser.UnityDocument.load_yaml(metapath).entry['guid'], [unityparser.UnityDocument.load_yaml(outbmddir / bmdpath_rel.stem / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
         else:
             outbmddir.mkdir(parents=True, exist_ok=True)
             try:
@@ -874,6 +826,20 @@ def getSound(soundKey):
     sounds[soundKey] = parsedInfo
     return parsedInfo
 
+def addMeshFilter(bmdFilename, objObj):
+    if bmdFilename in bmds:
+        asset, materialIds = bmds[bmdFilename]
+    else:
+        warn("Didn't load %r"%bmdFilename)
+        asset = materialIds = None
+    renderer = objObj.getOrCreateComponent(MeshRenderer)
+    if materialIds is not None:
+        renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+
+    meshFilter = objObj.getOrCreateComponent(MeshFilter)
+    if asset is not None:
+        meshFilter.m_Mesh = getFileRef(asset, id=4300000)
+
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
     grpObj, grpXfm = setupObject(group)
@@ -904,18 +870,7 @@ for group in strategy.objects:
             if modelEntry is not None:
                 if 'm' in modelEntry:
                     bmdFilename = "mapobj/"+modelEntry['m'].lower()
-                    if bmdFilename in bmds:
-                        asset, materialIds = bmds[bmdFilename]
-                    else:
-                        warn("Didn't load %r"%bmdFilename)
-                        asset = materialIds = None
-                    renderer = objObj.getOrCreateComponent(MeshRenderer)
-                    if materialIds is not None:
-                        renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
-
-                    meshFilter = objObj.getOrCreateComponent(MeshFilter)
-                    if asset is not None:
-                        meshFilter.m_Mesh = getFileRef(asset, id=4300000)
+                    addMeshFilter(bmdFilename, objObj)
                 else:
                     warn("No model for %r"%o.model)
         if isinstance(o, TMapStaticObj):
@@ -934,18 +889,7 @@ for group in strategy.objects:
                         prefix = "map"
                         # todo: common arc
                     bmdFilename = prefix+"/"+modelEntry['modelName'].lower()
-                    if bmdFilename in bmds:
-                        asset, materialIds = bmds[bmdFilename]
-                    else:
-                        warn("Didn't load %r"%bmdFilename)
-                        asset = materialIds = None
-                    renderer = objObj.getOrCreateComponent(MeshRenderer)
-                    if materialIds is not None:
-                        renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
-
-                    meshFilter = objObj.getOrCreateComponent(MeshFilter)
-                    if asset is not None:
-                        meshFilter.m_Mesh = getFileRef(asset, id=4300000)
+                    addMeshFilter(bmdFilename, objObj)
                 if 'collisionManagerName' in modelEntry:
                     for physName, uuid in cols[modelEntry['collisionManagerName'].lower()]:
                         # different terrain types ok?

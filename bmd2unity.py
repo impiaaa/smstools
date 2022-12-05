@@ -176,6 +176,7 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
     print("Setting channels")
 
     for fmt, original, asFloat in zip(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat):
+        if fmt is None: continue
         if fmt.arrayType == VtxAttr.POS:
             count = {CompType.POS_XY: 2, CompType.POS_XYZ: 3}[fmt.componentCount]
             channel = 0
@@ -327,7 +328,7 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
                                         data = transformedPositions
                                     elif arrayType == VtxAttr.NRM.value:
                                         data = transformedNormals
-                                    if isint: data = [tuple(map(int, v)) for v in data]
+                                    if isint and data in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
                                 uniqueVertex.extend(data[point.indices[arrayType]])
                         if doBones:
                             if batch.hasMatrixIndices:
@@ -349,8 +350,8 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
 
     print("Making sub-meshes")
 
-    subMeshTriangles = [[] for i in range(len(bmd.mat3.materials))]
-    subMeshVertices = [[] for i in range(len(bmd.mat3.materials))]
+    subMeshTriangles = [[] for i in range(len(bmd.mat3.remapTable))]
+    subMeshVertices = [[] for i in range(len(bmd.mat3.remapTable))]
     stack = []
     materialIndex = frameIndex = batchIndex = None
     for node in bmd.inf1.scenegraph:
@@ -380,12 +381,12 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
         else:
             raise ValueError(node.type)
     
-    materials = list(bmd.mat3.materials)
+    remapTable = list(bmd.mat3.remapTable)
     if targetMmi is not None:
-        print("Trimming materials")
-        for i in range(len(materials)-1, -1, -1):
+        print("Trimming submeshes")
+        for i in range(len(subMeshTriangles)-1, -1, -1):
             if len(subMeshTriangles[i]) == 0:
-                del materials[i]
+                del remapTable[i]
                 del subMeshTriangles[i]
                 del subMeshVertices[i]
     
@@ -503,64 +504,78 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
         #    }
         #}, outputFolderLocation)
         textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
-        materialIds = list(exportMaterials(materials, bmddir, textureIds))
-        materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+        materialIds = list(exportMaterials(bmd.mat3.materials[:max(remapTable)+1], bmddir, textureIds))
+        materialIdInSlot = [materialIds[matIndex] for matIndex in remapTable]
         return meshId, materialIdInSlot
     else:
         return meshId, []
 
+def exportTexture(img, bmddir):
+    textureSettings = {
+        "serializedVersion": 2,
+        "wrapU": [1, 0, 2][img.wrapS],
+        "wrapV": [1, 0, 2][img.wrapT],
+        "wrapW": 0,
+        "filterMode": [0, 1, 0, 1, 0, 2][img.magFilter],
+        "mipBias": img.lodBias/100,
+        "aniso": 2**img.maxAniso
+    }
+    if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
+        fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
+        decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+        fout.close()
+        return writeMeta(img.name+".dds", {
+            "IHVImageFormatImporter": {
+                "textureSettings": textureSettings,
+                "sRGBTexture": 0
+            }
+        }, bmddir)
+    else:
+        # PNG is required to be compressed, but it's the only format Unity can
+        # import at all pixel formats :(
+        decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].save(os.path.join(bmddir, img.name+".png"))
+        # TODO: use
+        #   ASTC for RGB5A3 on Android
+        #   RG Compressed BC5 for IA4 on PC
+        #   RG Compressed EAC 8 bit for IA4 on Android
+        #   R Compressed BC4 for I4 on PC
+        #   R Compressed EAC 4 bit for I4 on Android
+        # TODO: change decodeTexturePIL to swap a/g for RG
+        return writeMeta(img.name+".png", {
+            "TextureImporter": {
+                "serializedVersion": 11,
+                "textureSettings": textureSettings,
+                "mipmaps": {
+                    "mipMapMode": 0,
+                    "enableMipMap": 0,
+                    "sRGBTexture": 0,
+                    "linearTexture": 0
+                },
+                "textureFormat": 1,
+                "maxTextureSize": 2048,
+                "lightmap": 0,
+                "compressionQuality": 50,
+                "alphaUsage": int(bool(img.transparency)),
+                "alphaIsTransparency": 1,
+                "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
+                "textureShape": 1,
+                "singleChannelComponent": 1,
+                "platformSettings": [{
+                    "serializedVersion": 3,
+                    "buildTarget": "DefaultTexturePlatform",
+                    "maxTextureSize": 2048,
+                    "textureFormat": 7 if img.format == TexFmt.RGB565 or (img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565) else 4 if img.format == TexFmt.RGBA8 else 63 if img.format == TexFmt.I8 else -1,
+                    "textureCompression": 2,
+                    "compressionQuality": 50
+                }]
+            }
+        }, bmddir)
+
 def exportTextures(textures, bmddir):
     print("Exporting textures")
     for img in textures:
-        textureSettings = {
-            "serializedVersion": 2,
-            "wrapU": [1, 0, 2][img.wrapS],
-            "wrapV": [1, 0, 2][img.wrapT],
-            "wrapW": [1, 0, 2][img.wrapS],
-            "filterMode": [0, 1, 0, 1, 0, 1][img.magFilter],
-            "mipBias": img.lodBias/100
-        }
-        if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
-            fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
-            decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
-            fout.close()
-            yield writeMeta(img.name+".dds", {
-                "IHVImageFormatImporter": {
-                    "textureSettings": textureSettings,
-                    "sRGBTexture": 0
-                }
-            }, bmddir)
-        else:
-            decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].save(os.path.join(bmddir, img.name+".png"))
-            yield writeMeta(img.name+".png", {
-                "TextureImporter": {
-                    "serializedVersion": 11,
-                    "textureSettings": textureSettings,
-                    "mipmaps": {
-                        "mipMapMode": 0,
-                        "enableMipMap": 0,
-                        "sRGBTexture": 0,
-                        "linearTexture": 0
-                    },
-                    "textureFormat": 1,
-                    "maxTextureSize": 2048,
-                    "lightmap": 0,
-                    "compressionQuality": 50,
-                    "alphaUsage": 1,
-                    "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
-                    "textureShape": 1,
-                    "singleChannelComponent": 1,
-                    "platformSettings": [{
-                        "serializedVersion": 3,
-                        "buildTarget": "DefaultTexturePlatform",
-                        "maxTextureSize": 2048,
-                        "textureFormat": 7 if img.format == TexFmt.RGB565 or (img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565) else -1,
-                        "textureCompression": 2,
-                        "compressionQuality": 50
-                    }]
-                }
-            }, bmddir)
-    
+        yield exportTexture(img, bmddir)
+
 def exportMaterials(materials, bmddir, textureIds):
     print("Exporting materials")
     
@@ -569,17 +584,20 @@ def exportMaterials(materials, bmddir, textureIds):
         uMat.serializedVersion = 6
         uMat.m_Name = mat.name
         colors = {}
+        # Note: Unity converts colors from sRGB *if* they are marked as "Color"
+        # in the ShaderLab properties. "Vector" types are not converted. But
+        # both colors and vectors go under m_Colors.
         for i, color in enumerate(mat.matColors):
-            colors["_ColorMatReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            if color is not None: colors["_ColorMatReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         for i, color in enumerate(mat.ambColors):
-            colors["_ColorAmbReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            if color is not None: colors["_ColorAmbReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         for i, color in enumerate(mat.tevKColors):
-            colors["_KonstColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            if color is not None: colors["_KonstColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         for i, color in enumerate(mat.tevColors):
-            colors["_Color%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            if color is not None: colors["_Color%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         textures = {}
         for i, texIdx in enumerate(mat.texNos):
-            texEnv = {"m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}} # TODO
+            texEnv = {"m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}} # unused
             if texIdx is None:
                 texEnv["m_Texture"] = {"fileID": 0}
             else:
