@@ -353,6 +353,11 @@ class IndInitData(ReadableStruct):
         for x in self.indTexCoordScale: x.write(fout)
         for x in self.indTevStage: x.write(fout)
 
+class CullMode(Enum):
+    NONE  = 0 # Do not cull any primitives.
+    FRONT = 1 # Cull front-facing primitives.
+    BACK  = 2 # Cull back-facing primitives.
+    ALL   = 3 # Cull all primitives.
 
 class ColorSrc(Enum):
     REG = 0
@@ -900,7 +905,7 @@ class Material(ReadableStruct):
         fout.write(pack('>HHHH', self.fogIndex, self.alphaCompIndex, self.blendIndex, self.nbtScaleIndex))
     
     def index(self, mat3):
-        self.cullModeIndex = safeIndex(mat3.cullModeArray, self.cullMode)
+        self.cullModeIndex = safeIndex(mat3.cullModeArray, self.cullMode.value)
         self.colorChanNumIndex = safeIndex(mat3.colorChanNumArray, self.colorChanNum)
         self.texGenNumIndex = safeIndex(mat3.texGenNumArray, self.texGenNum)
         self.tevStageNumIndex = safeIndex(mat3.tevStageNumArray, self.tevStageNum)
@@ -1032,6 +1037,7 @@ class MaterialBlock(Section):
         self.cullModeArray = array('I')
         self.cullModeArray.fromfile(fin, lengths[4]//4)
         if sys.byteorder == 'little': self.cullModeArray.byteswap()
+        self.cullModeArray = list(map(CullMode, self.cullModeArray))
 
         fin.seek(start+offsets[5])
         self.matColorArray = [unpack('>BBBB', fin.read(4)) for i in range(lengths[5]//4)]
@@ -1107,10 +1113,12 @@ class MaterialBlock(Section):
         fin.seek(start+offsets[27])
         self.zCompLocArray = array('B')
         self.zCompLocArray.fromfile(fin, lengths[27])
+        self.zCompLocArray = list(map(bool, self.zCompLocArray))
 
         fin.seek(start+offsets[28])
         self.ditherArray = array('B')
         self.ditherArray.fromfile(fin, lengths[28])
+        self.ditherArray = list(map(bool, self.ditherArray))
 
         fin.seek(start+offsets[29])
         self.nbtScaleArray = [NBTScaleInfo.try_make(fin) for i in range(lengths[29]//NBTScaleInfo.header.size)]
@@ -1129,7 +1137,7 @@ class MaterialBlock(Section):
         self.materialNames = list({m.name for m in self.materials if m.name is not None})
         offsets[3] = alignOffset(offsets[2]+stringTableSize(self.materialNames))
         offsets[4] = offsets[3]+len(self.indirectArray)*0x138
-        self.cullModeArray = array('I', {m.cullMode for m in self.materials if m.cullMode is not None})
+        self.cullModeArray = array('I', {m.cullMode.value for m in self.materials if m.cullMode is not None})
         offsets[5] = offsets[4]+len(self.cullModeArray)*self.cullModeArray.itemsize
         self.matColorArray = list({x for m in self.materials for x in m.matColors if x is not None})
         offsets[6] = offsets[5]+len(self.matColorArray)*4

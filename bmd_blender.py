@@ -11,7 +11,7 @@ import math
 
 
 def flipY(vec):
-    return Vector((vec.x, 1.0-vec.y))
+    return vec#Vector((vec.x, 1.0-vec.y))
 
 def srgbToLinearrgb(c):
     """
@@ -310,17 +310,27 @@ def importMesh(filePath, bmd, mesh, bm):
             
             # Render attributes
             if mat.cullMode is not None:
-                bmat.use_backface_culling = mat.cullMode == 2
+                bmat.use_backface_culling = mat.cullMode == CullMode.BACK
             if mat.blend is not None:
                 if mat.blend.blendMode == BlendMode.NONE:
-                    bmat.blend_method = 'OPAQUE'
+                    if mat.alphaComp is not None and (mat.alphaComp.comp0 in (CompareType.GREATER, CompareType.GEQUAL) or mat.alphaComp.comp1 in (CompareType.GREATER, CompareType.GEQUAL)):
+                        bmat.blend_method = 'CLIP'
+                    else:
+                        bmat.blend_method = 'OPAQUE'
                 elif mat.blend.blendMode == BlendMode.BLEND:
                     bmat.blend_method = 'BLEND'
             if mat.alphaComp is not None:
                 if mat.alphaComp.comp0 == CompareType.GREATER:
                     bmat.alpha_threshold = mat.alphaComp.ref0/255
+                elif mat.alphaComp.comp0 == CompareType.GEQUAL:
+                    bmat.alpha_threshold = (mat.alphaComp.ref0-1)/255
                 elif mat.alphaComp.comp1 == CompareType.GREATER:
                     bmat.alpha_threshold = mat.alphaComp.ref1/255
+                elif mat.alphaComp.comp1 == CompareType.GEQUAL:
+                    bmat.alpha_threshold = (mat.alphaComp.ref1-1)/255
+            bmat.shadow_method = 'NONE'
+            
+            # preview
             if len(mat.tevColors) > 0 and mat.tevColors[0] is not None:
                 bmat.diffuse_color = color8ToLinear(mat.tevColors[0])
             

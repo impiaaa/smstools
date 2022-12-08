@@ -3,7 +3,7 @@ from classes import *
 import unityparser, transforms3d, numpy
 from math import radians, degrees
 import pathlib, sys, inspect
-from unityassets import writeMeta, fixUnityParserFloats
+from unityassets import writeMeta, fixUnityParserFloats, getFileRef
 
 fixUnityParserFloats()
 
@@ -237,9 +237,6 @@ class PrefabInstance(gocci(1001, 'PrefabInstance')):
 def getObjRef(obj):
     return {'fileID': int(obj.anchor)}
 
-def getFileRef(guid, id, type=2):
-    return {'fileID': id, 'guid': guid, 'type': type}
-
 def setupObject(o):
     if o.name in prefabs:
         objObj = PrefabInstance(*prefabs[o.name])
@@ -325,7 +322,6 @@ assert outpath.is_dir()
 
 import texture, bti
 btitime = max(pathlib.Path(texture.__file__).stat().st_mtime, pathlib.Path(bti.__file__).stat().st_mtime)
-from texture import decodeTextureDDS
 from bti import Image
 from bmd2unity import exportTexture
 
@@ -333,14 +329,13 @@ btis = {}
 for btipath in scenedirpath.rglob("*.bti"):
     btipath_rel = btipath.relative_to(scenedirpath)
     outbtidir = outpath / btipath_rel.parent
-    metapathDds = outbtidir / (btipath_rel.stem+".dds.meta")
+    metapathDds = outbtidir / (btipath_rel.stem+".ktx.meta")
     metapathPng = outbtidir / (btipath_rel.stem+".png.meta")
     if metapathPng.exists() and metapathPng.stat().st_mtime >= btitime:
         btis[btipath.stem.lower()] = unityparser.UnityDocument.load_yaml(metapathPng).entry['guid']
     elif metapathDds.exists() and metapathDds.stat().st_mtime >= btitime:
         btis[btipath.stem.lower()] = unityparser.UnityDocument.load_yaml(metapathDds).entry['guid']
     else:
-        # TODO switch to KTX?
         bti = Image()
         with btipath.open('rb') as fin:
             bti.read(fin, 0, 0, 0)
@@ -369,8 +364,8 @@ for colpath in scenedirpath.rglob("*.col"):
         outcoldir.mkdir(parents=True, exist_ok=True)
         cols[colpath_rel.stem.lower()] = list(exportCol(col, outcoldir, colpath_rel.stem))
 
-import bmd2unity, bmd
-bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, btitime)
+import bmd2unity, bmd, shadergen2
+bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
 from bmd import BModel
 from bmd2unity import exportBmd
 
@@ -388,6 +383,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         print(e)
         continue
     if 0:#bmd.name == "map":
+        # TODO: split into connected pieces
         pass
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")

@@ -97,17 +97,9 @@ def halfToFloat(hbits):
         )
     )[0]
 
-def getBatchTriangles(bmd, batch, indexMap, targetMmi):
+def getBatchTriangles(bmd, batch, indexMap):
     matrixTable = [(Matrix(), [], []) for i in range(10)]
     for shapeDraw, shapeMatrix in batch.matrixGroups:
-        if targetMmi is not None:
-            assert not batch.hasMatrixIndices
-            index = shapeMatrix.matrixTable[0]
-            assert index != 0xffff
-            assert not bmd.drw1.isWeighted[index]
-            mmi = bmd.drw1.data[index]
-            if mmi != targetMmi:
-                continue
         for primitive in shapeDraw.primitives:
             a = 0
             b = 1
@@ -137,7 +129,7 @@ def getBatchTriangles(bmd, batch, indexMap, targetMmi):
 Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
 Material = unityparser.constants.UnityClassIdMap.get_or_create_class_id(21, 'Material')
 
-def exportBmd(bmd, outputFolderLocation, targetMmi=None):
+def exportBmd(bmd, outputFolderLocation):
     vertexData = []
     fields = []
     vertexStruct = ['<']
@@ -146,7 +138,7 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
 
     dataForArrayType = [None]*21
 
-    doBones = len(bmd.jnt1.frames) > 1 and targetMmi is None
+    doBones = len(bmd.jnt1.frames) > 1
     
     if doBones:
         print("Transforming verts")
@@ -301,14 +293,6 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
         for shapeDraw, shapeMatrix in batch.matrixGroups:
             mmi = [0]*maxWeightCount
             mmw = [1.0]+[0.0]*(maxWeightCount-1)
-            if targetMmi is not None:
-                assert not batch.hasMatrixIndices
-                index = shapeMatrix.matrixTable[0]
-                assert index != 0xffff
-                assert not bmd.drw1.isWeighted[index]
-                mmi = bmd.drw1.data[index]
-                if mmi != targetMmi:
-                    continue
             for primitive in shapeDraw.primitives:
                 for point in primitive.points:
                     if point.indices not in indexMap:
@@ -366,31 +350,12 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
         elif node.type == 0x12:
             batchIndex = node.index
             batch = bmd.shp1.batches[batchIndex]
-            subMeshTriangles[materialIndex].extend(getBatchTriangles(bmd, batch, indexMap, targetMmi))
+            subMeshTriangles[materialIndex].extend(getBatchTriangles(bmd, batch, indexMap))
             # TODO mesh metrics
             for shapeDraw, shapeMatrix in batch.matrixGroups:
-                if targetMmi is not None:
-                    assert not batch.hasMatrixIndices
-                    index = shapeMatrix.matrixTable[0]
-                    assert index != 0xffff
-                    assert not bmd.drw1.isWeighted[index]
-                    mmi = bmd.drw1.data[index]
-                    if mmi != targetMmi:
-                        continue
                 subMeshVertices[materialIndex].extend([transformedPositions[point.posIndex] for primitive in shapeDraw.primitives for point in primitive.points])
         else:
             raise ValueError(node.type)
-    
-    remapTable = list(bmd.mat3.remapTable)
-    if targetMmi is not None:
-        print("Trimming submeshes")
-        for i in range(len(subMeshTriangles)-1, -1, -1):
-            if len(subMeshTriangles[i]) == 0:
-                del remapTable[i]
-                del subMeshTriangles[i]
-                del subMeshVertices[i]
-    
-    # FIXME why are cafe and underpass broken :(
 
     #import meshoptimizer
     #indices = [i for subMesh in subMeshTriangles for i in subMesh]
@@ -494,21 +459,18 @@ def exportBmd(bmd, outputFolderLocation, targetMmi=None):
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
     
-    if targetMmi is None:
-        bmddir = os.path.join(outputFolderLocation, bmd.name)
-        os.makedirs(bmddir, exist_ok=True)
-        #writeMeta(bmddir, {
-        #    "folderAsset": "yes",
-        #    "DefaultImporter": {
-        #        "externalObjects": {}
-        #    }
-        #}, outputFolderLocation)
-        textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
-        materialIds = list(exportMaterials(bmd.mat3.materials[:max(remapTable)+1], bmddir, textureIds))
-        materialIdInSlot = [materialIds[matIndex] for matIndex in remapTable]
-        return meshId, materialIdInSlot
-    else:
-        return meshId, []
+    bmddir = os.path.join(outputFolderLocation, bmd.name)
+    os.makedirs(bmddir, exist_ok=True)
+    #writeMeta(bmddir, {
+    #    "folderAsset": "yes",
+    #    "DefaultImporter": {
+    #        "externalObjects": {}
+    #    }
+    #}, outputFolderLocation)
+    textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
+    materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmddir, textureIds))
+    materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+    return meshId, materialIdInSlot
 
 def exportTexture(img, bmddir):
     textureSettings = {
@@ -521,10 +483,10 @@ def exportTexture(img, bmddir):
         "aniso": 2**img.maxAniso
     }
     if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
-        fout = open(os.path.join(bmddir, img.name+".dds"), 'wb')
-        decodeTextureDDS(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+        fout = open(os.path.join(bmddir, img.name+".ktx"), 'wb')
+        decodeTextureKTX(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
         fout.close()
-        return writeMeta(img.name+".dds", {
+        return writeMeta(img.name+".ktx", {
             "IHVImageFormatImporter": {
                 "textureSettings": textureSettings,
                 "sRGBTexture": 0
@@ -533,7 +495,7 @@ def exportTexture(img, bmddir):
     else:
         # PNG is required to be compressed, but it's the only format Unity can
         # import at all pixel formats :(
-        decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].save(os.path.join(bmddir, img.name+".png"))
+        decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].transpose(method=1).save(os.path.join(bmddir, img.name+".png"))
         # TODO: use
         #   ASTC for RGB5A3 on Android
         #   RG Compressed BC5 for IA4 on PC
@@ -555,7 +517,7 @@ def exportTexture(img, bmddir):
                 "maxTextureSize": 2048,
                 "lightmap": 0,
                 "compressionQuality": 50,
-                "alphaUsage": int(bool(img.transparency)),
+                "alphaUsage": 1,#int(bool(img.transparency)),
                 "alphaIsTransparency": 1,
                 "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
                 "textureShape": 1,
@@ -573,13 +535,47 @@ def exportTexture(img, bmddir):
 
 def exportTextures(textures, bmddir):
     print("Exporting textures")
+    # some textures have the same data and name, but differ by settings like
+    # transparency.
+    # only exporting different data is better for memory use, but needs handling
+    # in shader, which means more different shaders, which can increase compile
+    # time and state changes
+    exported = {}
+    exportedOrig = {}
     for img in textures:
-        yield exportTexture(img, bmddir)
+        if img.name in exported:
+            ex = exportedOrig[img.name]
+            if ex != img:
+                differ = ", ".join([field if isinstance(field, str) else field[0] for field, a, b in zip(img.fields, img.as_tuple(), ex.as_tuple()) if a != b])
+                warn("%r has multiple samplers that differ in %s"%(img.name, differ))
+            yield exported[img.name]
+        else:
+            guid = exportTexture(img, bmddir)
+            yield guid
+            exported[img.name] = guid
+            exportedOrig[img.name] = img
+
+from shadergen2 import UnityShaderGen
 
 def exportMaterials(materials, bmddir, textureIds):
     print("Exporting materials")
     
     for mat in materials:
+        gen = UnityShaderGen()
+        assetName = mat.name+".shader"
+        with open(os.path.join(bmddir, assetName), 'w') as fout:
+            gen.gen(mat, fout)
+        shader = writeMeta(assetName, {
+            "ShaderImporter": {
+                "externalObjects": {},
+                "defaultTextures": [],
+                "nonModifiableTextures": [],
+                "userData": None,
+                "assetBundleName": None,
+                "assetBundleVariant": None
+            }
+        }, bmddir)
+        
         uMat = Material(str(2100000), '')
         uMat.serializedVersion = 6
         uMat.m_Name = mat.name
@@ -588,27 +584,46 @@ def exportMaterials(materials, bmddir, textureIds):
         # in the ShaderLab properties. "Vector" types are not converted. But
         # both colors and vectors go under m_Colors.
         for i, color in enumerate(mat.matColors):
-            if color is not None: colors["_ColorMatReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
-        for i, color in enumerate(mat.ambColors):
-            if color is not None: colors["_ColorAmbReg%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
-        for i, color in enumerate(mat.tevKColors):
-            if color is not None: colors["_KonstColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            if color is not None: colors["_MatColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+        # amb color is never animated. also use unity_AmbientSky for ambColor 0
+        #for i, color in enumerate(mat.ambColors):
+        #    if color is not None: colors["_AmbColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         for i, color in enumerate(mat.tevColors):
-            if color is not None: colors["_Color%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
-        textures = {}
-        for i, texIdx in enumerate(mat.texNos):
-            texEnv = {"m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}} # unused
+            if color is not None: colors["_TevColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+        for i, color in enumerate(mat.tevKColors):
+            if color is not None: colors["_TevKColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+        texEnvs = {}
+        for i in range(8):
+            texEnv = {}
+            
+            # note: texMtx and texNo do not necessarily correspond
+            texMtx = mat.texMtxs[i] if i < len(mat.texMtxs) else None
+            texIdx = mat.texNos[i] if i < len(mat.texNos) else None
+            if texMtx is None and texIdx is None: continue
+            
+            if texMtx is None:
+                texEnv["m_Scale"] = {"x": 1, "y": 1}
+                texEnv["m_Offset"] = {"x": 0, "y": 0}
+            else:
+                texEnv["m_Scale"] = {"x": texMtx.scale[0], "y": texMtx.scale[1]}
+                texEnv["m_Offset"] = {"x": texMtx.translation[0], "y": texMtx.translation[1]}
+            
             if texIdx is None:
                 texEnv["m_Texture"] = {"fileID": 0}
             else:
                 texEnv["m_Texture"] = {"fileID": 2800000, "guid": textureIds[texIdx], "type": 3}
-            textures["_Tex%d"%i] = texEnv
+            
+            texEnvs["_Tex%d"%i] = texEnv
+        # still need to send texmtx center, rotation
+        for i, texMtx in enumerate(mat.texMtxs):
+            if texMtx is not None: colors["_Tex%d_CR"%i] = {"r": texMtx.center[0], "g": texMtx.center[1], "b": texMtx.center[2], "a": texMtx.rotation*pi}
+        # (dot(vec4(cosR, -sinR, 0, dot(vec2(-cosR, sinR), center.xy)), coord), dot(vec4(sinR, cosR, 0, dot(vec2(-sinR, -cosR), center.xy)), coord), coord.z) * vec3(scale, 1.0) + vec3(translation, 0.0) + center
         uMat.m_SavedProperties = {
             "serializedVersion": 3,
-            "m_TexEnvs": textures,
+            "m_TexEnvs": texEnvs,
             "m_Colors": colors
         }
-        uMat.m_Shader = {"fileID": 4800000, "guid": "3e8e64449a2c52eb9b3267898b76ade0", "type": 3}
+        uMat.m_Shader = getFileRef(shader, id=4800000, type=3)
         asset = unityparser.UnityDocument([uMat])
         assetName = mat.name+".mat"
         asset.dump_yaml(os.path.join(bmddir, assetName))
@@ -623,13 +638,5 @@ if __name__ == "__main__":
     bmd.name = os.path.splitext(bmd.name)[0]
     bmd.read(fin)
     fin.close()
-    if False and bmd.name == "map":
-        outputFolderLocation = os.path.join(outputFolderLocation, bmd.name)
-        os.makedirs(outputFolderLocation, exist_ok=True)
-        for targetMmi, targetFrame in enumerate(bmd.jnt1.frames):
-            print(targetFrame.name)
-            bmd.name = targetFrame.name
-            exportBmd(bmd, outputFolderLocation, targetMmi)
-    else:
-        exportBmd(bmd, outputFolderLocation)
+    exportBmd(bmd, outputFolderLocation)
 

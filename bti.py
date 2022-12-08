@@ -41,10 +41,12 @@ class Image(ReadableStruct):
             nextHeader = fin.tell()
             
             self.fullDataOffset = start+textureHeaderOffset+self.dataOffset+0x20*texIndex
+            self.dataOffset = None
             fin.seek(self.fullDataOffset)
             self.data = readTextureData(fin, self.format, self.width, self.height, self.mipmapCount)
             
             self.fullPaletteOffset = start+textureHeaderOffset+self.paletteOffset+0x20*texIndex
+            self.paletteOffset = None
             fin.seek(self.fullPaletteOffset)
             self.palette = readPaletteData(fin, self.paletteFormat, self.paletteNumEntries)
             

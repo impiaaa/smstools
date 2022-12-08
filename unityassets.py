@@ -30,3 +30,6 @@ def fixUnityParserFloats():
                         |\.(?:nan|NaN|NAN))$''', re.X),
             list('-+0123456789.'))
 
+def getFileRef(guid, id, type=2):
+    return {'fileID': id, 'guid': guid, 'type': type}
+
