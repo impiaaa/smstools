@@ -97,7 +97,7 @@ def halfToFloat(hbits):
         )
     )[0]
 
-def getBatchTriangles(bmd, batch, indexMap):
+def getBatchTriangles(batch, indexMap):
     matrixTable = [(Matrix(), [], []) for i in range(10)]
     for shapeDraw, shapeMatrix in batch.matrixGroups:
         for primitive in shapeDraw.primitives:
@@ -129,45 +129,38 @@ def getBatchTriangles(bmd, batch, indexMap):
 Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
 Material = unityparser.constants.UnityClassIdMap.get_or_create_class_id(21, 'Material')
 
-def exportBmd(bmd, outputFolderLocation):
-    vertexData = []
+def transformVerts(bmd, batches, positions, normals=None):
+    transformedPositions = [Vector() for p in positions]
+    if normals is None:
+        transformedNormals = None
+    else:
+        transformedNormals = [Vector() for p in normals]
+    for batch in batches:
+        matrixTable = [(Matrix(), [], []) for i in range(10)]
+        for mat, mmi, mmw in matrixTable:
+            mat.identity()
+        for i, (shapeDraw, shapeMatrix) in enumerate(batch.matrixGroups):
+            updateMatrixTable(bmd, shapeMatrix, matrixTable)
+            mat, mmi, mmw = matrixTable[0]
+            for curr in shapeDraw.primitives:
+                for p in curr.points:
+                    if batch.hasMatrixIndices:
+                        mat, mmi, mmw = matrixTable[p.matrixIndex//3]
+                    if batch.hasPositions:
+                        transformedPositions[p.posIndex] = mat@positions[p.posIndex]
+                    if batch.hasNormals:
+                        transformedNormals[p.normalIndex] = (mat@normals[p.normalIndex].resized(4)).resized(3)
+    return transformedPositions, transformedNormals
+
+def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones):
     fields = []
     vertexStruct = ['<']
     uChannels = [{"stream": 0, "offset": 0, "format": 0, "dimension": 0} for i in range(14)]
+    dataForArrayType = [None]*21
+    
     offset = 0
 
-    dataForArrayType = [None]*21
-
-    doBones = len(bmd.jnt1.frames) > 1
-    
-    if doBones:
-        print("Transforming verts")
-
-        transformedPositions = [Vector() for p in bmd.vtx1.positions]
-        if hasattr(bmd.vtx1, "normals"): transformedNormals = [Vector() for p in bmd.vtx1.normals]
-        for batch in bmd.shp1.batches:
-            matrixTable = [(Matrix(), [], []) for i in range(10)]
-            for mat, mmi, mmw in matrixTable:
-                mat.identity()
-            for i, (shapeDraw, shapeMatrix) in enumerate(batch.matrixGroups):
-                updateMatrixTable(bmd, shapeMatrix, matrixTable)
-                mat, mmi, mmw = matrixTable[0]
-                for curr in shapeDraw.primitives:
-                    for p in curr.points:
-                        if batch.hasMatrixIndices:
-                            mat, mmi, mmw = matrixTable[p.matrixIndex//3]
-                        if batch.hasPositions:
-                            transformedPositions[p.posIndex] = mat@bmd.vtx1.positions[p.posIndex]
-                        if batch.hasNormals:
-                            transformedNormals[p.normalIndex] = (mat@bmd.vtx1.normals[p.normalIndex].resized(4)).resized(3)
-        transformedPositionsArray = array('f', [c for v in transformedPositions for c in v])
-        if hasattr(bmd.vtx1, "normals"): transformedNormalsArray = array('f', [c for v in transformedNormals for c in v])
-    else:
-        transformedPositions = bmd.vtx1.positions
-    
-    print("Setting channels")
-
-    for fmt, original, asFloat in zip(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat):
+    for fmt, original, asFloat in zip(formats, originalData, asFloat):
         if fmt is None: continue
         if fmt.arrayType == VtxAttr.POS:
             count = {CompType.POS_XY: 2, CompType.POS_XYZ: 3}[fmt.componentCount]
@@ -230,21 +223,21 @@ def exportBmd(bmd, outputFolderLocation):
         fields.extend([ctype]*count)
         offset += sizeof(ctype)*count
         
-        vertexData.append(splitVertexArray(arr, count))
         #formatForArrayType[fmt.arrayType.value] = fmt
         dataForArrayType[fmt.arrayType.value] = splitVertexArray(arr, count)
 
-    if len(bmd.evp1.weightedIndices) == 0:
+    if len(weightedIndices) == 0:
         maxWeightCount = 0
     else:
-        maxWeightCount = max(map(len, bmd.evp1.weightedIndices))
+        maxWeightCount = max(map(len, weightedIndices))
+    boneIndices = weights = None
     if doBones:
         if maxWeightCount == 0:
             maxWeightCount = 1
-            weights = [(1.0,)]*len(bmd.evp1.weightedIndices)
+            weights = [(1.0,)]*len(weightedIndices)
         else:
-            weights = [tuple(v)+(0.0,)*(maxWeightCount-len(v)) for v in bmd.evp1.weightedWeights]
-        boneIndices = [tuple(v)+(0,)*(maxWeightCount-len(v)) for v in bmd.evp1.weightedIndices]
+            weights = [tuple(v)+(0.0,)*(maxWeightCount-len(v)) for v in weightedWeights]
+        boneIndices = [tuple(v)+(0,)*(maxWeightCount-len(v)) for v in weightedIndices]
     
         count = maxWeightCount
         channel = 12
@@ -259,7 +252,6 @@ def exportBmd(bmd, outputFolderLocation):
         
         fields.extend([ctype]*count)
         offset += sizeof(ctype)*count
-        vertexData.append(splitVertexArray(arr, count))
         
         count = maxWeightCount
         channel = 13
@@ -274,7 +266,6 @@ def exportBmd(bmd, outputFolderLocation):
         
         fields.extend([ctype]*maxWeightCount)
         offset += sizeof(ctype)*count
-        vertexData.append(splitVertexArray(arr, count))
         #dataForArrayType[0] = splitVertexArray(arr, count)
     elif maxWeightCount == 0:
         maxWeightCount = 1
@@ -284,12 +275,13 @@ def exportBmd(bmd, outputFolderLocation):
         _pack_ = 1
         _fields_ = list(zip(string.ascii_letters, fields))
     assert sizeof(MyVertexFormat) == vertexStruct.size, (MyVertexFormat._fields_, sizeof(MyVertexFormat), vertexStruct.format, vertexStruct.size)
+    
+    return vertexStruct, uChannels, maxWeightCount, MyVertexFormat, dataForArrayType, boneIndices, weights
 
-    print("Collecting vertices")
-
+def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeighted, weightData, transformedPositions, transformedNormals, boneIndices, weights):
     uniqueVertices = []
     indexMap = {}
-    for batch in bmd.shp1.batches:
+    for batch in batches:
         for shapeDraw, shapeMatrix in batch.matrixGroups:
             mmi = [0]*maxWeightCount
             mmw = [1.0]+[0.0]*(maxWeightCount-1)
@@ -320,25 +312,25 @@ def exportBmd(bmd, outputFolderLocation):
                             else:
                                 index = shapeMatrix.matrixTable[0]
                             if index != 0xffff:
-                                if bmd.drw1.isWeighted[index]:
-                                    mmi = boneIndices[bmd.drw1.data[index]]
-                                    mmw = weights[bmd.drw1.data[index]]
+                                if isWeighted[index]:
+                                    mmi = boneIndices[weightData[index]]
+                                    mmw = weights[weightData[index]]
                                 else:
-                                    mmi = [bmd.drw1.data[index]]+[0]*(maxWeightCount-1)
+                                    mmi = [weightData[index]]+[0]*(maxWeightCount-1)
                                     mmw = [1.0]+[0.0]*(maxWeightCount-1)
                             uniqueVertex.extend(mmw)
                             uniqueVertex.extend(mmi)
                         uniqueIndex = len(uniqueVertices)
                         uniqueVertices.append(tuple(uniqueVertex))
                         indexMap[point.indices] = uniqueIndex
+    return indexMap, uniqueVertices
 
-    print("Making sub-meshes")
-
-    subMeshTriangles = [[] for i in range(len(bmd.mat3.remapTable))]
-    subMeshVertices = [[] for i in range(len(bmd.mat3.remapTable))]
+def makeSubMeshes(remapTable, scenegraph, batches, indexMap, transformedPositions):
+    subMeshTriangles = [[] for i in range(len(remapTable))]
+    subMeshVertices = [[] for i in range(len(remapTable))]
     stack = []
     materialIndex = frameIndex = batchIndex = None
-    for node in bmd.inf1.scenegraph:
+    for node in scenegraph:
         if node.type == 1:
             stack.append((materialIndex, frameIndex, batchIndex))
         elif node.type == 2:
@@ -349,22 +341,20 @@ def exportBmd(bmd, outputFolderLocation):
             materialIndex = node.index
         elif node.type == 0x12:
             batchIndex = node.index
-            batch = bmd.shp1.batches[batchIndex]
-            subMeshTriangles[materialIndex].extend(getBatchTriangles(bmd, batch, indexMap))
+            batch = batches[batchIndex]
+            subMeshTriangles[materialIndex].extend(getBatchTriangles(batch, indexMap))
             # TODO mesh metrics
             for shapeDraw, shapeMatrix in batch.matrixGroups:
                 subMeshVertices[materialIndex].extend([transformedPositions[point.posIndex] for primitive in shapeDraw.primitives for point in primitive.points])
         else:
             raise ValueError(node.type)
+    return subMeshTriangles, subMeshVertices
 
-    #import meshoptimizer
-    #indices = [i for subMesh in subMeshTriangles for i in subMesh]
-    #remap = meshoptimizer.generateVertexRemap(indices, uniqueVertices, MyVertexFormat)
-
+def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, jointMatrices, joints, scenegraph):
     mesh = Mesh(str(4300000), '')
     asset = unityparser.UnityDocument([mesh])
 
-    mesh.m_Name = bmd.name
+    mesh.m_Name = name
     mesh.serializedVersion = 9
     mesh.m_IsReadable = 0
     mesh.m_KeepVertices = int(doBones)
@@ -375,8 +365,8 @@ def exportBmd(bmd, outputFolderLocation):
     indexBuffer = array('H')
     
     print("Setting submeshes")
-    if sum(map(len, subMeshVertices)) == 0: return
 
+    minXTotal = minYTotal = minZTotal = maxXTotal = maxYTotal = maxZTotal = None
     for triangles, positions in zip(subMeshTriangles, subMeshVertices):
         if len(positions) == 0:
             assert len(triangles) == 0
@@ -394,12 +384,12 @@ def exportBmd(bmd, outputFolderLocation):
                 "serializedVersion": 2
             })
         else:
-            minX = min([p.x for p in positions])
-            minY = min([p.y for p in positions])
-            minZ = min([p.z for p in positions])
-            maxX = max([p.x for p in positions])
-            maxY = max([p.y for p in positions])
-            maxZ = max([p.z for p in positions])
+            minX = min([p.x for p in positions]); minXTotal = minX if minXTotal is None else min(minX, minXTotal)
+            minY = min([p.y for p in positions]); minYTotal = minY if minYTotal is None else min(minY, minYTotal)
+            minZ = min([p.z for p in positions]); minZTotal = minZ if minZTotal is None else min(minZ, minZTotal)
+            maxX = max([p.x for p in positions]); maxXTotal = maxX if maxXTotal is None else max(maxX, maxXTotal)
+            maxY = max([p.y for p in positions]); maxYTotal = maxY if maxYTotal is None else max(maxY, maxYTotal)
+            maxZ = max([p.z for p in positions]); maxZTotal = maxZ if maxZTotal is None else max(maxZ, maxZTotal)
             mesh.m_SubMeshes.append({
                 "firstByte": len(indexBuffer)*2,
                 "indexCount": len(triangles),
@@ -423,29 +413,24 @@ def exportBmd(bmd, outputFolderLocation):
         "_typelessdata": (b''.join([vertexStruct.pack(*v) for v in uniqueVertices])).hex()
     }
     mesh.m_IndexBuffer = indexBuffer.tobytes().hex()
-    minX = min([p.x for positions in subMeshVertices for p in positions])
-    minY = min([p.y for positions in subMeshVertices for p in positions])
-    minZ = min([p.z for positions in subMeshVertices for p in positions])
-    maxX = max([p.x for positions in subMeshVertices for p in positions])
-    maxY = max([p.y for positions in subMeshVertices for p in positions])
-    maxZ = max([p.z for positions in subMeshVertices for p in positions])
     mesh.m_LocalAABB = {
-        "m_Center": {'x': (minX+maxX)/2, 'y': (minY+maxY)/2, 'z': (minZ+maxZ)/2},
-        "m_Extent": {'x': (maxX-minX)/2, 'y': (maxY-minY)/2, 'z': (maxZ-minZ)/2}
+        "m_Center": {'x': (minXTotal+maxXTotal)/2, 'y': (minYTotal+maxYTotal)/2, 'z': (minZTotal+maxZTotal)/2},
+        "m_Extent": {'x': (maxXTotal-minXTotal)/2, 'y': (maxYTotal-minYTotal)/2, 'z': (maxZTotal-minZTotal)/2}
     }
     
     if doBones:
-        mesh.m_BindPose = [{'e%d%d'%(i,j): mat[i][j] for i in range(4) for j in range(4)} for mat in bmd.jnt1.matrices]
-        boneNames = [None]*len(bmd.jnt1.frames)
+        print("Generating armature")
+        mesh.m_BindPose = [{'e%d%d'%(i,j): mat[i][j] for i in range(4) for j in range(4)} for mat in jointMatrices]
+        boneNames = [None]*len(joints)
         rootIndex = None
         name = None
         nameStack = []
-        armName = bmd.name+'_arm'
-        for node in bmd.inf1.scenegraph:
+        armName = mesh.m_Name+'_arm'
+        for node in scenegraph:
             if node.type == 0x10:
                 if rootIndex == None:
                     rootIndex = node.index
-                name = bmd.jnt1.frames[node.index].name
+                name = joints[node.index].name
                 boneNames[node.index] = '/'.join([armName]+nameStack+[name])
             elif node.type == 1:
                 nameStack.append(name)
@@ -453,8 +438,42 @@ def exportBmd(bmd, outputFolderLocation):
                 name = nameStack.pop()
         mesh.m_BoneNameHashes = array('I', [crc32(name.encode()) for name in boneNames]).tobytes().hex()
         mesh.m_RootBoneNameHash = crc32(boneNames[rootIndex].encode())
-        mesh.m_BonesAABB = [{"m_Min": dict(zip('xyz', frame.bbMin)), "m_Max": dict(zip('xyz', frame.bbMax))} for frame in bmd.jnt1.frames]
+        mesh.m_BonesAABB = [{"m_Min": dict(zip('xyz', frame.bbMin)), "m_Max": dict(zip('xyz', frame.bbMax))} for frame in joints]
     
+    return asset
+
+def exportBmd(bmd, outputFolderLocation):
+    doBones = len(bmd.jnt1.frames) > 1
+    
+    if doBones:
+        print("Transforming verts")
+        transformedPositions, transformedNormals = transformVerts(bmd, bmd.shp1.batches, bmd.vtx1.positions, bmd.vtx1.normals if hasattr(bmd.vtx1, "normals") else None)
+        transformedPositionsArray = array('f', [c for v in transformedPositions for c in v])
+        if transformedNormals is None:
+            transformedNormalsArray = None
+        else:
+            transformedNormalsArray = array('f', [c for v in transformedNormals for c in v])
+    else:
+        transformedPositions = bmd.vtx1.positions
+        if hasattr(bmd.vtx1, "normals"): transformedNormals = bmd.vtx1.normals
+        else: transformedNormals = None
+        transformedPositionsArray = transformedNormalsArray = None
+    
+    print("Setting channels")
+    vertexStruct, uChannels, maxWeightCount, MyVertexFormat, dataForArrayType, boneIndices, weights = setupChannels(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat, bmd.evp1.weightedIndices, bmd.evp1.weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones)
+
+    print("Collecting vertices")
+    indexMap, uniqueVertices = collectVertices(bmd.shp1.batches, maxWeightCount, dataForArrayType, doBones, bmd.drw1.isWeighted, bmd.drw1.data, transformedPositions, transformedNormals, boneIndices, weights)
+    
+    print("Making sub-meshes")
+    subMeshTriangles, subMeshVertices = makeSubMeshes(bmd.mat3.remapTable, bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
+    
+    #import meshoptimizer
+    #indices = [i for subMesh in subMeshTriangles for i in subMesh]
+    #remap = meshoptimizer.generateVertexRemap(indices, uniqueVertices, MyVertexFormat)
+    
+    asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
+    print("Writing asset")
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
@@ -467,9 +486,14 @@ def exportBmd(bmd, outputFolderLocation):
     #        "externalObjects": {}
     #    }
     #}, outputFolderLocation)
+    print("Exporting textures")
     textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
-    materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmddir, textureIds))
+    
+    print("Exporting materials")
+    useColor1 = all(map(bool, bmd.vtx1.colors))
+    materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmddir, textureIds, useColor1))
     materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+    
     return meshId, materialIdInSlot
 
 def exportTexture(img, bmddir):
@@ -534,7 +558,6 @@ def exportTexture(img, bmddir):
         }, bmddir)
 
 def exportTextures(textures, bmddir):
-    print("Exporting textures")
     # some textures have the same data and name, but differ by settings like
     # transparency.
     # only exporting different data is better for memory use, but needs handling
@@ -557,14 +580,12 @@ def exportTextures(textures, bmddir):
 
 from shadergen2 import UnityShaderGen
 
-def exportMaterials(materials, bmddir, textureIds):
-    print("Exporting materials")
-    
+def exportMaterials(materials, bmddir, textureIds, useColor1):
+    gen = UnityShaderGen()
     for mat in materials:
-        gen = UnityShaderGen()
         assetName = mat.name+".shader"
         with open(os.path.join(bmddir, assetName), 'w') as fout:
-            gen.gen(mat, fout)
+            gen.gen(mat, fout, useColor1)
         shader = writeMeta(assetName, {
             "ShaderImporter": {
                 "externalObjects": {},
@@ -614,10 +635,9 @@ def exportMaterials(materials, bmddir, textureIds):
                 texEnv["m_Texture"] = {"fileID": 2800000, "guid": textureIds[texIdx], "type": 3}
             
             texEnvs["_Tex%d"%i] = texEnv
-        # still need to send texmtx center, rotation
+        # send texmtx center, rotation
         for i, texMtx in enumerate(mat.texMtxs):
             if texMtx is not None: colors["_Tex%d_CR"%i] = {"r": texMtx.center[0], "g": texMtx.center[1], "b": texMtx.center[2], "a": texMtx.rotation*pi}
-        # (dot(vec4(cosR, -sinR, 0, dot(vec2(-cosR, sinR), center.xy)), coord), dot(vec4(sinR, cosR, 0, dot(vec2(-sinR, -cosR), center.xy)), coord), coord.z) * vec3(scale, 1.0) + vec3(translation, 0.0) + center
         uMat.m_SavedProperties = {
             "serializedVersion": 3,
             "m_TexEnvs": texEnvs,

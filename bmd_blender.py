@@ -431,9 +431,9 @@ def importMesh(filePath, bmd, mesh, bm):
                     if texGens[texGen.source-TexGenSrc.TEXCOORD0] is not None: tree.links.new(texGens[texGen.source-TexGenSrc.TEXCOORD0], node.inputs[0])
                     texGenSrc = node.outputs[0]
                 elif texGen.source >= TexGenSrc.COLOR0 and texGen.source <= TexGenSrc.COLOR1:
-                    node = placer.addNode('ShaderNodeVertexColor')
-                    node.layer_name = str(texGen.source-TexGenSrc.COLOR0)
-                    texGenSrc = node.outputs['Color']
+                    node = placer.addNode('NodeReroute')
+                    if colorChannels[texGen.source-TexGenSrc.COLOR0] is not None: tree.links.new(colorChannels[texGen.source-TexGenSrc.COLOR0], node.inputs[0])
+                    texGenSrc = node.outputs[0]
                 else:
                     texGenSrc = None
                 node.parent = frame

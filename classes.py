@@ -307,19 +307,19 @@ class TMapXlu:
         count1, = unpack('>I', fin.read(4))
         self.things = []
         for i in range(count1):
-            thing = []
+            jointModelIndexes = []
             count2, = unpack('>I', fin.read(4))
             for j in range(count2):
                 thing.append(unpack('>II', fin.read(8)))
-            self.things.append(thing)
+            self.things.append(jointModelIndexes)
     def __repr__(self):
         return "TMapXlu"+repr(self.things)
 
 class TMapCollisionData:
     def read(self, fin):
-        self.unknown = unpack('>IIIII', fin.read(20))
+        self.xBlockCount, self.zBlockCount, self.checkDataCount, self.checkListCount, self.checkListWarpCount = unpack('>IIIII', fin.read(20))
     def __repr__(self):
-        return "TMapCollisionData(%r)"%(self.unknown,)
+        return "TMapCollisionData(xBlockCount=%s, zBlockCount=%s, checkDataCount=%s, checkListCount=%s, checkListWarpCount=%s)"%(self.xBlockCount, self.zBlockCount, self.checkDataCount, self.checkListCount, self.checkListWarpCount)
 
 class NamedPosition:
     def read(self, fin):
@@ -1195,6 +1195,8 @@ class CPolarSubCamera(TLookAtCamera):
     def __init__(self):
         super().__init__()
         self.pos = (0,0,0)
+    def read(self, fin):
+        pass
 
 
 class TActor(TPlacement):

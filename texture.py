@@ -501,21 +501,21 @@ class GL:
     COMPRESSED_RGB_S3TC_DXT1_EXT  = 0x83F0
     RGB565                        = 0x8D62
 
-#              glType                    glFormat glInternalFormat                  glBaseInternalFormat
+#                  glType                    glFormat glInternalFormat                 glBaseInternalFormat
 glFormats = {
-    TexFmt.I4:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                            GL.RED),
-    TexFmt.I8:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                            GL.RED),
-    TexFmt.IA4:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
-    TexFmt.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
-    TexFmt.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                        GL.RGB),
-    TexFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
-    TexFmt.RGBA8:  (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
-    TexFmt.CMPR:   (                      0,       0, GL.COMPRESSED_RGB_S3TC_DXT1_EXT,  GL.RGB)
+    TexFmt.I4:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                           GL.RED),
+    TexFmt.I8:     (GL.UNSIGNED_BYTE,        GL.RED,  GL.R8,                           GL.RED),
+    TexFmt.IA4:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                          GL.RG),
+    TexFmt.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                          GL.RG),
+    TexFmt.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                       GL.RGB),
+    TexFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
+    TexFmt.RGBA8:  (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
+    TexFmt.CMPR:   (                      0,       0, GL.COMPRESSED_RGB_S3TC_DXT1_EXT, GL.RGBA)
 }
 glPaletteFormats = {
-    TlutFmt.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                           GL.RG),
-    TlutFmt.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                        GL.RGB),
-    TlutFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                         GL.RGBA),
+    TlutFmt.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                          GL.RG),
+    TlutFmt.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                       GL.RGB),
+    TlutFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
 }
 
 def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=0):

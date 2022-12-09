@@ -273,7 +273,7 @@ def setup3d(objXfm, o):
         rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(180-o.rot[1]), radians(o.rot[2]))
         objXfm.m_LocalScale = {'x': SCALE*o.scale[0], 'y': SCALE*o.scale[1], 'z': -SCALE*o.scale[2]}
     else:
-        rot = transforms3d.euler.euler2quat(radians(-o.rot[0]), radians(o.rot[1]), radians(o.rot[2]))
+        rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(-o.rot[1]), radians(o.rot[2]))
     rot = transforms3d.quaternions.qmult(rot, [0,0,1,0])
     euler = transforms3d.euler.quat2euler(rot)
     objXfm.m_LocalEulerAnglesHint = {'x': euler[0], 'y': euler[1], 'z': euler[2]}
@@ -397,9 +397,6 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 print(bmdpath_rel, e)
                 continue
 
-# bpy.ops.import_scene.bmd("EXEC_DEFAULT", directory="/media/spencer/ExtraData/Game extracts/sms/mario/watergun2/normal_wg/", files=[{"name": "normal_wg.bmd"}])
-# bpy.ops.export_scene.fbx("EXEC_DEFAULT", filepath="/media/spencer/ExtraData/Game extracts/sms/mario/watergun2/normal_wg/normal_wg.fbx", apply_unit_scale=False)
-
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
 
 ocs = OcclusionCullingSettings(getId(), '')
@@ -495,6 +492,7 @@ for o in marScene.objects:
         objXfm.m_Father = getObjRef(lightgrpXfm)
         
         light = objObj.getOrCreateComponent(Light)
+        light.serializedVersion = 10
         light.m_Color = doColor(o2.color)
         light.m_Intensity = 1
         light.m_Type = 1
@@ -903,7 +901,9 @@ for group in strategy.objects:
                     objObj.getOrCreateComponent(ParticleSystemRenderer)
                     objObj.getOrCreateComponent(ParticleSystem)
         if o.name == "Map":
-            pass
+            objObj.m_StaticEditorFlags = 0xFFFFFFFF
+            addMeshFilter("map/map/map.bmd", objObj)
+            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
 
 tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))
 assert tables.name == "NameRefGrp"
