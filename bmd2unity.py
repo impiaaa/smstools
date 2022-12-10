@@ -443,6 +443,8 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     return asset
 
 def exportBmd(bmd, outputFolderLocation):
+    # TODO: when splitting, remove vertex attribs where all == 0
+    # TODO: split mesh based on positions
     doBones = len(bmd.jnt1.frames) > 1
     
     if doBones:
@@ -507,6 +509,7 @@ def exportTexture(img, bmddir):
         "aniso": 2**img.maxAniso
     }
     if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
+        # TODO: Unity doesn't understand the other formats but they're used for textures with mipmaps
         fout = open(os.path.join(bmddir, img.name+".ktx"), 'wb')
         decodeTextureKTX(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
         fout.close()
@@ -578,14 +581,14 @@ def exportTextures(textures, bmddir):
             exported[img.name] = guid
             exportedOrig[img.name] = img
 
-from shadergen2 import UnityShaderGen
+from shadergen2 import UnityShaderGen, ShaderWriter
 
 def exportMaterials(materials, bmddir, textureIds, useColor1):
     gen = UnityShaderGen()
     for mat in materials:
         assetName = mat.name+".shader"
         with open(os.path.join(bmddir, assetName), 'w') as fout:
-            gen.gen(mat, fout, useColor1)
+            gen.gen(mat, ShaderWriter(fout), useColor1)
         shader = writeMeta(assetName, {
             "ShaderImporter": {
                 "externalObjects": {},
@@ -600,13 +603,17 @@ def exportMaterials(materials, bmddir, textureIds, useColor1):
         uMat = Material(str(2100000), '')
         uMat.serializedVersion = 6
         uMat.m_Name = mat.name
+        if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans):
+            # enable emissive baking
+            uMat.m_LightmapFlags = 2
+        else:
+            uMat.m_LightmapFlags = 0
         colors = {}
-        # Note: Unity converts colors from sRGB *if* they are marked as "Color"
-        # in the ShaderLab properties. "Vector" types are not converted. But
-        # both colors and vectors go under m_Colors.
+        # Declared as Vectors (not Colors) in shader properties, but still go
+        # in the m_Colors block
         for i, color in enumerate(mat.matColors):
             if color is not None: colors["_MatColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
-        # amb color is never animated. also use unity_AmbientSky for ambColor 0
+        # amb color is never animated, so not exposed in material properties
         #for i, color in enumerate(mat.ambColors):
         #    if color is not None: colors["_AmbColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
         for i, color in enumerate(mat.tevColors):

@@ -4,35 +4,47 @@ from unityassets import *
 
 Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
 
-def exportCol(col, outputFolderLocation, physNameBase):
+def exportCol(col, outputFolderLocation, physNameBase, shouldSplit=True):
     for groupIdx, group in enumerate(col.groups):
+        zippedTriIndices = zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3])
         if len(group.tribuf3):
-            triangles = list(zip(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]), group.terrainTypes, group.tribuf2, group.tribuf3))
+            triangles = list(zip(zippedTriIndices, group.terrainTypes, group.tribuf2, group.tribuf3))
         else:
-            triangles = list(zip(zip(group.indexBuffer[0::3], group.indexBuffer[1::3], group.indexBuffer[2::3]), group.terrainTypes, group.tribuf2, [None]*group.numTriIndices))
-        connectedPieces = []
-        while len(triangles) > 0:
-            connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3 = triangles.pop(0)
-            connectedTris = [connectedTriIndices]
-            connectedIndices = set(connectedTriIndices)
-            i = 0
-            while i < len(triangles):
-                triIndices, terrainType, unk2, unk3 = triangles[i]
-                
-                if len(connectedIndices.intersection(triIndices)) > 0 and \
-                   terrainType == connectedTerrainType and \
-                   unk2 == connectedUnk2 and \
-                   unk3 == connectedUnk3:
-                    
-                    del triangles[i]
-                    connectedTris.append(triIndices)
-                    connectedIndices.update(triIndices)
-                    i = 0
-                
-                else:
-                    i += 1
+            triangles = list(zip(zippedTriIndices, group.terrainTypes, group.tribuf2, [None]*group.numTriIndices))
+        if shouldSplit:
+            connectedPieces = []
             
-            connectedPieces.append((connectedTris, connectedTerrainType, connectedUnk2, connectedUnk3))
+            while len(triangles) > 0:
+                connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3 = triangles.pop(0)
+                connectedTris = [connectedTriIndices]
+                connectedIndices = set(connectedTriIndices)
+                i = 0
+                while i < len(triangles):
+                    triIndices, terrainType, unk2, unk3 = triangles[i]
+                    
+                    if len(connectedIndices.intersection(triIndices)) > 0 and \
+                       terrainType == connectedTerrainType and \
+                       unk2 == connectedUnk2 and \
+                       unk3 == connectedUnk3:
+                        
+                        del triangles[i]
+                        connectedTris.append(triIndices)
+                        connectedIndices.update(triIndices)
+                        i = 0
+                    
+                    else:
+                        i += 1
+                
+                connectedPieces.append((connectedTris, connectedTerrainType, connectedUnk2, connectedUnk3))
+        else:
+            connectedPieces = {}
+            for connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3 in triangles:
+                key = (connectedTerrainType, connectedUnk2, connectedUnk3)
+                if key in connectedPieces:
+                    connectedPieces[key].append(connectedTriIndices)
+                else:
+                    connectedPieces[key] = [connectedTriIndices]
+            connectedPieces = [(connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3) for (connectedTerrainType, connectedUnk2, connectedUnk3), connectedTriIndices in connectedPieces.items()]
         
         for connectedIdx, (oldTriangles, terrainType, unk2, unk3) in enumerate(connectedPieces):
             usedIndices = list({i for tri in oldTriangles for i in tri})
@@ -44,10 +56,11 @@ def exportCol(col, outputFolderLocation, physNameBase):
             #newVertexBuffer = col.vertexBuffer
             #newIndexBuffer = group.indexBuffer
             
-            if unk3 is None:
-                physName = '%s-%04x-%d-%d.%d'%(physNameBase, group.surfaceId, terrainType, unk2, connectedIdx)
-            else:
-                physName = '%s-%04x-%d-%d-%d.%d'%(physNameBase, group.surfaceId, terrainType, unk2, unk3, connectedIdx)
+            physName = physName = '%s-%04x-%d-%d'%(physNameBase, group.surfaceId, terrainType, unk2)
+            if unk3 is not None:
+                physName += '-%d'%unk3
+            if shouldSplit:
+                physName += '.%d'%connectedIdx
 
             mesh = Mesh(str(4300000), '')
             asset = unityparser.UnityDocument([mesh])

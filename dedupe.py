@@ -22,7 +22,9 @@ while len(toCheck) > 0:
     for path in toCheck:
         if path.is_dir(): continue
         if path.suffix == ".meta": continue
-        h = crc32(path.read_bytes())
+        data = path.read_bytes()
+        if path.suffix == ".shader": data = data[data.find('\n'):] # skip shader name
+        h = crc32(data)
         if h in files: files[h].add(path)
         else: files[h] = {path}
     

@@ -313,7 +313,8 @@ def color8ToLinear(c):
     return res
 
 def doColor(c):
-    return dict(zip('rgba', color8ToLinear(c)))
+    # XXX are these stored as linear?
+    return dict(zip('rgba', (x/255 for x in c)))
 
 scenedirpath = pathlib.Path(sys.argv[1])
 assert scenedirpath.is_dir()
@@ -362,7 +363,7 @@ for colpath in scenedirpath.rglob("*.col"):
         with colpath.open('rb') as fin:
             col.read(fin)
         outcoldir.mkdir(parents=True, exist_ok=True)
-        cols[colpath_rel.stem.lower()] = list(exportCol(col, outcoldir, colpath_rel.stem))
+        cols[colpath_rel.stem.lower()] = list(exportCol(col, outcoldir, colpath_rel.stem, colpath_rel.stem == "map"))
 
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
@@ -404,6 +405,10 @@ rs = RenderSettings(getId(), '')
 lms = LightmapSettings(getId(), '')
 nms = NavMeshSettings(getId(), '')
 
+# Subtractive light mode. Only works if the main light is set to realtime-only.
+lms.m_UseShadowmask = 0
+lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1}
+
 for o in scene.objects:
     if o.name == 'MarScene':
         marScene = o
@@ -421,6 +426,7 @@ for o in marScene.objects:
         ambColor = o.search("影アンビエント（オブジェクト）")
         assert ambColor.name == 'AmbColor'
         rs.m_SubtractiveShadowColor = doColor(ambColor.color)
+        # or {r: 0.08494473, g: 0.2297351, b: 0.46647662, a: 1}
 
 scene = unityparser.UnityDocument([ocs, rs, lms, nms])
 
@@ -495,7 +501,9 @@ for o in marScene.objects:
         light.serializedVersion = 10
         light.m_Color = doColor(o2.color)
         light.m_Intensity = 1
-        light.m_Type = 1
+        light.m_Type = 1 # directional
+        light.m_Shadows = {"m_Type": 1} # hard shadows
+        light.m_Lightmapping = 4 # realtime (required for subtractive GI)
     if o.name == 'Strategy':
         strategy = o
 
@@ -829,10 +837,16 @@ def addMeshFilter(bmdFilename, objObj):
     renderer = objObj.getOrCreateComponent(MeshRenderer)
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+    renderer.m_Enabled = 1
+    renderer.m_CastShadows = 1
+    renderer.m_ReceiveShadows = 0
+    renderer.m_ReceiveGI = 2
 
     meshFilter = objObj.getOrCreateComponent(MeshFilter)
     if asset is not None:
         meshFilter.m_Mesh = getFileRef(asset, id=4300000)
+    
+    return renderer, meshFilter
 
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
