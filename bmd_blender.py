@@ -289,7 +289,7 @@ def importMesh(filePath, bmd, mesh, bm):
                 imgs = decodeTexturePIL(texture.data, texture.format, texture.width, texture.height, texture.paletteFormat, texture.palette, mipmapCount=texture.mipmapCount)
                 # in PIL, only PNG, Targa, and TIFF support all required pixel formats. PNG is required to be compressed (waste of time), and Blender doesn't load the alpha channel in monochrome TGAs
                 f = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
-                imgs[0][0].save(f)
+                imgs[0][0].transpose(method=1).save(f)
                 f.close()
                 image = bpy.data.images.load(f.name)
                 image.pack()
@@ -395,7 +395,10 @@ def importMesh(filePath, bmd, mesh, bm):
                     alphaChannels.append(None)
                 placer.alignRows(colIdx)
             
+            placer.newColumn()
+            
             # Texgen stages
+            colIdx = placer.colIdx
             texGens = []
             for j, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
                 placer.goToColumn(colIdx)
@@ -501,7 +504,7 @@ def importMesh(filePath, bmd, mesh, bm):
                     
                     placer.goToColumn(colIdx)
                     frame = tree.nodes.new('NodeFrame')
-                    frame.label = "Indirect " + str(j)
+                    frame.label = "Indirect texture stage " + str(j)
                     
                     node = placer.addNode('ShaderNodeVectorMath')
                     if texGens[indTexOrder.texCoordId] is not None: tree.links.new(texGens[indTexOrder.texCoordId], node.inputs[0])
@@ -510,11 +513,23 @@ def importMesh(filePath, bmd, mesh, bm):
                     out = node.outputs[0]
                     
                     placer.nextColumn()
-                    node = placeTexture(indTexOrder.texture, mat, bmd, placer, btextures)
-                    node.parent = frame
-                    tree.links.new(out, node.inputs[0])
-                    # TODO: noclip also multiplies by 255, and then takes .abg (.wzy). why?
-                    indTexCoords.append(node.out[0])
+                    imgNode = placeTexture(indTexOrder.texture, mat, bmd, placer, btextures)
+                    imgNode.parent = frame
+                    tree.links.new(out, imgNode.inputs[0])
+                    
+                    placer.nextColumn()
+                    sepNode = placer.addNode('ShaderNodeSeparateRGB')
+                    sepNode.parent = frame
+                    tree.links.new(imgNode.outputs['Color'], sepNode.inputs[0])
+                    
+                    placer.nextColumn()
+                    joinNode = placer.addNode('ShaderNodeCombineXYZ')
+                    joinNode.parent = frame
+                    tree.links.new(imgNode.outputs['Alpha'], joinNode.inputs[0])
+                    tree.links.new(sepNode.outputs[2], joinNode.inputs[1])
+                    tree.links.new(sepNode.outputs[1], joinNode.inputs[2])
+                    
+                    indTexCoords.append(sepNode.outputs[0])
                 placer.newColumn()
             
             # TEV registers
@@ -532,6 +547,9 @@ def importMesh(filePath, bmd, mesh, bm):
                         node.outputs[0].default_value = color8ToLinear(color)
                         node.label = name + ' ' + str(j)
                         out.append(node.outputs[0])
+            node = placer.addNode('ShaderNodeCombineXYZ')
+            tevTexCoord = node.outputs[0]
+            
             placer.nextColumn()
             
             # TEV stages
@@ -547,11 +565,14 @@ def importMesh(filePath, bmd, mesh, bm):
                 else:
                     rasSwapTable = mat.tevSwapModeTables[tevSwapMode.rasSel].as_tuple()
                     texSwapTable = mat.tevSwapModeTables[tevSwapMode.texSel].as_tuple()
+                
+                frame = tree.nodes.new('NodeFrame')
+                frame.label = "TEV stage " + str(j)
+                
                 if hasIndirect:
                     indTevStage = bmd.mat3.indirectArray[i].indTevStage[j]
-                
-                #frame = tree.nodes.new('NodeFrame')
-                #frame.label = "TEV stage " + str(j)
+                    indTexCoords[indTevStage.indTexId]
+                    # TODO
                 
                 if tevStage is None:
                     colorSources = [None]*4

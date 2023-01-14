@@ -1,7 +1,7 @@
 from scenebin import *
 from classes import *
 import unityparser, transforms3d, numpy
-from math import radians, degrees
+from math import radians, degrees, tan
 import pathlib, sys, inspect
 from unityassets import writeMeta, fixUnityParserFloats, getFileRef
 
@@ -260,11 +260,12 @@ def setupObject(o):
     objXfm = objObj.getOrCreateComponent(Transform)
     return objObj, objXfm
 
+UndergroundShift = 528
 def setupPosition(objXfm, o):
     x, y, z = SCALE*o.pos[0], SCALE*o.pos[1], -1*SCALE*o.pos[2]
     if y > 80 and abs(x) < 1000 and abs(z) < 1000:
         # put the rooms in the sky underground
-        y -= 200
+        z += UndergroundShift
     objXfm.m_LocalPosition = {'x': x, 'y': y, 'z': z}
 
 def setup3d(objXfm, o):
@@ -367,8 +368,46 @@ for colpath in scenedirpath.rglob("*.col"):
 
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
-from bmd import BModel
-from bmd2unity import exportBmd
+from bmd import *
+from bmd2unity import exportBmd, exportTextures, exportMaterials
+
+def printFlatScenegraph(sg):
+    for node in sg:
+        if node.type == 1:
+            indent += 1
+        elif node.type == 2:
+            indent -= 1
+        else:
+            print('  '*indent+(("frame", "material", "batch")[node.type-0x10]), node.index)
+
+def printScenegraphHierarchy(sg, indent=0):
+    print('  '*indent+(("frame", "material", "batch")[sg.type-0x10]), sg.index)
+    for c in sg.children:
+        printScenegraphHierarchy(c, indent+1)
+
+def filterScenegraph(sgin, batchIndices):
+    sgout = SceneGraph()
+    sgout.type = sgin.type
+    sgout.index = sgin.index
+    sgout.children = []
+    for c in sgin.children:
+        fc = filterScenegraph(c, batchIndices)
+        newIdx = batchIndices[fc.index]
+        if fc.type == 0x12:
+            if newIdx is None:
+                sgout.children.extend(fc.children)
+            else:
+                fc.index = newIdx
+                sgout.children.append(fc)
+        else:
+            sgout.children.append(fc)
+    sgout.children = [c for c in sgout.children if c.type == 0x12 or len(c.children) > 0]
+    if len(sgout.children) == 1 and sgout.type == 0x11 and sgout.children[0].type == 0x11:
+        return sgout.children[0]
+    if len(sgout.children) == 1 and sgout.type == 0x10 and sgout.children[0].type == 0x10:
+        # NOTE: Only for maps. Assumes all matrices are identity
+        return sgout.children[0]
+    return sgout
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -377,26 +416,77 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
     outbmddir = outpath / bmdpath_rel.parent
     bmd = BModel()
     bmd.name = bmdpath_rel.stem.lower()
-    try:
-        with bmdpath.open('rb') as fin:
-            bmd.read(fin)
-    except ValueError as e:
-        print(e)
-        continue
-    if 0:#bmd.name == "map":
+    with bmdpath.open('rb') as fin:
+        bmd.read(fin)
+    bmddatadir = outbmddir / bmdpath_rel.stem
+    bmddatadir.mkdir(parents=True, exist_ok=True)
+    bmdkey = str(bmdpath_rel).lower()
+    if bmd.name == "map":
+        print("Exporting textures")
+        textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
+        
+        print("Exporting materials")
+        useColor1 = all(map(bool, bmd.vtx1.colors))
+        materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1))
+        materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+        
+        bmds[bmdkey] = []
+        
         # TODO: split into connected pieces
-        pass
+        groupedAttribs = {}
+        for shape in bmd.shp1.batches:
+            key = tuple(shape.attribs)
+            if key in groupedAttribs: groupedAttribs[key].append(shape)
+            else: groupedAttribs[key] = [shape]
+        for attribFmt, shapeGroup in groupedAttribs.items():
+            subBmd = BModel()
+            subBmd.scenegraph = filterScenegraph(bmd.scenegraph, [shapeGroup.index(shape) if shape in shapeGroup else None for shape in bmd.shp1.batches])
+            subBmd.inf1 = ModelInfoBlock()
+            subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
+            
+            subBmd.vtx1 = VertexBlock()
+            subBmd.vtx1.positions = bmd.vtx1.positions
+            if hasattr(bmd.vtx1, "normals"): subBmd.vtx1.normals = bmd.vtx1.normals
+            subBmd.vtx1.originalData = bmd.vtx1.originalData
+            subBmd.vtx1.asFloat = bmd.vtx1.asFloat
+            subBmd.vtx1.formats = [f if f is None or f.arrayType in [a.attrib for a in attribFmt] else None for f in bmd.vtx1.formats]
+            
+            subBmd.shp1 = ShapeBlock()
+            subBmd.shp1.batches = shapeGroup
+            
+            subBmd.jnt1 = JointBlock()
+            #usedJointIndices = {sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x10}
+            # just force doBones off
+            subBmd.jnt1.matrices = []#[m for i, m in enumerate(bmd.jnt1.matrices) if i in usedJoints]
+            subBmd.jnt1.frames = []#[f for i, f in enumerate(bmd.jnt1.frames) if i in usedJoints]
+            
+            subBmd.mat3 = MaterialBlock()
+            usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
+            subBmd.mat3.remapTable = usedMaterialSlots # only need length
+            for sg in subBmd.inf1.scenegraph:
+                if sg.type == 0x11:
+                    sg.index = usedMaterialSlots.index(sg.index)
+            filteredMaterialIdInSlot = [materialIdInSlot[oldSlot] for oldSlot in usedMaterialSlots]
+            
+            subBmd.tex1 = bmd.tex1
+            subBmd.evp1 = bmd.evp1 # unused when doBones off
+            subBmd.drw1 = bmd.drw1 # unused when doBones off
+            subBmd.name = bmd.name+'-'+(','.join([a.attrib.name for a in attribFmt]))
+            meshId = exportBmd(subBmd, outbmddir)
+            bmds[bmdkey].append((meshId, filteredMaterialIdInSlot))
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[str(bmdpath_rel).lower()] = unityparser.UnityDocument.load_yaml(metapath).entry['guid'], [unityparser.UnityDocument.load_yaml(outbmddir / bmdpath_rel.stem / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
+            bmds[bmdkey] = unityparser.UnityDocument.load_yaml(metapath).entry['guid'], [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
         else:
-            outbmddir.mkdir(parents=True, exist_ok=True)
-            try:
-                bmds[str(bmdpath_rel).lower()] = exportBmd(bmd, outbmddir)
-            except ValueError as e:
-                print(bmdpath_rel, e)
-                continue
+            print("Exporting textures")
+            textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
+            
+            print("Exporting materials")
+            useColor1 = all(map(bool, bmd.vtx1.colors))
+            materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1))
+            materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+            bmds[bmdkey] = exportBmd(bmd, outbmddir), materialIdInSlot
 
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
 
@@ -467,7 +557,7 @@ for baseColliderName in ["map", "building01", "building02"]:
             objXfm.m_Father = getObjRef(grpXfm)
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -1*SCALE}
             if baseName.endswith("-interior"):
-                objXfm.m_LocalPosition = {'x': 0.0, 'y': -200.0, 'z': 0.0}
+                objXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': float(UndergroundShift)}
             colliderGroups[baseName] = objObj
         addCol(uuid, objObj)
 
@@ -829,11 +919,10 @@ def getSound(soundKey):
     return parsedInfo
 
 def addMeshFilter(bmdFilename, objObj):
-    if bmdFilename in bmds:
-        asset, materialIds = bmds[bmdFilename]
+    if isinstance(bmdFilename, tuple):
+        asset, materialIds = bmdFilename
     else:
-        warn("Didn't load %r"%bmdFilename)
-        asset = materialIds = None
+        asset, materialIds = bmds[bmdFilename]
     renderer = objObj.getOrCreateComponent(MeshRenderer)
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
@@ -881,8 +970,12 @@ for group in strategy.objects:
                     addMeshFilter(bmdFilename, objObj)
                 else:
                     warn("No model for %r"%o.model)
+            # for every TMapObjBaseManager, assign
+            # lodClipSize = (clipRadius/tan(25))/farClip
+            # for every TMapObjBase, search for manager, get LODGroup and assign screenRelativeHeight
+            # could also do with TLiveActor/TLiveManager, but sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
         if isinstance(o, TMapStaticObj):
-            #objObj.m_StaticEditorFlags = 0xFFFFFFFF
+            # not "static" in the unity sense
             modelEntry = actorDataTable.get(o.baseName, None)
             if modelEntry is None:
                 warn("No static model for %r"%o.baseName)
@@ -914,9 +1007,26 @@ for group in strategy.objects:
                 if 'particle' in modelEntry:
                     objObj.getOrCreateComponent(ParticleSystemRenderer)
                     objObj.getOrCreateComponent(ParticleSystem)
-        if o.name == "Map":
+        if isinstance(o, TMap):
             objObj.m_StaticEditorFlags = 0xFFFFFFFF
-            addMeshFilter("map/map/map.bmd", objObj)
+            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+            objXfm.m_Children = []
+            for assetAndMaterials in bmds["map/map/map.bmd"]:
+                meshObj = GameObject(getId(), '')
+                meshObj.serializedVersion = 6
+                meshObj.m_Component = []
+                meshObj.m_IsActive = 1
+                meshObj.m_StaticEditorFlags = 0xFFFFFFFF
+                meshObj.m_Name = "Mesh"
+                scene.entries.append(meshObj)
+                meshXfm = meshObj.getOrCreateComponent(Transform)
+                meshXfm.m_Father = getObjRef(objXfm)
+                objXfm.m_Children.append(getObjRef(meshXfm))
+                addMeshFilter(assetAndMaterials, meshObj)
+        if isinstance(o, TSky):
+            objObj.m_StaticEditorFlags = 0xFFFFFFFF
+            renderer, meshFilter = addMeshFilter("map/map/sky.bmd", objObj)
+            renderer.m_CastShadows = 0
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
 
 tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))

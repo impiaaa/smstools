@@ -118,9 +118,9 @@ class TCubeCameraInfo(TCubeGeneralInfo):
 class TCubeStreamInfo(TCubeGeneralInfo):
     def read(self, fin):
         super().read(fin)
-        self.unk3 = unpack('>2I', fin.read(8))
+        self.movementScale, self.movementType = unpack('>II', fin.read(8))
     def __repr__(self):
-        return super().__repr__()+'|'+repr(self.unk3)
+        return super().__repr__()+'|sc=%d, typ=%d'%(self.movementScale, self.movementType)
 
 
 class GroupObject(TNameRef):
@@ -752,7 +752,11 @@ class TObjManager(TViewObj):
 class TMareJellyFishManager(TObjManager): pass
 
 @register('LiveManager')
-class TLiveManager(TObjManager): pass
+class TLiveManager(TObjManager):
+    def __init__(self):
+        super().__init__()
+        self.farClip = 4000
+        self.clipRadius = 200
 
 @register('BoardNpcManager')
 class TBoardNpcManager(TLiveManager): pass
@@ -762,9 +766,9 @@ class TBoardNpcManager(TLiveManager): pass
 class TMapObjBaseManager(TLiveManager):
     def read(self, fin):
         super().read(fin)
-        self.far, self.unkClip = unpack('>ff', fin.read(8))
+        self.farClip, self.clipRadius = unpack('>ff', fin.read(8))
     def __repr__(self):
-        return super().__repr__()+'|far=%.1f %.1f'%(self.far, self.unkClip)
+        return super().__repr__()+'|far=%.1f sz=%.1f'%(self.farClip, self.clipRadius)
 
 @register('ItemManager')
 class TItemManager(TMapObjBaseManager): pass
@@ -778,6 +782,9 @@ class TPoolManager(TMapObjBaseManager): pass
 
 @register('EnemyManager')
 class TEnemyManager(TLiveManager):
+    def __init__(self):
+        super().__init__()
+        self.clipRadius = 300
     def read(self, fin):
         super().read(fin)
         self.sharedMActorSetsCount, = unpack('>I', fin.read(4))
@@ -1196,7 +1203,7 @@ class CPolarSubCamera(TLookAtCamera):
         super().__init__()
         self.pos = (0,0,0)
     def read(self, fin):
-        pass
+        TNameRef.read(self, fin)
 
 
 class TActor(TPlacement):

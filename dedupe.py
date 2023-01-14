@@ -23,7 +23,7 @@ while len(toCheck) > 0:
         if path.is_dir(): continue
         if path.suffix == ".meta": continue
         data = path.read_bytes()
-        if path.suffix == ".shader": data = data[data.find('\n'):] # skip shader name
+        if path.suffix == ".shader": data = data[data.find(b'\n'):] # skip shader name
         h = crc32(data)
         if h in files: files[h].add(path)
         else: files[h] = {path}
@@ -39,7 +39,7 @@ while len(toCheck) > 0:
         metas = {toTuple(m) for m in metas}
         if len(metas) != 1: continue
         
-        name = (','.join({f.stem for f in dupes}))+(','.join({f.suffix for f in dupes}))
+        name = (','.join({f.stem for f in dupes}))[:50]+(','.join({f.suffix for f in dupes}))
         dir = pathlib.Path(os.path.commonpath(dupes))
         newPath = dir / name
         

@@ -12,6 +12,7 @@ def exportCol(col, outputFolderLocation, physNameBase, shouldSplit=True):
         else:
             triangles = list(zip(zippedTriIndices, group.terrainTypes, group.tribuf2, [None]*group.numTriIndices))
         if shouldSplit:
+            # split large COLs into disconnected pieces, hopefully as an optimization
             connectedPieces = []
             
             while len(triangles) > 0:
@@ -37,6 +38,7 @@ def exportCol(col, outputFolderLocation, physNameBase, shouldSplit=True):
                 
                 connectedPieces.append((connectedTris, connectedTerrainType, connectedUnk2, connectedUnk3))
         else:
+            # only split different terrain types, so that they can be acted on separately
             connectedPieces = {}
             for connectedTriIndices, connectedTerrainType, connectedUnk2, connectedUnk3 in triangles:
                 key = (connectedTerrainType, connectedUnk2, connectedUnk3)

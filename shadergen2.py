@@ -23,46 +23,139 @@ class ShaderWriter:
 # FIXME: hardcoded to sunshine
 CosAtt = {1<<0: (1, 0, 0), 1<<2: (0, 0, 1)}
 DistAtt = {1<<0: (1, 0, 0), 1<<2: (25, 0, -24)}
+
+tev_ksel_table_c = {
+    TevKColorSel.CONST_1: "(fixed3)(8.0/8.0)",
+    TevKColorSel.CONST_7_8: "(fixed3)(7.0/8.0)",
+    TevKColorSel.CONST_3_4: "(fixed3)(6.0/8.0)",
+    TevKColorSel.CONST_5_8: "(fixed3)(5.0/8.0)",
+    TevKColorSel.CONST_1_2: "(fixed3)(4.0/8.0)",
+    TevKColorSel.CONST_3_8: "(fixed3)(3.0/8.0)",
+    TevKColorSel.CONST_1_4: "(fixed3)(2.0/8.0)",
+    TevKColorSel.CONST_1_8: "(fixed3)(1.0/8.0)",
+    TevKColorSel.K0: "_TevKColor0.rgb",
+    TevKColorSel.K0_R: "_TevKColor0.rrr",
+    TevKColorSel.K0_G: "_TevKColor0.ggg",
+    TevKColorSel.K0_B: "_TevKColor0.bbb",
+    TevKColorSel.K0_A: "_TevKColor0.aaa",
+    TevKColorSel.K1: "_TevKColor1.rgb",
+    TevKColorSel.K1_R: "_TevKColor1.rrr",
+    TevKColorSel.K1_G: "_TevKColor1.ggg",
+    TevKColorSel.K1_B: "_TevKColor1.bbb",
+    TevKColorSel.K1_A: "_TevKColor1.aaa",
+    TevKColorSel.K2: "_TevKColor2.rgb",
+    TevKColorSel.K2_R: "_TevKColor2.rrr",
+    TevKColorSel.K2_G: "_TevKColor2.ggg",
+    TevKColorSel.K2_B: "_TevKColor2.bbb",
+    TevKColorSel.K2_A: "_TevKColor2.aaa",
+    TevKColorSel.K3: "_TevKColor3.rgb",
+    TevKColorSel.K3_R: "_TevKColor3.rrr",
+    TevKColorSel.K3_G: "_TevKColor3.ggg",
+    TevKColorSel.K3_B: "_TevKColor3.bbb",
+    TevKColorSel.K3_A: "_TevKColor3.aaa"
+}
+tev_ksel_table_a = {
+    TevKColorSel.CONST_1: "8.0/8.0",
+    TevKColorSel.CONST_7_8: "7.0/8.0",
+    TevKColorSel.CONST_3_4: "6.0/8.0",
+    TevKColorSel.CONST_5_8: "5.0/8.0",
+    TevKColorSel.CONST_1_2: "4.0/8.0",
+    TevKColorSel.CONST_3_8: "3.0/8.0",
+    TevKColorSel.CONST_1_4: "2.0/8.0",
+    TevKColorSel.CONST_1_8: "1.0/8.0",
+    TevKColorSel.K0_R: "_TevKColor0.r",
+    TevKColorSel.K0_G: "_TevKColor0.g",
+    TevKColorSel.K0_B: "_TevKColor0.b",
+    TevKColorSel.K0_A: "_TevKColor0.a",
+    TevKColorSel.K1_R: "_TevKColor1.r",
+    TevKColorSel.K1_G: "_TevKColor1.g",
+    TevKColorSel.K1_B: "_TevKColor1.b",
+    TevKColorSel.K1_A: "_TevKColor1.a",
+    TevKColorSel.K2_R: "_TevKColor2.r",
+    TevKColorSel.K2_G: "_TevKColor2.g",
+    TevKColorSel.K2_B: "_TevKColor2.b",
+    TevKColorSel.K2_A: "_TevKColor2.a",
+    TevKColorSel.K3_R: "_TevKColor3.r",
+    TevKColorSel.K3_G: "_TevKColor3.g",
+    TevKColorSel.K3_B: "_TevKColor3.b",
+    TevKColorSel.K3_A: "_TevKColor3.a"
+}
+tev_c_input_table = {
+    TevColorArg.CPREV: "colorPrev.rgb",
+    TevColorArg.APREV: "colorPrev.aaa",
+    TevColorArg.C0: "color0.rgb",
+    TevColorArg.A0: "color0.aaa",
+    TevColorArg.C1: "color1.rgb",
+    TevColorArg.A1: "color1.aaa",
+    TevColorArg.C2: "color2.rgb",
+    TevColorArg.A2: "color2.aaa",
+    TevColorArg.TEXC: "texTemp.rgb",
+    TevColorArg.TEXA: "texTemp.aaa",
+    TevColorArg.RASC: "rasTemp.rgb",
+    TevColorArg.RASA: "rasTemp.aaa",
+    TevColorArg.ONE: "(half3)(1)",
+    TevColorArg.HALF: "(half3)(1.0/2.0)",
+    TevColorArg.KONST: "konstTemp.rgb",
+    TevColorArg.ZERO: "(half3)(0)"
+}
+tev_a_input_table = {
+    TevAlphaArg.APREV: "colorPrev.a",
+    TevAlphaArg.A0: "color0.a",
+    TevAlphaArg.A1: "color1.a",
+    TevAlphaArg.A2: "color2.a",
+    TevAlphaArg.TEXA: "texTemp.a",
+    TevAlphaArg.RASA: "rasTemp.a",
+    TevAlphaArg.KONST: "konstTemp.a",
+    TevAlphaArg.ZERO: "0"
+}
+tev_output_table = {
+    Register.PREV: "colorPrev",
+    Register.REG0: "color0",
+    Register.REG1: "color1",
+    Register.REG2: "color2",
+}
+
 # Copied from Dolphin
 class DXShaderGen:
     def genLightShader(self, fout, colorChannel, suffix):
         if colorChannel.attenuationFunction == 0:
-            # Spec
-            fout.writeLine("ldir = unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w;")
-            #fout.writeLine("float3 spotDir = unity_SpotDirection[0].w ? unity_SpotDirection[0].xyz : ldir.xyz;")
-            fout.writeLine("ldir = normalize(ldir);")
-            #fout.writeLine("attn = (dot(viewN, ldir) >= 0.0) ? max(0.0, dot(viewN, spotDir)) : 0.0;")
-            fout.writeLine("attn = max(0.0, dot(viewN, ldir));")
-            fout.writeLine("cosAttn = float3{};".format(CosAtt[colorChannel.litMask&5]))
-            fout.writeLine("distAttn = {}(float3{});".format("normalize" if (colorChannel.diffuseFunction == DiffuseFunction.NONE) else "", DistAtt[colorChannel.litMask&5]))
-            fout.writeLine("attn = max(0.0f, dot(cosAttn, float3(1.0, attn, attn*attn))) / dot(distAttn, float3(1.0, attn, attn*attn));")
+            fout.writeLine("// Spec")
+            fout.writeLine("float3 lightDir = unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w;")
+            #fout.writeLine("float3 spotDir = unity_SpotDirection[0].w ? unity_SpotDirection[0].xyz : lightDir.xyz;")
+            fout.writeLine("lightDir = normalize(lightDir);")
+            #fout.writeLine("float lightAttn = (dot(viewN, lightDir) >= 0.0) ? max(0.0, dot(viewN, spotDir)) : 0.0;")
+            fout.writeLine("float lightAttn = max(0.0, dot(viewN, lightDir));")
+            fout.writeLine("float3 cosAttn = float3{};".format(CosAtt[colorChannel.litMask&5]))
+            fout.writeLine("float3 distAttn = {}(float3{});".format("normalize" if (colorChannel.diffuseFunction == DiffuseFunction.NONE) else "", DistAtt[colorChannel.litMask&5]))
+            fout.writeLine("lightAttn = max(0.0f, dot(cosAttn, float3(1.0, lightAttn, lightAttn*lightAttn))) / dot(distAttn, float3(1.0, lightAttn, lightAttn*lightAttn));")
         elif colorChannel.attenuationFunction == 1:
-            # Spot
-            fout.writeLine("ldir = unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w;")
-            #fout.writeLine("float3 spotDir = unity_SpotDirection[0].w ? unity_SpotDirection[0].xyz : ldir.xyz;")
-            fout.writeLine("dist2 = dot(ldir, ldir);")
-            fout.writeLine("dist = sqrt(dist2);")
-            fout.writeLine("ldir = ldir / dist;")
-            #fout.writeLine("attn = max(0.0, dot(ldir, spotDir));")
-            fout.writeLine("attn = 1.0;")
-            # attn*attn may overflow
+            fout.writeLine("// Spot")
+            fout.writeLine("float3 lightDir = unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w;")
+            #fout.writeLine("float3 spotDir = unity_SpotDirection[0].w ? unity_SpotDirection[0].xyz : lightDir.xyz;")
+            fout.writeLine("float lightDistSq = dot(lightDir, lightDir);")
+            fout.writeLine("float lightDist = sqrt(lightDistSq);")
+            fout.writeLine("lightDir = lightDir / lightDist;")
+            #fout.writeLine("float lightAttn = max(0.0, dot(lightDir, spotDir));")
+            fout.writeLine("float lightAttn = 1.0;")
+            # lightAttn*lightAttn may overflow
             cosAtt = CosAtt[colorChannel.litMask&5]
-            fout.writeLine("attn = max(0.0, {} + {}*attn + {}*attn*attn) / dot(float3{}, float3(1.0,dist,dist2));".format(cosAtt[0], cosAtt[1], cosAtt[2], DistAtt[colorChannel.litMask&5]))
+            fout.writeLine("lightAttn = max(0.0, {} + {}*lightAttn + {}*lightAttn*lightAttn) / dot(float3{}, float3(1.0,lightDist,lightDistSq));".format(cosAtt[0], cosAtt[1], cosAtt[2], DistAtt[colorChannel.litMask&5]))
         else:
-            # None/dir
-            fout.writeLine("ldir = normalize(unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w);")
-            fout.writeLine("attn = 1.0;")
-            fout.writeLine("if (length(ldir) == 0.0)\n    ldir = viewN;")
+            fout.writeLine("// None/dir")
+            fout.writeLine("float3 lightDir = normalize(unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w);")
+            fout.writeLine("float lightAttn = 1.0;")
+            fout.writeLine("if (length(lightDir) == 0.0)\n    lightDir = viewN;")
         
+        fout.writeLine("// "+str(colorChannel.diffuseFunction))
         if colorChannel.diffuseFunction == DiffuseFunction.NONE:
-            fout.writeLine("lacc{0} += attn * unity_LightColor[0]{0};".format(suffix))
+            fout.writeLine("lightAccum{0} += lightAttn * unity_LightColor[0]{0};".format(suffix))
         else:
-            fout.writeLine("lacc{0} += attn * {1}dot(ldir, viewN)) * unity_LightColor[0]{0};".format(suffix, "max(0.0," if colorChannel.diffuseFunction == DiffuseFunction.CLAMP else "("))
+            fout.writeLine("lightAccum{0} += lightAttn * {1}dot(lightDir, viewN)) * unity_LightColor[0]{0};".format(suffix, "max(0.0," if colorChannel.diffuseFunction == DiffuseFunction.CLAMP else "("))
     
     def genVertLighting(self, mat, fout, useColor1, lightingEnabled=True, alphaOnly=False):
         # numColorChans controls the number of color channels available to TEV, but
         # we still need to generate all channels here, as it can be used in texgen.
-        fout.writeLine("float4 vertex_color_0, vertex_color_1;")
+        fout.writeLine("float4 vertexColor0, vertexColor1;")
         
         # To use color 1, the vertex descriptor must have color 0 and 1.
         # If color 1 is present but not color 0, it is used for lighting channel 0.
@@ -71,76 +164,76 @@ class DXShaderGen:
             if mat.colorChans[i*2].matColorSource == ColorSrc.VTX or mat.colorChans[i*2].ambColorSource == ColorSrc.VTX or mat.colorChans[i*2+1].matColorSource == ColorSrc.VTX or mat.colorChans[i*2+1].ambColorSource == ColorSrc.VTX:
                 if i == 0 or useColor1:
                     # Use color0 for channel 0, and color1 for channel 1 if both colors 0 and 1 are present.
-                    fout.writeLine("vertex_color_{0} = v.color{0};".format(i))
+                    fout.writeLine("vertexColor{0} = v.color{0};".format(i))
                 elif i == 0:
                     # Use color1 for channel 0 if color0 is not present.
-                    fout.writeLine("vertex_color_0 = v.color1;")
+                    fout.writeLine("vertexColor0 = v.color1;")
                 #else:
-                #    fout.writeLine("vertex_color_{0} = missing_color_value;".format(i))
+                #    fout.writeLine("vertexColor{0} = missing_color_value;".format(i))
         
-        fout.writeLine("half4 lacc;")
-        fout.writeLine("float3 ldir, h, cosAttn, distAttn;")
-        fout.writeLine("float dist, dist2, attn;")
         for i in range(2):
             if i*2+1 >= len(mat.colorChans) or mat.colorChans[i*2+1] is None: continue
             fout.writeLine("fixed4 colorChannel{};".format(i))
             with fout:
                 colorChannel = mat.colorChans[i*2]
                 if colorChannel.matColorSource == ColorSrc.VTX:
-                    fout.writeLine("fixed4 mat = vertex_color_{};".format(i))
+                    fout.writeLine("fixed4 baseColor = vertexColor{};".format(i))
                 else:
-                    fout.writeLine("fixed4 mat = _MatColor{};".format(i))
+                    fout.writeLine("fixed4 baseColor = _MatColor{};".format(i))
                 
                 if colorChannel.lightingEnabled and lightingEnabled:
                     if colorChannel.ambColorSource == ColorSrc.VTX:
-                        fout.writeLine("lacc = vertex_color_{};".format(i))
+                        fout.writeLine("half4 lightAccum = vertexColor{};".format(i))
                     else:
                         if i == 0:
-                            fout.writeLine("lacc = fixed4(LinearToGammaSpace(UNITY_LIGHTMODEL_AMBIENT.xyz), UNITY_LIGHTMODEL_AMBIENT.w);")
+                            fout.writeLine("half4 lightAccum = fixed4(LinearToGammaSpace(UNITY_LIGHTMODEL_AMBIENT.rgb), UNITY_LIGHTMODEL_AMBIENT.a);")
                         else:
-                            fout.writeLine("lacc = _AmbColor{};".format(i))
+                            fout.writeLine("half4 lightAccum = _AmbColor{};".format(i))
                 else:
-                    fout.writeLine("lacc = half4(1,1,1,1);")
+                    fout.writeLine("half4 lightAccum = 1;")
                 
                 alphaChannel = mat.colorChans[i*2+1]
                 if alphaChannel.matColorSource != colorChannel.matColorSource:
                     if alphaChannel.matColorSource == ColorSrc.VTX:
-                        fout.writeLine("mat.w = vertex_color_{}.w;".format(i))
+                        fout.writeLine("baseColor.a = vertexColor{}.a;".format(i))
                     else:
-                        fout.writeLine("mat.w = _MatColor{}.w;".format(i))
+                        fout.writeLine("baseColor.a = _MatColor{}.a;".format(i))
                 
                 if alphaChannel.lightingEnabled != colorChannel.lightingEnabled or alphaChannel.ambColorSource != colorChannel.ambColorSource:
                     if alphaChannel.lightingEnabled and lightingEnabled:
                         if alphaChannel.ambColorSource == ColorSrc.VTX:
-                            fout.writeLine("lacc.w = vertex_color_{}.w;".format(i))
+                            fout.writeLine("lightAccum.a = vertexColor{}.a;".format(i))
                         else:
                             if i == 0:
-                                fout.writeLine("lacc.w = UNITY_LIGHTMODEL_AMBIENT.w;")
+                                fout.writeLine("lightAccum.a = UNITY_LIGHTMODEL_AMBIENT.a;")
                             else:
-                                fout.writeLine("lacc.w = _AmbColor{}.w;".format(i))
+                                fout.writeLine("lightAccum.a = _AmbColor{}.a;".format(i))
                     else:
-                        fout.writeLine("lacc.w = half(1);")
+                        fout.writeLine("lightAccum.a = half(1);")
                 
                 # on GX, need to have different light for diffuse/specular, so
                 # just assume 1 light and use it for all calcs
                 if not alphaOnly and colorChannel.lightingEnabled == alphaChannel.lightingEnabled and colorChannel.litMask == alphaChannel.litMask and colorChannel.diffuseFunction == alphaChannel.diffuseFunction and colorChannel.attenuationFunction == alphaChannel.attenuationFunction:
                     if colorChannel.lightingEnabled and colorChannel.litMask != 0 and lightingEnabled:
-                        self.genLightShader(fout, colorChannel, "")
+                        with fout:
+                            self.genLightShader(fout, colorChannel, "")
                 else:
                     if colorChannel.lightingEnabled and colorChannel.litMask != 0 and lightingEnabled and not alphaOnly:
-                        self.genLightShader(fout, colorChannel, ".xyz")
+                        with fout:
+                            self.genLightShader(fout, colorChannel, ".rgb")
                     if alphaChannel.lightingEnabled and alphaChannel.litMask != 0 and lightingEnabled:
-                        self.genLightShader(fout, alphaChannel, ".w")
+                        with fout:
+                            self.genLightShader(fout, alphaChannel, ".a")
                 
-                fout.writeLine("lacc = saturate(lacc);")
-                fout.writeLine("colorChannel{} = mat * lacc;".format(i))
+                fout.writeLine("lightAccum = saturate(lightAccum);")
+                fout.writeLine("colorChannel{} = baseColor * lightAccum;".format(i))
                 if i < mat.colorChanNum: fout.writeLine("o.color{0} = colorChannel{0};".format(i))
         
     def genTexGen(self, mat, fout):
         for i in range(mat.texGenNum):
             texInfo = mat.texCoords[i]
             with fout:
-                fout.writeLine("float4 src = float4(0.0, 0.0, 1.0, 1.0);")
+                fout.writeLine("float4 src = float4(0, 0, 1, 1);")
                 if texInfo.source == TexGenSrc.POS:
                     fout.writeLine("src.xyz = v.vertex.xyz;") # only 4d in the meta pass
                 elif texInfo.source == TexGenSrc.NRM:
@@ -170,8 +263,8 @@ class DXShaderGen:
                         fout.writeLine("texcoord = UnityObjectToViewPos(src){};".format(suffix))
                     elif texInfo.matrix >= TexGenMatrix.TEXMTX0 and texInfo.matrix <= TexGenMatrix.TEXMTX9:
                         texMtxIdx = (texInfo.matrix-TexGenMatrix.TEXMTX0)//3
-                        fout.writeLine("float cosR = cos(_Tex{}_CR.z);".format(texMtxIdx))
-                        fout.writeLine("float sinR = sin(_Tex{}_CR.z);".format(texMtxIdx))
+                        fout.writeLine("float cosR, sinR;")
+                        fout.writeLine("sincos(_Tex{}_CR.z, sinR, cosR);".format(texMtxIdx))
                         fout.writeLine("texcoord = (")
                         fout.writeLine("    float3(")
                         fout.writeLine("        dot(float4(cosR, -sinR, 0, dot(float2(-cosR,  sinR), _Tex{0}_CR.xy)), src),".format(texMtxIdx))
@@ -193,11 +286,123 @@ class DXShaderGen:
                 else:
                     texMtxIdx = (mat.postTexGens[i].matrix-TexGenMatrix.DTTMTX0)//3
                     fout.writeLine("o.texcoord{} = mul(_PostTexMtx{}, texcoord);".format(i, texMtxIdx))
-
-    def genFrag(self, mat, fout):
-        fout.writeLine("fixed4 col = {1,1,1,1};")
-        if len(mat.texNos) > 0 and mat.texNos[0] is not None and len(mat.texMtxs) > 0 and mat.texMtxs[0] is not None: fout.writeLine("col *= tex2D(_Tex0, i.texcoord0);")
-        if mat.colorChanNum > 0 and usesColorChannel(mat.colorChans[0]): fout.writeLine("col *= i.color0;")
+    
+    def getTevOp(self, suffix, op, bias, scale):
+        fmt = "half" if len(suffix) <= 1 else "half"+str(len(suffix))
+        if op in (TevOp.ADD, TevOp.SUB):
+            return "(tevD.{suffix} + ({fmt})({bias}) {sign} lerp(tevA.{suffix}, tevB.{suffix}, tevC.{suffix})) * {scale}".format(suffix=suffix, fmt=fmt, bias={TevBias.ZERO: 0, TevBias.ADDHALF: 0.5, TevBias.SUBHALF: -0.5}[bias], sign=("+" if op == TevOp.ADD else "-"), scale={TevScale.SCALE_1: 1, TevScale.SCALE_2: 2, TevScale.SCALE_4: 4, TevScale.DIVIDE_2: 0.5}[scale])
+        elif op == TevOp.COMP_R8_GT:
+            return "((tevA.r > tevB.r) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op == TevOp.COMP_R8_EQ:
+            return "((tevA.r == tevB.r) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op ==TevOp.COMP_GR16_GT:
+            return "((TevPack16(tevA.rg) >  TevPack16(tevB.rg)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op ==TevOp.COMP_GR16_EQ:
+            return "((TevPack16(tevA.rg) == TevPack16(tevB.rg)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op ==TevOp.COMP_BGR24_GT:
+            return "((TevPack24(tevA.rgb) >  TevPack24(tevB.rgb)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op ==TevOp.COMP_BGR24_EQ:
+            return "((TevPack24(tevA.rgb) == TevPack24(tevB.rgb)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
+        elif op == TevOp.COMP_RGB8_GT:
+            return "((tevA.rgb > tevB.rgb) * tevC.{suffix}) + tevD.{suffix}".format(suffix=suffix)
+        elif op == TevOp.COMP_RGB8_EQ:
+            return "((tevA.rgb == tevB.rgb) * tevC.{suffix}) + tevD.{suffix}".format(suffix=suffix) 
+       
+    def genFrag(self, mat, indirect, textures, fout):
+        if any(i is not None and textures[i].mipmapCount > 1 for i in mat.texNos):
+            fout.writeLine("float sceneTextureLODBias = log2(min(_ScreenParams.x / 640, _ScreenParams.y / 528));")
+        fout.writeLine("half4 colorPrev = _TevColor0;")
+        for i in range(3): fout.writeLine("half4 color{} = _TevColor{};".format(i, i+1))
+        
+        for i in range(indirect.indTexStageNum if indirect.hasIndirect else 0):
+            indTexOrder = indirect.indTexOrder[i]
+            indTexCoordScale = indirect.indTexCoordScale[i]
+            texture = textures[mat.texNos[indTexOrder.texture]]
+            fout.writeLine("int3 indTex{} = 255*{}.abg;".format(i, self.sampleTexture(indTexOrder.texture, texture, "i.texcoord{}/float2({}, {})".format(indTexOrder.texCoordId, 1<<indTexCoordScale.scaleS, 1<<indTexCoordScale.scaleT))))
+        
+        fout.writeLine("float2 tevCoord = 0;")
+        for i in range(mat.tevStageNum):
+            fout.writeLine("// TEV stage {}".format(i))
+            with fout:
+                tevInd = indirect.indTevStage[i]
+                tevOrder = mat.tevOrders[i]
+                if tevInd.alphaSel == 0: # Off
+                    fout.writeLine("fixed alphaBump = 0;")
+                else:
+                    fout.writeLine("int alphaBump = indTex{}.{}&{};".format(tevInd.indTexId, "wxyz"[tevInd.alphaSel], [0xF8,0xE0,0xF0,0xF8][tevInd.format]))
+                if tevInd.mtxId == 0: # Off
+                    fout.writeLine("float2 indTevTrans = 0;")
+                else:
+                    fout.writeLine("int3 indTevCrd = indTex{};".format(tevInd.indTexId))
+                    if tevInd.bias > 0:
+                        fout.writeLine("indTevCrd.{} += {};".format(["", "x", "y", "xy", "z", "xz", "yz", "xyz"][tevInd.bias], "-128" if tevInd.format == 0 else "1"))
+                    
+                    if tevInd.mtxId == 0:
+                        fout.writeLine("float2 indTevTrans = 0;")
+                    elif tevInd.mtxId in (1, 2, 3):
+                        fout.writeLine("float2 indTevTrans = mul(_IndTexMtx{}, float4(indTevCrd, 0));".format(tevInd.mtxId-1))
+                    elif tevInd.mtxId in (5, 6, 7):
+                        fout.writeLine("float2 indTevTrans = i.texcoord{}*indTevCrd.xx;".format(tevOrder.texCoordId))
+                    elif tevInd.mtxId in (9, 10, 11):
+                        fout.writeLine("float2 indTevTrans = i.texcoord{}*indTevCrd.yy;".format(tevOrder.texCoordId))
+                if tevOrder.texCoordId == 0xFF:
+                    fout.writeLine("float2 wrappedCoord = 0;")
+                else:
+                    fout.writeLine("float2 wrappedCoord = i.texcoord{};".format(tevOrder.texCoordId))
+                    if tevInd.wrapS == 6:
+                        fout.writeLine("wrappedCoord.x = 0;")
+                    elif tevInd.wrapS != 0:
+                        fout.writeLine("wrappedCoord.x %= {}/255.0;".format([0, 256, 128, 64, 32, 16][tevInd.wrapS]))
+                    if tevInd.wrapT == 6:
+                        fout.writeLine("wrappedCoord.y = 0;")
+                    elif tevInd.wrapT != 0:
+                        fout.writeLine("wrappedCoord.y %= {}/255.0;".format([0, 256, 128, 64, 32, 16][tevInd.wrapT]))
+                    
+                    if tevInd.addPrev:
+                        fout.writeLine("tevCoord += wrappedCoord + indTevTrans/255;")
+                    else:
+                        fout.writeLine("tevCoord = wrappedCoord + indTevTrans/255;")
+            
+                tevStage = mat.tevStages[i]
+                if TevColorArg.RASA in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD) or \
+                    TevColorArg.RASC in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD) or \
+                    TevAlphaArg.RASA in (tevStage.alphaInA, tevStage.alphaInB, tevStage.alphaInC, tevStage.alphaInD):
+                    if tevOrder.chanId in (ColorChannelID.COLOR0, ColorChannelID.ALPHA0, ColorChannelID.COLOR0A0):
+                        rasSrc = "i.color0"
+                    elif tevOrder.chanId in (ColorChannelID.COLOR1, ColorChannelID.ALPHA1, ColorChannelID.COLOR1A1):
+                        rasSrc = "i.color1"
+                    elif tevOrder.chanId == ColorChannelID.ALPHA_BUMP:
+                        rasSrc = "alphaBump"
+                    elif tevOrder.chanId == ColorChannelID.ALPHA_BUMP_N:
+                        rasSrc = "(alphaBump*(255.0/248.0))"
+                    elif tevOrder.chanId in (ColorChannelID.COLOR_ZERO, ColorChannelID.COLOR_NULL):
+                        rasSrc = "(fixed4)(0)"
+                    tbl = mat.tevSwapModeTables[mat.tevSwapModes[i].rasSel]
+                    fout.writeLine("fixed4 rasTemp = {}.{}{}{}{};".format(rasSrc, "rgba"[tbl.rSel], "rgba"[tbl.gSel], "rgba"[tbl.bSel], "rgba"[tbl.aSel]))
+                
+                if TevColorArg.TEXA in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD) or \
+                    TevColorArg.TEXC in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD) or \
+                    TevAlphaArg.TEXA in (tevStage.alphaInA, tevStage.alphaInB, tevStage.alphaInC, tevStage.alphaInD):
+                    texSrc = self.sampleTexture(tevOrder.texMap, textures[mat.texNos[tevOrder.texMap]], "tevCoord")
+                    tbl = mat.tevSwapModeTables[mat.tevSwapModes[i].texSel]
+                    fout.writeLine("fixed4 texTemp = {}.{}{}{}{};".format(texSrc, "rgba"[tbl.rSel], "rgba"[tbl.gSel], "rgba"[tbl.bSel], "rgba"[tbl.aSel]))
+                
+                if TevColorArg.KONST in (tevStage.colorInA, tevStage.colorInB, tevStage.colorInC, tevStage.colorInD) or \
+                    TevAlphaArg.KONST in (tevStage.alphaInA, tevStage.alphaInB, tevStage.alphaInC, tevStage.alphaInD):
+                    fout.writeLine("fixed4 konstTemp = fixed4({}, {});".format(tev_ksel_table_c[mat.tevKColorSels[i]], tev_ksel_table_a[mat.tevKAlphaSels[i]]))
+                
+                fout.writeLine("half4 tevA = half4({}, {})%(256.0/255.0);".format(tev_c_input_table[tevStage.colorInA], tev_a_input_table[tevStage.alphaInA]))
+                fout.writeLine("half4 tevB = half4({}, {})%(256.0/255.0);".format(tev_c_input_table[tevStage.colorInB], tev_a_input_table[tevStage.alphaInB]))
+                fout.writeLine("half4 tevC = half4({}, {})%(256.0/255.0);".format(tev_c_input_table[tevStage.colorInC], tev_a_input_table[tevStage.alphaInC]))
+                fout.writeLine("half4 tevD = half4({}, {});".format(tev_c_input_table[tevStage.colorInD], tev_a_input_table[tevStage.alphaInD]))
+                
+                fout.writeLine("{}.rgb = clamp({}, {}, {});".format(tev_output_table[tevStage.colorRegId], self.getTevOp("rgb", tevStage.colorOp, tevStage.colorBias, tevStage.colorScale), 0 if tevStage.colorClamp else -4, 1 if tevStage.colorClamp else 4))
+                if i == mat.tevStageNum-1 and tevStage.colorRegId != Register.PREV:
+                    fout.writeLine("colorPrev.rgb = {}.rgb;".format(tev_output_table[tevStage.colorRegId]))
+                fout.writeLine("{}.a = clamp({}, {}, {});".format(tev_output_table[tevStage.alphaRegId], self.getTevOp("a", tevStage.alphaOp, tevStage.alphaBias, tevStage.alphaScale), 0 if tevStage.alphaClamp else -4, 1 if tevStage.alphaClamp else 4))
+                if i == mat.tevStageNum-1 and tevStage.alphaRegId != Register.PREV:
+                    fout.writeLine("colorPrev.a = {}.a;".format(tev_output_table[tevStage.alphaRegId]))
+        
         if mat.alphaComp is not None:
             # reduce the number of cases to handle by eliminating impossibilities
             if mat.alphaComp.comp0 == CompareType.LEQUAL and mat.alphaComp.ref0 == 255: mat.alphaComp.comp0 = CompareType.ALWAYS
@@ -210,16 +415,52 @@ class DXShaderGen:
             if mat.alphaComp.comp1 == CompareType.GREATER and mat.alphaComp.ref1 == 255: mat.alphaComp.comp1 = CompareType.NEVER
             # optimizations
             if CompareType.ALWAYS in (mat.alphaComp.comp0, mat.alphaComp.comp1) and mat.alphaComp.op == AlphaOp.OR:
-                pass#fout.writeLine("clip(1);")
+                pass
             elif CompareType.NEVER in (mat.alphaComp.comp0, mat.alphaComp.comp1) and mat.alphaComp.op == AlphaOp.AND:
-                fout.writeLine("clip(-1);")
+                fout.writeLine("discard;")
             elif (mat.alphaComp.comp0 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND) or (mat.alphaComp.comp0 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR):
-                fout.writeLine(makeSimpleComp(mat.alphaComp.comp1, mat.alphaComp.ref1))
+                fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp1, mat.alphaComp.ref1))
             elif (mat.alphaComp.comp1 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND) or (mat.alphaComp.comp1 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR):
-                fout.writeLine(makeSimpleComp(mat.alphaComp.comp0, mat.alphaComp.ref0))
+                fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp0, mat.alphaComp.ref0))
             else:
                 # fallback/general case
-                fout.writeLine("clip((({}) {} ({}))?{});".format(makeComp(mat.alphaComp.comp0, mat.alphaComp.ref0), ["&&", "||", "^", "^"][mat.alphaComp.op.value], makeComp(mat.alphaComp.comp1, mat.alphaComp.ref1), ("-1:1" if (mat.alphaComp.op == AlphaOp.XNOR) else "1:-1")))
+                fout.writeLine("if (!(({}) {} ({}))) discard;".format(self.makeComp(mat.alphaComp.comp0, mat.alphaComp.ref0), ["&&", "||", "!=", "=="][mat.alphaComp.op.value], self.makeComp(mat.alphaComp.comp1, mat.alphaComp.ref1)))
+
+    def sampleTexture(self, texSlot, texture, coord):
+        if texture.mipmapCount > 1:
+            s = "tex2Dbias(_Tex{}, float4(({}).xy, 0, sceneTextureLODBias+{}))".format(texSlot, coord, texture.lodBias/100)
+        else:
+            s = "tex2D(_Tex{}, {})".format(texSlot, coord)
+        if not texture.usePalette and texture.format in (TexFmt.I4, TexFmt.I8): suffix = "rrrr"
+        elif not texture.usePalette and texture.format in (TexFmt.IA4, TexFmt.IA8): suffix = "rrrg"
+        elif texture.usePalette and texture.paletteFormat == TlutFmt.IA8: suffix = "rrrg"
+        else: suffix = "rgba"
+        if True or texture.transparency:
+            if suffix != "rgba":
+                s += "."+suffix
+        else:
+            s = "fixed4({}.{}, 1)".format(s, suffix[:3])
+        return s
+
+    def makeComp(self, comp, ref):
+        if comp == CompareType.ALWAYS: return "1"
+        elif comp == CompareType.NEVER: return "0"
+        else: return "colorPrev.a {} {}".format(["", "<", "==", "<=", ">", "!=", ">="][comp.value], ref/255)
+
+    def makeSimpleComp(self, comp, ref):
+        if comp in (CompareType.LESS, CompareType.LEQUAL, CompareType.GREATER, CompareType.GEQUAL):
+            if comp == CompareType.LEQUAL:
+                ref += 1
+                comp = CompareType.LESS
+            elif comp == CompareType.GEQUAL:
+                ref -= 1
+                comp = CompareType.GREATER
+            if comp == CompareType.GREATER:
+                return "clip(colorPrev.a - {});".format(ref/255)
+            else:
+                return "clip({} - colorPrev.a);".format(ref/255)
+        else:
+            return "if (!({})) discard;".format(self.makeComp(comp, ref))
 
 def usesTexGenInput(mat, src):
     return any(
@@ -248,40 +489,20 @@ def usesNormal(mat):
 def usesColorChannel(chan: ColorChanInfo):
     return chan is not None and (chan.matColorSource == ColorSrc.VTX or chan.ambColorSource == ColorSrc.VTX)
 
-def makeComp(comp, ref):
-    if comp == CompareType.ALWAYS: return "1"
-    elif comp == CompareType.NEVER: return "0"
-    else: return "col.w {} {}".format(["", "<", "==", "<=", ">", "!=", ">="][comp.value], ref/255)
-
-def makeSimpleComp(comp, ref):
-    if comp in (CompareType.LESS, CompareType.LEQUAL, CompareType.GREATER, CompareType.GEQUAL):
-        if comp == CompareType.LEQUAL:
-            ref += 1
-            comp = CompareType.LESS
-        elif comp == CompareType.GEQUAL:
-            ref -= 1
-            comp = CompareType.GREATER
-        if comp == CompareType.GREATER:
-            return "clip(col.w - {});".format(ref/255)
-        else:
-            return "clip({} - col.w);".format(ref/255)
-    else:
-        return "clip(({})?1:-1);".format(makeComp(comp, ref))
-
 class UnityShaderGen(DXShaderGen):
     def genv2f(self, mat, fout):
         for i, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
             fout.writeLine("{0} texcoord{1} : TEXCOORD{1};".format("float2" if texGen.type in (TexGenType.MTX2x4, TexGenType.SRTG) else "float3", i))
         for i in range(mat.colorChanNum): fout.writeLine("fixed4 color{0} : COLOR{0};".format(i))
     
-    def genUniforms(self, mat, fout):
+    def genUniforms(self, mat, indirect, fout):
         for i, color in enumerate(mat.matColors):
             if color is not None: fout.writeLine("fixed4 _MatColor{};".format(i))
         for i, color in enumerate(mat.ambColors):
             # use unity_AmbientSky for ambColor 0
             if i != 0 and color is not None: fout.writeLine("const fixed4 _AmbColor{0} = {{{1[0]}/255, {1[1]}/255, {1[2]}/255, {1[3]}/255}};".format(i, color))
-        for i, color in enumerate(mat.tevColors):
-            if color is not None: fout.writeLine("half4 _TevColor{};".format(i))
+        for i in range(4):
+            fout.writeLine("half4 _TevColor{};".format(i))
         for i, color in enumerate(mat.tevKColors):
             if color is not None: fout.writeLine("fixed4 _TevKColor{};".format(i))
         for i, texIdx in enumerate(mat.texNos):
@@ -291,6 +512,8 @@ class UnityShaderGen(DXShaderGen):
             if texMtx is not None: fout.writeLine("float4 _Tex{}_CR;".format(i))
         for i, texMtx in enumerate(mat.postTexMtxs):
             if texMtx is not None: fout.writeLine("const float4x4 _PostTexMtx{} = {{{}}};".format(i, ", ".join(map(str, texMtx.effectMatrix))))
+        for i, texMtx in enumerate(indirect.indTexMtx):
+            if texMtx is not None: fout.writeLine("const float4x4 _IndTexMtx{} = {{{}}};".format(i, ", ".join(map(str, texMtx.m+([0]*8)))))
     
     def genAttributes(self, mat, fout):
         if usesTexGenInput(mat, TexGenSrc.TANGENT) or usesBump(mat): fout.writeLine("float3 tangent : TANGENT;")
@@ -301,12 +524,12 @@ class UnityShaderGen(DXShaderGen):
             if i*2+1 >= len(mat.colorChans) or mat.colorChans[i*2+1] is None: continue
             if usesColorChannel(mat.colorChans[i*2]) or usesColorChannel(mat.colorChans[i*2+1]): fout.writeLine("fixed4 color{0} : COLOR{0};".format(i))
     
-    def gen(self, mat, fout, useColor1):
+    def gen(self, mat, indirect, textures, fout, useColor1):
         fout.writeLine("Shader \"J3D/{}\"".format(mat.name))
         with fout:
             fout.writeLine("Properties")
             with fout:
-                # Note: Unity converts colors from sRGB *if* they are marked as "Color"
+                # Unity converts colors from sRGB *if* they are marked as "Color"
                 # in the ShaderLab properties. "Vector" types are not converted.
                 for i, color in enumerate(mat.matColors):
                     if color is not None: fout.writeLine("_MatColor{0} (\"Material color {0}\", Vector) = (0, 0, 0, 1)".format(i))
@@ -350,7 +573,7 @@ class UnityShaderGen(DXShaderGen):
                 fout.writeLine("UNITY_VERTEX_INPUT_INSTANCE_ID")
             fout.writeLine(";")
             
-            self.genUniforms(mat, fout)
+            self.genUniforms(mat, indirect, fout)
             
             fout.indent -= 1
             fout.writeLine("ENDCG")
@@ -373,7 +596,7 @@ class UnityShaderGen(DXShaderGen):
                                 fout.writeLine('"RenderType" = "TransparentCutout"')
                                 fout.writeLine('"IgnoreProjector" = "True"')
                 
-                fout.writeLine("LOD 100")
+                #fout.writeLine("LOD 100")
                 if mat.blend is not None:
                     if mat.blend.blendMode == BlendMode.NONE:
                         fout.writeLine("Blend Off")
@@ -400,7 +623,7 @@ class UnityShaderGen(DXShaderGen):
                 
                 fout.writeLine("Pass")
                 with fout:
-                    fout.writeLine("LOD 100")
+                    #fout.writeLine("LOD 100")
                     
                     fout.writeLine("Tags")
                     with fout:
@@ -437,14 +660,17 @@ class UnityShaderGen(DXShaderGen):
                         self.genTexGen(mat, fout)
                         if mat.fog is not None: fout.writeLine("UNITY_TRANSFER_FOG(o,o.position);")
                         fout.writeLine("return o;")
-
+                    
+                    fout.writeLine("half TevPack16(half2 a) { return dot(a, half2(1.0, 256.0)); }")
+                    fout.writeLine("half TevPack24(half3 a) { return dot(a, half3(1.0, 256.0, 256.0 * 256.0)); }")
+                    
                     fout.writeLine("half4 frag(v2f i) : SV_Target")
                     with fout:
-                        self.genFrag(mat, fout)
+                        self.genFrag(mat, indirect, textures, fout)
                         fout.writeLine("#ifdef UNITY_COLORSPACE_GAMMA")
-                        fout.writeLine("    half4 ret = col;")
+                        fout.writeLine("    half4 ret = colorPrev;")
                         fout.writeLine("#else")
-                        fout.writeLine("    half4 ret = half4(GammaToLinearSpace(col.xyz), col.w);")
+                        fout.writeLine("    half4 ret = half4(GammaToLinearSpace(colorPrev.rgb), colorPrev.a);")
                         fout.writeLine("#endif")
                         fout.writeLine("UNITY_APPLY_FOG(i.fogCoord, ret);")
                         fout.writeLine("return ret;")
@@ -484,13 +710,14 @@ class UnityShaderGen(DXShaderGen):
 
                         fout.writeLine("float4 fragShadow(v2fShadow i) : SV_Target")
                         with fout:
-                            if not mat.zCompLoc: self.genFrag(mat, fout)
+                            if not mat.zCompLoc: self.genFrag(mat, indirect, textures, fout)
                             fout.writeLine("SHADOW_CASTER_FRAGMENT(i)")
                         
                         fout.indent -= 1
                         fout.writeLine("ENDCG")
                 
                 # only do meta pass for unlit materials.
+                # TODO: do diffuse (and specular?) by disabling lighting
                 if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans):
                     fout.writeLine("Pass")
                     with fout:
@@ -501,38 +728,68 @@ class UnityShaderGen(DXShaderGen):
                         
                         fout.writeLine("#pragma vertex vert_meta")
                         fout.writeLine("#pragma fragment frag_meta")
+                        fout.writeLine("#pragma shader_feature EDITOR_VISUALIZATION")
                         fout.writeLine("#include \"UnityMetaPass.cginc\"")
  
                         fout.writeLine("struct appdata_lightmapped_t")
                         with fout:
                             fout.writeLine("float4 vertex : POSITION;")
                             self.genAttributes(mat, fout)
-                            fout.writeLine("float2 lightMapUV : TEXCOORD{};".format(min(i for i in range(8) if not usesTexGenInput(mat, TexGenSrc.TEX0+i))))
+                            uvSlot = min(i for i in range(8) if not usesTexGenInput(mat, TexGenSrc.TEX0+i))
+                            fout.writeLine("float2 lightMapUV : TEXCOORD{};".format(uvSlot))
+                            dynUvSlot = min(i for i in range(8) if not usesTexGenInput(mat, TexGenSrc.TEX0+i) and i != uvSlot)
+                            fout.writeLine("float2 dynLightMapUV : TEXCOORD{};".format(dynUvSlot))
                         fout.writeLine(";")
                         
                         fout.writeLine("struct v2f_meta")
                         with fout:
                             fout.writeLine("float4 position : SV_POSITION;")
                             self.genv2f(mat, fout)
+                            fout.writeLine("#ifdef EDITOR_VISUALIZATION")
+                            fout.writeLine("    float2 vizUV : TEXCOORD{};".format(mat.texGenNum))
+                            fout.writeLine("    float4 lightCoord : TEXCOORD{};".format(mat.texGenNum+1))
+                            fout.writeLine("#endif")
                         fout.writeLine(";")
                         
                         fout.writeLine("v2f_meta vert_meta(appdata_lightmapped_t v)")
                         with fout:
                             fout.writeLine("v2f_meta o;")
-                            fout.writeLine("o.position = UnityMetaVertexPosition(v.vertex, {}, {}, unity_LightmapST, unity_DynamicLightmapST);".format("v.texcoord1" if usesTexGenInput(mat, TexGenSrc.TEX1) else "v.lightMapUV", "v.texcoord2" if usesTexGenInput(mat, TexGenSrc.TEX2) else "v.lightMapUV"))
-                            # it shouldn't generate any actual light shaders, but we need it to get mat/vtx colors
+                            fout.writeLine("o.position = UnityMetaVertexPosition(v.vertex, v.lightMapUV, v.dynLightMapUV, unity_LightmapST, unity_DynamicLightmapST);")
                             self.genVertLighting(mat, fout, useColor1)
                             self.genTexGen(mat, fout)
+                            fout.writeLine("#ifdef EDITOR_VISUALIZATION")
+                            with fout:
+                                fout.writeLine("o.vizUV = 0;")
+                                fout.writeLine("o.lightCoord = 0;")
+                                fout.writeLine("if (unity_VisualizationMode == EDITORVIZ_TEXTURE)")
+                                with fout:
+                                    fout.writeLine("o.vizUV = UnityMetaVizUV(unity_EditorViz_UVIndex, {}, v.lightMapUV, v.dynLightMapUV, unity_EditorViz_Texture_ST);".format("v.texcoord0" if usesTexGenInput(mat, TexGenSrc.TEX0) else "float2(0,0)"))
+                                fout.writeLine("else if (unity_VisualizationMode == EDITORVIZ_SHOWLIGHTMASK)")
+                                with fout:
+                                    fout.writeLine("o.vizUV = v.lightMapUV * unity_LightmapST.xy + unity_LightmapST.zw;")
+                                    fout.writeLine("o.lightCoord = mul(unity_EditorViz_WorldToLight, mul(unity_ObjectToWorld, float4(v.vertex.xyz, 1)));")
+                            fout.writeLine("#endif")
                             fout.writeLine("return o;")
                         
                         fout.writeLine("float4 frag_meta (v2f_meta i) : SV_Target")
                         with fout:
-                            self.genFrag(mat, fout)
-                            fout.writeLine("half4 res = {0, 0, 0, 1};")
+                            self.genFrag(mat, indirect, textures, fout)
                             # only support unlit materials as emissive
-                            fout.writeLine("if (unity_MetaFragmentControl.y)")
-                            with fout: fout.writeLine("res.xyz = GammaToLinearSpace(col.xyz);")
-                            fout.writeLine("return res;")
+                            fout.writeLine("#ifdef EDITOR_VISUALIZATION")
+                            with fout:
+                                fout.writeLine("UnityMetaInput o;")
+                                fout.writeLine("UNITY_INITIALIZE_OUTPUT(UnityMetaInput, o);")
+                                fout.writeLine("o.VizUV = i.vizUV;")
+                                fout.writeLine("o.LightCoord = i.lightCoord;")
+                                fout.writeLine("o.Emission = GammaToLinearSpace(colorPrev.rgb);")
+                                fout.writeLine("return UnityMetaFragment(o);")
+                            fout.writeLine("#else")
+                            with fout:
+                                fout.writeLine("half4 res = {0, 0, 0, 1};")
+                                fout.writeLine("if (unity_MetaFragmentControl.y)")
+                                with fout: fout.writeLine("res.rgb = GammaToLinearSpace(colorPrev.rgb);")
+                                fout.writeLine("return res;")
+                            fout.writeLine("#endif")
                         
                         fout.indent -= 1
                         fout.writeLine("ENDCG")

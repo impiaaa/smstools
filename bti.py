@@ -33,6 +33,7 @@ class Image(ReadableStruct):
     def read(self, fin, start=None, textureHeaderOffset=None, texIndex=None):
         super().read(fin)
         self.mipmapCount = max(self.mipmapCount, 1)
+        assert (self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2)) == self.usePalette, (self.format, self.usePalette)
         if self.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
             self.hasAlpha = self.paletteFormat in (TlutFmt.IA8, TlutFmt.RGB5A3)
         else:

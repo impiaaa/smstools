@@ -69,10 +69,10 @@ formatArrayTypes = {
 TexFmt.I4:     'B',
 TexFmt.I8:     'B',
 TexFmt.IA4:    'B',
-TexFmt.IA8:    'B',
+TexFmt.IA8:    'H',
 TexFmt.RGB565: 'H',
 TexFmt.RGB5A3: 'H',
-TexFmt.RGBA8:  'B',
+TexFmt.RGBA8:  'I',
 TexFmt.C4:     'B',
 TexFmt.C8:     'B',
 TexFmt.C14X2:  'H',
@@ -166,10 +166,10 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
                 if dataidx >= len(data): break
-                c1, c2 = data[dataidx], data[dataidx+1]
-                dataidx += 2
+                c = data[dataidx]
+                dataidx += 1
                 if x < width and y < height:
-                    putpixel(x, y, (c1,c2))
+                    putpixel(x, y, (c>>8, c&0xFF))
     
     elif format == TexFmt.RGB565:
         for y in range(yoff, yoff+4):
@@ -193,10 +193,10 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
         for y in range(yoff, yoff+4):
             for x in range(xoff, xoff+4):
                 if dataidx >= len(data): break
-                c = data[dataidx:dataidx+4]
+                c = data[dataidx]
                 dataidx += 4
                 if x < width and y < height:
-                    putpixel(x, y, c)
+                    putpixel(x, y, (c>>24, (c>>16)&0xFF, (c>>8)&0xFF, c&0xFF))
     
     elif format == TexFmt.C4:
         for y in range(yoff, yoff+8):
@@ -250,7 +250,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
 
 # Just transform the pixel data from blocked to linear, so we can put it in a PC format
 def deblock(format, data, width, height):
-    dest = array(data.typecode, [0]*int(width*height*formatBytesPerPixel[format]))
+    dest = array(data.typecode, [0]*len(data))
     dataidx = 0
     for y in range(0, height, formatBlockHeight[format]):
         for x in range(0, width, formatBlockWidth[format]):
@@ -263,12 +263,12 @@ def deblock(format, data, width, height):
                         if y+dy+4 <= height: dest[width*(y + dy)//2 + (x + dx)*2:width*(y + dy)//2 + (x + dx)*2 + 8] = fixS3TC1Block(c)
             else:
                 for dy in range(formatBlockHeight[format]):
-                    for i in range(int(formatBlockWidth[format]/data.itemsize)):
+                    for i in range(int(formatBlockWidth[format])):
                         if dataidx >= len(data): break
                         c = data[dataidx]
                         dataidx += 1
-                        idx = int((width*(y + dy) + x)/data.itemsize + i)
-                        if idx < len(dest): dest[idx] = c
+                        idx = int((width*(y + dy) + x) + i)
+                        dest[idx] = c
     return dest
 
 def calcTextureSize(format, width, height):
@@ -458,7 +458,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
-            dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
+            dataOffset = (arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3))//data.itemsize
             if format in (TexFmt.I4, TexFmt.I8, TexFmt.IA4, TexFmt.IA8, TexFmt.RGB565, TexFmt.RGB5A3, TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*componentsOut)
                 if componentsIn == 1:
@@ -557,7 +557,7 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
     for mipIdx in range(mipmapCount):
         for arrayIdx in range(max(1, arrayCount)):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
-            dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
+            dataOffset = (arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3))//data.itemsize
             if format in (TexFmt.I4, TexFmt.IA4, TexFmt.RGB5A3) or (format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and paletteFormat in (TlutFmt.IA8, TlutFmt.RGB5A3)):
                 pixelData = array('B', (0,)*mipWidth*mipHeight*components)
                 if components == 1:

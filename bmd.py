@@ -191,6 +191,29 @@ class SceneGraph(object):
                 # shape
                 d['batch'] = bmd.shp1.batches[self.index]
         return d
+    def copy(self):
+        sg = SceneGraph()
+        sg.children = [c.copy() for c in self.children]
+        sg.type = self.type
+        sg.index = self.index
+        return sg
+    def to_array(self):
+        m = ModelHierarchy()
+        m.type = self.type
+        m.index = self.index
+        l = [m]
+        if len(self.children) > 0:
+            m = ModelHierarchy()
+            m.type = 1
+            m.index = 0
+            l.append(m)
+            for c in self.children:
+                l.extend(c.to_array())
+            m = ModelHierarchy()
+            m.type = 2
+            m.index = 0
+            l.append(m)
+        return l
 
 INVALID_INDEX = 0xFFFF
 
@@ -314,7 +337,7 @@ class IndTexOrder(ReadableStruct):
 class IndTexMtx(Readable):
     def read(self, fin):
         p = unpack('>6f', fin.read(0x18))
-        self.exponent, = unpack('Bxxx', fin.read(4))
+        self.exponent, = unpack('bxxx', fin.read(4))
         scale = 2**self.exponent
         self.m = [
             p[0]*scale, p[1]*scale, p[2]*scale, scale,
@@ -335,7 +358,7 @@ class IndTexCoordScale(ReadableStruct):
 
 class IndTevStage(ReadableStruct):
     header = Struct('BBBBBBBBBxxx')
-    fields = ["indTexId", "format", "bias", "mtxId", "wrapS", "wrapT", "addPrev", ("unmodifiedTexCoordLod", bool), "a"]
+    fields = ["indTexId", "format", "bias", "mtxId", "wrapS", "wrapT", "addPrev", ("unmodifiedTexCoordLod", bool), "alphaSel"]
 
 class IndInitData(ReadableStruct):
     header = Struct('BBxx')

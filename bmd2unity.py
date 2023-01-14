@@ -8,6 +8,7 @@ import os.path
 import unityparser
 from unityassets import *
 from binascii import crc32
+from PIL import Image
 
 fmtCTypes = {
     CompSize.U8:  c_ubyte,
@@ -325,9 +326,9 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
                         indexMap[point.indices] = uniqueIndex
     return indexMap, uniqueVertices
 
-def makeSubMeshes(remapTable, scenegraph, batches, indexMap, transformedPositions):
-    subMeshTriangles = [[] for i in range(len(remapTable))]
-    subMeshVertices = [[] for i in range(len(remapTable))]
+def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
+    subMeshTriangles = [[] for i in range(count)]
+    subMeshVertices = [[] for i in range(count)]
     stack = []
     materialIndex = frameIndex = batchIndex = None
     for node in scenegraph:
@@ -356,7 +357,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
 
     mesh.m_Name = name
     mesh.serializedVersion = 9
-    mesh.m_IsReadable = 0
+    mesh.m_IsReadable = 1
     mesh.m_KeepVertices = int(doBones)
     mesh.m_KeepIndices = int(doBones)
     mesh.m_IndexFormat = 0
@@ -443,8 +444,6 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     return asset
 
 def exportBmd(bmd, outputFolderLocation):
-    # TODO: when splitting, remove vertex attribs where all == 0
-    # TODO: split mesh based on positions
     doBones = len(bmd.jnt1.frames) > 1
     
     if doBones:
@@ -468,7 +467,7 @@ def exportBmd(bmd, outputFolderLocation):
     indexMap, uniqueVertices = collectVertices(bmd.shp1.batches, maxWeightCount, dataForArrayType, doBones, bmd.drw1.isWeighted, bmd.drw1.data, transformedPositions, transformedNormals, boneIndices, weights)
     
     print("Making sub-meshes")
-    subMeshTriangles, subMeshVertices = makeSubMeshes(bmd.mat3.remapTable, bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
+    subMeshTriangles, subMeshVertices = makeSubMeshes(len(bmd.mat3.remapTable), bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
     
     #import meshoptimizer
     #indices = [i for subMesh in subMeshTriangles for i in subMesh]
@@ -479,35 +478,22 @@ def exportBmd(bmd, outputFolderLocation):
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
-    
-    bmddir = os.path.join(outputFolderLocation, bmd.name)
-    os.makedirs(bmddir, exist_ok=True)
-    #writeMeta(bmddir, {
-    #    "folderAsset": "yes",
-    #    "DefaultImporter": {
-    #        "externalObjects": {}
-    #    }
-    #}, outputFolderLocation)
-    print("Exporting textures")
-    textureIds = list(exportTextures(bmd.tex1.textures, bmddir))
-    
-    print("Exporting materials")
-    useColor1 = all(map(bool, bmd.vtx1.colors))
-    materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmddir, textureIds, useColor1))
-    materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
-    
-    return meshId, materialIdInSlot
+        
+    return meshId
 
+filterModes = [0, 1, 0, 1, 0, 2]
+blurRadius = sqrt(-1/(2*log(3/240, e)))
 def exportTexture(img, bmddir):
     textureSettings = {
         "serializedVersion": 2,
         "wrapU": [1, 0, 2][img.wrapS],
         "wrapV": [1, 0, 2][img.wrapT],
         "wrapW": 0,
-        "filterMode": [0, 1, 0, 1, 0, 2][img.magFilter],
+        "filterMode": max(filterModes[img.minFilter], filterModes[img.magFilter]),
         "mipBias": img.lodBias/100,
         "aniso": 2**img.maxAniso
     }
+    # TODO: use ETC2 for CMPR on mobile
     if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
         # TODO: Unity doesn't understand the other formats but they're used for textures with mipmaps
         fout = open(os.path.join(bmddir, img.name+".ktx"), 'wb')
@@ -522,14 +508,78 @@ def exportTexture(img, bmddir):
     else:
         # PNG is required to be compressed, but it's the only format Unity can
         # import at all pixel formats :(
-        decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].transpose(method=1).save(os.path.join(bmddir, img.name+".png"))
-        # TODO: use
-        #   ASTC for RGB5A3 on Android
-        #   RG Compressed BC5 for IA4 on PC
-        #   RG Compressed EAC 8 bit for IA4 on Android
-        #   R Compressed BC4 for I4 on PC
-        #   R Compressed EAC 4 bit for I4 on Android
-        # TODO: change decodeTexturePIL to swap a/g for RG
+        decImg = decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)[0][0].transpose(method=1)
+        if img.format in (TexFmt.I4, TexFmt.IA4):
+            from lineblur import bidirLineBlur
+            # slightly improves texture compression for EAC.
+            # slightly worsens texture compression for BC :(
+            decImg = bidirLineBlur(decImg)
+        if (img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8) or img.format in (TexFmt.IA4, TexFmt.IA8):
+            # unity imports R and G
+            intensity, alpha = decImg.split()
+            decImg = Image.merge('RGB', (intensity, alpha, Image.new('L', decImg.size)))
+        decImg.save(os.path.join(bmddir, img.name+".png"))
+        platformSettings = [{
+            "serializedVersion": 3,
+            "buildTarget": "DefaultTexturePlatform",
+            "maxTextureSize": 2048,
+            "textureFormat": -1,
+            "textureCompression": 2,
+            "compressionQuality": 50
+        }]
+        if img.format == TexFmt.RGBA8:
+            # already handled above
+            platformSettings[0]["textureFormat"] = 4 # RGBA32
+        elif img.format == TexFmt.RGB565:
+            platformSettings[0]["textureFormat"] = 7 # RGB565
+        elif img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565:
+            platformSettings[0]["textureFormat"] = 7 # RGB565
+        elif img.format == TexFmt.I4:
+            # actually already seems to be selected automatically
+            platformSettings.append({
+                "serializedVersion": 3,
+                "buildTarget": "Standalone",
+                "maxTextureSize": 2048,
+                "textureFormat": 26, # BC4
+                "textureCompression": 2,
+                "compressionQuality": 50,
+                "overridden": 0
+            })
+            platformSettings.append({
+                "serializedVersion": 3,
+                "buildTarget": "Android",
+                "maxTextureSize": 2048,
+                "textureFormat": 41, # EAC_R
+                "textureCompression": 2,
+                "compressionQuality": 50,
+                "overridden": 0
+            })
+        elif img.format == TexFmt.IA4:
+            # actually already seems to be selected automatically
+            platformSettings.append({
+                "serializedVersion": 3,
+                "buildTarget": "Standalone",
+                "maxTextureSize": 2048,
+                "textureFormat": 27, # BC5
+                "textureCompression": 2,
+                "compressionQuality": 50,
+                "overridden": 0
+            })
+            platformSettings.append({
+                "serializedVersion": 3,
+                "buildTarget": "Android",
+                "maxTextureSize": 2048,
+                "textureFormat": 43, # EAC_RG
+                "textureCompression": 2,
+                "compressionQuality": 50,
+                "overridden": 0
+            })
+        elif img.format == TexFmt.IA8:
+            platformSettings[0]["textureFormat"] = 62 # RG16
+        elif img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8:
+            platformSettings[0]["textureFormat"] = 62 # RG16
+        elif img.format == TexFmt.I8:
+            platformSettings[0]["textureFormat"] = 63 # R8
         return writeMeta(img.name+".png", {
             "TextureImporter": {
                 "serializedVersion": 11,
@@ -544,19 +594,12 @@ def exportTexture(img, bmddir):
                 "maxTextureSize": 2048,
                 "lightmap": 0,
                 "compressionQuality": 50,
-                "alphaUsage": 1,#int(bool(img.transparency)),
-                "alphaIsTransparency": 1,
+                "alphaUsage": 1,#int(bool(img.transparency)), # all this does is remove the alpha channel when 0
+                "alphaIsTransparency": 0, # dilates color around transparent areas
                 "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
                 "textureShape": 1,
                 "singleChannelComponent": 1,
-                "platformSettings": [{
-                    "serializedVersion": 3,
-                    "buildTarget": "DefaultTexturePlatform",
-                    "maxTextureSize": 2048,
-                    "textureFormat": 7 if img.format == TexFmt.RGB565 or (img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565) else 4 if img.format == TexFmt.RGBA8 else 63 if img.format == TexFmt.I8 else -1,
-                    "textureCompression": 2,
-                    "compressionQuality": 50
-                }]
+                "platformSettings": platformSettings
             }
         }, bmddir)
 
@@ -583,12 +626,13 @@ def exportTextures(textures, bmddir):
 
 from shadergen2 import UnityShaderGen, ShaderWriter
 
-def exportMaterials(materials, bmddir, textureIds, useColor1):
+def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useColor1):
     gen = UnityShaderGen()
-    for mat in materials:
+    for i, mat in enumerate(materials):
         assetName = mat.name+".shader"
+        indirect = indirectArray[i] if i < len(indirectArray) else None
         with open(os.path.join(bmddir, assetName), 'w') as fout:
-            gen.gen(mat, ShaderWriter(fout), useColor1)
+            gen.gen(mat, indirect, textures, ShaderWriter(fout), useColor1)
         shader = writeMeta(assetName, {
             "ShaderImporter": {
                 "externalObjects": {},
