@@ -1538,7 +1538,10 @@ class TSpineEnemy(TLiveActor):
         TActor.read(self, fin)
         self.someObjectName = None
         self.managerName = readString(fin)
-        self.graphName = readString(fin)
+        if fin.tell() < len(fin.getvalue()):
+            self.graphName = readString(fin)
+        else:
+            self.graphName = None
     def __repr__(self):
         return super().__repr__()+'|manager=%s,graph=%s'%(self.managerName,self.graphName)
 
@@ -1751,7 +1754,10 @@ class TFishoid(TRealoid):
 class TSmallEnemy(TSpineEnemy):
     def read(self, fin):
         super().read(fin)
-        self.coinId, = unpack('>i', fin.read(4))
+        if fin.tell() < len(fin.getvalue()):
+            self.coinId, = unpack('>i', fin.read(4))
+        else:
+            self.coinId = -1
     def __repr__(self):
         return super().__repr__()+'|coin=%d'%self.coinId
 

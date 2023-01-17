@@ -99,7 +99,6 @@ def halfToFloat(hbits):
     )[0]
 
 def getBatchTriangles(batch, indexMap):
-    matrixTable = [(Matrix(), [], []) for i in range(10)]
     for shapeDraw, shapeMatrix in batch.matrixGroups:
         for primitive in shapeDraw.primitives:
             a = 0
@@ -357,7 +356,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
 
     mesh.m_Name = name
     mesh.serializedVersion = 9
-    mesh.m_IsReadable = 1
+    mesh.m_IsReadable = 0
     mesh.m_KeepVertices = int(doBones)
     mesh.m_KeepIndices = int(doBones)
     mesh.m_IndexFormat = 0
@@ -626,13 +625,14 @@ def exportTextures(textures, bmddir):
 
 from shadergen2 import UnityShaderGen, ShaderWriter
 
-def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useColor1):
+def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useColor1, objectScale, doMeta=False):
     gen = UnityShaderGen()
+    gen.objectScale = objectScale
     for i, mat in enumerate(materials):
         assetName = mat.name+".shader"
         indirect = indirectArray[i] if i < len(indirectArray) else None
         with open(os.path.join(bmddir, assetName), 'w') as fout:
-            gen.gen(mat, indirect, textures, ShaderWriter(fout), useColor1)
+            gen.gen(mat, indirect, textures, ShaderWriter(fout), useColor1, doMeta)
         shader = writeMeta(assetName, {
             "ShaderImporter": {
                 "externalObjects": {},
@@ -699,6 +699,158 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
         assetName = mat.name+".mat"
         asset.dump_yaml(os.path.join(bmddir, assetName))
         yield writeNativeMeta(assetName, 2100000, bmddir)
+
+def printFlatScenegraph(sg):
+    for node in sg:
+        if node.type == 1:
+            indent += 1
+        elif node.type == 2:
+            indent -= 1
+        else:
+            print('  '*indent+(("frame", "material", "batch")[node.type-0x10]), node.index)
+
+def printScenegraphHierarchy(sg, indent=0):
+    print('  '*indent+(("frame", "material", "batch")[sg.type-0x10]), sg.index)
+    for c in sg.children:
+        printScenegraphHierarchy(c, indent+1)
+
+def filterScenegraph(sgin, batchIndices):
+    sgout = SceneGraph()
+    sgout.type = sgin.type
+    sgout.index = sgin.index
+    sgout.children = []
+    for c in sgin.children:
+        fc = filterScenegraph(c, batchIndices)
+        newIdx = batchIndices[fc.index]
+        if fc.type == 0x12:
+            if newIdx is None:
+                sgout.children.extend(fc.children)
+            else:
+                fc.index = newIdx
+                sgout.children.append(fc)
+        else:
+            sgout.children.append(fc)
+    sgout.children = [c for c in sgout.children if c.type == 0x12 or len(c.children) > 0]
+    if len(sgout.children) == 1 and sgout.type == 0x11 and sgout.children[0].type == 0x11:
+        return sgout.children[0]
+    if len(sgout.children) == 1 and sgout.type == 0x10 and sgout.children[0].type == 0x10:
+        # NOTE: Only for maps. Assumes all matrices are identity
+        return sgout.children[0]
+    return sgout
+
+def addNormals(bmd, newVtxDesc):
+    bmd.vtx1.asFloat = list(bmd.vtx1.asFloat)
+        
+    # assume normal falls back to asFloat
+    
+    normals = [Vector((0,0,0)) for p in bmd.vtx1.positions]
+    for shape in bmd.shp1.batches:
+        # mutates!
+        shape.attribs.append(newVtxDesc)
+        for shapeDraw, shapeMatrix in shape.matrixGroups:
+            for primitive in shapeDraw.primitives:
+                a = 0
+                b = 1
+                flip = True
+                for c in range(2, len(primitive.points)):
+                    pa, pb, pc = primitive.points[a], primitive.points[b], primitive.points[c]
+                    
+                    pa = primitive.points[a] = pa.replace(VtxAttr.NRM, pa.posIndex)
+                    pb = primitive.points[b] = pb.replace(VtxAttr.NRM, pb.posIndex)
+                    pc = primitive.points[c] = pc.replace(VtxAttr.NRM, pc.posIndex)
+
+                    if flip:
+                        x = pa
+                        pa = pb
+                        pb = x
+                    
+                    p1 = bmd.vtx1.positions[pa.posIndex]
+                    p2 = bmd.vtx1.positions[pb.posIndex]
+                    p3 = bmd.vtx1.positions[pc.posIndex]
+                    U = p2 - p1
+                    V = p3 - p1
+                    N = U.cross(V)
+                    N.normalize()
+                    normals[pa.normalIndex] += N
+                    normals[pb.normalIndex] += N
+                    normals[pc.normalIndex] += N
+                    
+                    if primitive.type == PrimitiveType.TRIANGLESTRIP:
+                        flip = not flip
+                        a = b
+                        b = c
+                    elif primitive.type == PrimitiveType.TRIANGLEFAN:
+                        b = c
+                    else:
+                        warn("Unknown primitive type %s"%primitive.type)
+                        break
+    bmd.vtx1.asFloat[1] = [c for n in normals for c in n.normalized()]
+
+def splitByVertexFormat(bmd):
+    groupedAttribs = {}
+    for shape in bmd.shp1.batches:
+        key = tuple(shape.attribs)
+        if key in groupedAttribs: groupedAttribs[key].append(shape)
+        else: groupedAttribs[key] = [shape]
+    
+    for vtxDescs, shapeGroup in groupedAttribs.items():
+        subBmd = BModel()
+        subBmd.scenegraph = filterScenegraph(bmd.scenegraph, [shapeGroup.index(shape) if shape in shapeGroup else None for shape in bmd.shp1.batches])
+        subBmd.inf1 = ModelInfoBlock()
+        subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
+        
+        subBmd.shp1 = ShapeBlock()
+        subBmd.shp1.batches = shapeGroup
+        
+        subBmd.vtx1 = VertexBlock()
+        subBmd.vtx1.positions = bmd.vtx1.positions
+        subBmd.vtx1.normals = None # unused when doBones off
+        subBmd.vtx1.originalData = bmd.vtx1.originalData
+        subBmd.vtx1.asFloat = bmd.vtx1.asFloat
+
+        attribs = {a.attrib for a in vtxDescs}
+        assert VtxAttr.POS in attribs, attribs
+        if VtxAttr.NRM not in attribs and VtxAttr.TEX1 not in attribs:
+            newVtxDesc = VtxDesc()
+            newVtxDesc.attrib = VtxAttr.NRM
+            newVtxDesc.dataType = VtxAttrIn.INDEX16
+            vtxDescs += (newVtxDesc,)
+            attribs.add(VtxAttr.NRM)
+            
+            addNormals(subBmd, newVtxDesc)
+            
+            '''bmd.vtx1.originalData = list(bmd.vtx1.originalData)
+            newVtxDesc = VtxDesc()
+            newVtxDesc.attrib = VtxAttr.TEX1
+            newVtxDesc.dataType = VtxAttrIn.INDEX16
+            vtxDescs += (newVtxDesc,)
+            attribs.add(VtxAttr.TEX1)
+            
+            assert bmd.vtx1.formats[6].arrayType == VtxAttr.TEX1 and bmd.vtx1.formats[6].componentCount == CompType.TEX_ST and bmd.vtx1.formats[6].dataType == CompSize.F32, bmd.vtx1.formats[6]'''
+        
+        subBmd.vtx1.formats = [f if f is None or f.arrayType in attribs else None for f in bmd.vtx1.formats]
+        
+        subBmd.jnt1 = JointBlock()
+        #usedJointIndices = {sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x10}
+        # just force doBones off
+        subBmd.jnt1.matrices = []#[m for i, m in enumerate(bmd.jnt1.matrices) if i in usedJoints]
+        subBmd.jnt1.frames = []#[f for i, f in enumerate(bmd.jnt1.frames) if i in usedJoints]
+        
+        subBmd.mat3 = MaterialBlock()
+        usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
+        subBmd.mat3.remapTable = usedMaterialSlots # only need length
+        for sg in subBmd.inf1.scenegraph:
+            if sg.type == 0x11:
+                sg.index = usedMaterialSlots.index(sg.index)
+        
+        subBmd.tex1 = bmd.tex1
+        subBmd.evp1 = bmd.evp1 # unused when doBones off
+        subBmd.drw1 = bmd.drw1 # unused when doBones off
+        subBmd.name = bmd.name+'-'+(','.join(a.attrib.name for a in vtxDescs))
+        yield subBmd
+
+def splitByConnectedPieces(bmd):
+    pass
 
 if __name__ == "__main__":
     import sys

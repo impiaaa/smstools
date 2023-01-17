@@ -237,7 +237,10 @@ class PrefabInstance(gocci(1001, 'PrefabInstance')):
 def getObjRef(obj):
     return {'fileID': int(obj.anchor)}
 
+rootOrder = 0
+
 def setupObject(o):
+    global rootOrder
     if o.name in prefabs:
         objObj = PrefabInstance(*prefabs[o.name])
         objObj.serializedVersion = 2
@@ -258,6 +261,8 @@ def setupObject(o):
     scene.entries.append(objObj)
     objObj.m_Name = o.description
     objXfm = objObj.getOrCreateComponent(Transform)
+    objXfm.m_RootOrder = rootOrder
+    rootOrder += 1
     return objObj, objXfm
 
 UndergroundShift = 528
@@ -368,46 +373,8 @@ for colpath in scenedirpath.rglob("*.col"):
 
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
-from bmd import *
-from bmd2unity import exportBmd, exportTextures, exportMaterials
-
-def printFlatScenegraph(sg):
-    for node in sg:
-        if node.type == 1:
-            indent += 1
-        elif node.type == 2:
-            indent -= 1
-        else:
-            print('  '*indent+(("frame", "material", "batch")[node.type-0x10]), node.index)
-
-def printScenegraphHierarchy(sg, indent=0):
-    print('  '*indent+(("frame", "material", "batch")[sg.type-0x10]), sg.index)
-    for c in sg.children:
-        printScenegraphHierarchy(c, indent+1)
-
-def filterScenegraph(sgin, batchIndices):
-    sgout = SceneGraph()
-    sgout.type = sgin.type
-    sgout.index = sgin.index
-    sgout.children = []
-    for c in sgin.children:
-        fc = filterScenegraph(c, batchIndices)
-        newIdx = batchIndices[fc.index]
-        if fc.type == 0x12:
-            if newIdx is None:
-                sgout.children.extend(fc.children)
-            else:
-                fc.index = newIdx
-                sgout.children.append(fc)
-        else:
-            sgout.children.append(fc)
-    sgout.children = [c for c in sgout.children if c.type == 0x12 or len(c.children) > 0]
-    if len(sgout.children) == 1 and sgout.type == 0x11 and sgout.children[0].type == 0x11:
-        return sgout.children[0]
-    if len(sgout.children) == 1 and sgout.type == 0x10 and sgout.children[0].type == 0x10:
-        # NOTE: Only for maps. Assumes all matrices are identity
-        return sgout.children[0]
-    return sgout
+from bmd import BModel
+from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -427,53 +394,10 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         
         print("Exporting materials")
         useColor1 = all(map(bool, bmd.vtx1.colors))
-        materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1))
+        materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, True))
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
         
-        bmds[bmdkey] = []
-        
-        # TODO: split into connected pieces
-        groupedAttribs = {}
-        for shape in bmd.shp1.batches:
-            key = tuple(shape.attribs)
-            if key in groupedAttribs: groupedAttribs[key].append(shape)
-            else: groupedAttribs[key] = [shape]
-        for attribFmt, shapeGroup in groupedAttribs.items():
-            subBmd = BModel()
-            subBmd.scenegraph = filterScenegraph(bmd.scenegraph, [shapeGroup.index(shape) if shape in shapeGroup else None for shape in bmd.shp1.batches])
-            subBmd.inf1 = ModelInfoBlock()
-            subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
-            
-            subBmd.vtx1 = VertexBlock()
-            subBmd.vtx1.positions = bmd.vtx1.positions
-            if hasattr(bmd.vtx1, "normals"): subBmd.vtx1.normals = bmd.vtx1.normals
-            subBmd.vtx1.originalData = bmd.vtx1.originalData
-            subBmd.vtx1.asFloat = bmd.vtx1.asFloat
-            subBmd.vtx1.formats = [f if f is None or f.arrayType in [a.attrib for a in attribFmt] else None for f in bmd.vtx1.formats]
-            
-            subBmd.shp1 = ShapeBlock()
-            subBmd.shp1.batches = shapeGroup
-            
-            subBmd.jnt1 = JointBlock()
-            #usedJointIndices = {sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x10}
-            # just force doBones off
-            subBmd.jnt1.matrices = []#[m for i, m in enumerate(bmd.jnt1.matrices) if i in usedJoints]
-            subBmd.jnt1.frames = []#[f for i, f in enumerate(bmd.jnt1.frames) if i in usedJoints]
-            
-            subBmd.mat3 = MaterialBlock()
-            usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
-            subBmd.mat3.remapTable = usedMaterialSlots # only need length
-            for sg in subBmd.inf1.scenegraph:
-                if sg.type == 0x11:
-                    sg.index = usedMaterialSlots.index(sg.index)
-            filteredMaterialIdInSlot = [materialIdInSlot[oldSlot] for oldSlot in usedMaterialSlots]
-            
-            subBmd.tex1 = bmd.tex1
-            subBmd.evp1 = bmd.evp1 # unused when doBones off
-            subBmd.drw1 = bmd.drw1 # unused when doBones off
-            subBmd.name = bmd.name+'-'+(','.join([a.attrib.name for a in attribFmt]))
-            meshId = exportBmd(subBmd, outbmddir)
-            bmds[bmdkey].append((meshId, filteredMaterialIdInSlot))
+        bmds[bmdkey] = [(exportBmd(subBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subBmd.mat3.remapTable]) for subBmd in splitByVertexFormat(bmd)]
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
@@ -484,7 +408,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             
             print("Exporting materials")
             useColor1 = all(map(bool, bmd.vtx1.colors))
-            materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1))
+            materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, bmd.name in ("map", "sky")))
             materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
             bmds[bmdkey] = exportBmd(bmd, outbmddir), materialIdInSlot
 
@@ -529,6 +453,8 @@ for baseColliderName in ["map", "building01", "building02"]:
     grpObj.serializedVersion = 6
     grpObj.m_Component = []
     grpXfm = grpObj.getOrCreateComponent(Transform)
+    grpXfm.m_RootOrder = rootOrder
+    rootOrder += 1
     grpXfm.m_Children = []
     colliderGroups = {}
     for physName, uuid in cols[baseColliderName]:
@@ -553,6 +479,8 @@ for baseColliderName in ["map", "building01", "building02"]:
             objObj.serializedVersion = 6
             objObj.m_Component = []
             objXfm = objObj.getOrCreateComponent(Transform)
+            objXfm.m_RootOrder = rootOrder
+            rootOrder += 1
             grpXfm.m_Children.append(getObjRef(objXfm))
             objXfm.m_Father = getObjRef(grpXfm)
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -1*SCALE}
@@ -1020,6 +948,8 @@ for group in strategy.objects:
                 meshObj.m_Name = "Mesh"
                 scene.entries.append(meshObj)
                 meshXfm = meshObj.getOrCreateComponent(Transform)
+                meshXfm.m_RootOrder = rootOrder
+                rootOrder += 1
                 meshXfm.m_Father = getObjRef(objXfm)
                 objXfm.m_Children.append(getObjRef(meshXfm))
                 addMeshFilter(assetAndMaterials, meshObj)
@@ -1083,4 +1013,6 @@ AGUAVgBpAHIAdAB1AGEAbABDAGEAbQBlAHIAYQAsACAAQwBpAG4AZQBtAGEAYwBoAGkAbgBlAAsBBQAA
 AFYAYQBsAHUAZQAAAAAABwUHBQcF""".replace('\n', '')
 
 scene.dump_yaml(outpath / "map" / "scene.unity")
+
+# game far plane is 3000, but 1530 *should* be good enough in dolpic10
 

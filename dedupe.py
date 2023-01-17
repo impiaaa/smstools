@@ -24,6 +24,10 @@ while len(toCheck) > 0:
         if path.suffix == ".meta": continue
         data = path.read_bytes()
         if path.suffix == ".shader": data = data[data.find(b'\n'):] # skip shader name
+        elif path.suffix in (".mat", ".asset"):
+            data = data.split(b'\n')
+            data = [line for line in data if not line.startswith(b'  m_Name: ')]
+            data = b'\n'.join(data)
         h = crc32(data)
         if h in files: files[h].add(path)
         else: files[h] = {path}
@@ -43,10 +47,10 @@ while len(toCheck) > 0:
         dir = pathlib.Path(os.path.commonpath(dupes))
         newPath = dir / name
         
-        print("Moving", dupes, "to", newPath)
+        print("Moving", ", ".join(str(d.relative_to(dir)) for d in dupes), "to", newPath)
+        for d in dupes: d.with_suffix(d.suffix+".meta").unlink()
         dupes.pop().rename(newPath)
         for d in dupes: d.unlink()
-        for d in dupes: d.with_suffix(d.suffix+".meta").unlink()
         
         newGuid = str(uuid.uuid4()).replace('-', '')
         origMeta['guid'] = newGuid

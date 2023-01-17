@@ -1148,7 +1148,6 @@ class MaterialBlock(Section):
         
         for m in self.materials:
             m.resolve(self)
-        #    m.debug()
     
     def write(self, fout):
         self.count = len(self.materials)
@@ -1308,7 +1307,12 @@ class Index:
         for attrib in attribs:
             s = self.sizeStructs[attrib.dataType]
             fout.write(s.pack(self.indices[attrib.attrib.value]))
-
+    
+    def replace(self, fmt, value):
+        other = Index()
+        other.indices = self.indices[:fmt.value]+(value,)+self.indices[fmt.value+1:]
+        return other
+    
     @property
     def matrixIndex(self):
         return self.indices[VtxAttr.PTNMTXIDX.value]
@@ -1328,6 +1332,9 @@ class Index:
     @property
     def texCoordIndex(self):
         return self.indices[VtxAttr.TEX0.value:VtxAttr.TEX7.value+1]
+    
+    def __repr__(self):
+        return ", ".join("{}: {}".format(VtxAttr(i).name, self.indices[i]) for i in range(21))
 
 class PrimitiveType(Enum):
     NONE          = 0
