@@ -363,18 +363,18 @@ for colpath in scenedirpath.rglob("*.col"):
     outcoldir = outpath / colpath_rel.parent
     metapaths = list(outcoldir.glob(colpath_rel.stem+"-*.asset.meta"))
     if len(metapaths) > 0 and all(metapath.stat().st_mtime >= coltime for metapath in metapaths):
-        cols[colpath.stem.lower()] = [(metapath.stem[:-5], unityparser.UnityDocument.load_yaml(metapath).entry['guid']) for metapath in metapaths]
+        cols[str(colpath_rel.with_suffix('')).lower()] = [(metapath.stem[:-5], unityparser.UnityDocument.load_yaml(metapath).entry['guid']) for metapath in metapaths]
     else:
         col = ColReader()
         with colpath.open('rb') as fin:
             col.read(fin)
         outcoldir.mkdir(parents=True, exist_ok=True)
-        cols[colpath_rel.stem.lower()] = list(exportCol(col, outcoldir, colpath_rel.stem, colpath_rel.stem == "map"))
+        cols[str(colpath_rel.with_suffix('')).lower()] = list(exportCol(col, outcoldir, colpath_rel.stem, colpath_rel.stem == "map"))
 
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
-from bmd import BModel
-from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat
+from bmd import BModel, VtxDesc, VtxAttr, VtxAttrIn, CompType, CompSize, ArrayFormat
+from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -410,6 +410,16 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             useColor1 = all(map(bool, bmd.vtx1.colors))
             materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, bmd.name in ("map", "sky")))
             materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
+            if bmd.name == "sky":
+                newVtxDesc = VtxDesc()
+                newVtxDesc.attrib = VtxAttr.NRM
+                newVtxDesc.dataType = VtxAttrIn.INDEX16
+                bmd.vtx1.formats[1] = ArrayFormat()
+                bmd.vtx1.formats[1].arrayType = VtxAttr.NRM
+                bmd.vtx1.formats[1].componentCount = CompType.NRM_XYZ
+                bmd.vtx1.formats[1].dataType = CompSize.F32
+                bmd.vtx1.formats[1].decimalPoint = 0
+                addNormals(bmd, newVtxDesc)
             bmds[bmdkey] = exportBmd(bmd, outbmddir), materialIdInSlot
 
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
@@ -422,6 +432,11 @@ nms = NavMeshSettings(getId(), '')
 # Subtractive light mode. Only works if the main light is set to realtime-only.
 lms.m_UseShadowmask = 0
 lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1}
+
+managers = scene.search("コンダクター初期化用")
+for o in managers.objects:
+    if isinstance(o, TMapObjBaseManager):
+        o.lodClipSize = (o.clipRadius/tan(radians(25)))/o.farClip
 
 for o in scene.objects:
     if o.name == 'MarScene':
@@ -444,7 +459,7 @@ for o in marScene.objects:
 
 scene = unityparser.UnityDocument([ocs, rs, lms, nms])
 
-for baseColliderName in ["map", "building01", "building02"]:
+for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
     if baseColliderName not in cols: continue
     grpObj = GameObject(getId(), '')
     scene.entries.append(grpObj)
@@ -459,9 +474,9 @@ for baseColliderName in ["map", "building01", "building02"]:
     colliderGroups = {}
     for physName, uuid in cols[baseColliderName]:
         baseName = physName.split('.')[0]
-        assert baseName.startswith(baseColliderName)
-        baseName = baseName[len(baseColliderName)+1:]
-        if baseColliderName == "map":
+        assert baseName.startswith(baseColliderName.split('/')[-1])
+        baseName = baseName[len(baseColliderName.split('/')[-1])+1:]
+        if baseColliderName == "map/map":
             assetPath = outpath / "map" / (physName+"asset")
             if not assetPath.exists():
                 assetPath = outpath / "map" / (physName+".asset")
@@ -525,211 +540,7 @@ for o in marScene.objects:
     if o.name == 'Strategy':
         strategy = o
 
-modelLookup = {
-"AirportPole": {},
-"amiking": {'m': 'amiking_model1.bmd'},
-"ArrowBoardDown": {'t': 'ArrowBoard'},
-"ArrowBoardLR": {'t': 'ArrowBoard'},
-"ArrowBoardUp": {'t': 'ArrowBoard'},
-"balloonKoopaJr": {'m': 'balloonKoopaJr.bmd', 'n': 'balloonkoopajr_wait', 'u': 0},
-"baloonball": {'m': 'soccerball.bmd'},
-"bambooRailFence": {'m': 'bambooFence_rail.bmd'},
-"BananaTree": {'m': 'BananaTree.bmd'},
-"barrel_oil": {'m': 'barrel_oil.bmd'},
-"BasketReverse": {'m': 'Basket.bmd'},
-"bath": {'m': 'bath.bmd'},
-"belldolpic": {'m': 'BellDolpic.bmd'},
-"BiaBell": {'m': 'BiaBell.bmd'},
-"BiaWatermill00": {'m': 'BiaWatermill00.bmd'},
-"bigWindmill": {'t': 'bianco', 'm': 'bigWindmill.bmd'},
-"billboard_dolphin": {'m': 'billboardDol.bmd'},
-"billboard_fish": {'m': 'billboardFish.bmd'},
-"billboard_restaurant": {'m': 'billboardRestaurant.bmd'},
-"billboard_sun": {'m': 'billboardSun.bmd'},
-"breakable_block": {'m': 'breakable_block.bmd'},
-"BrickBlock": {'t': 'BrickBlock', 'm': 'BrickBlock.bmd'},
-"castella": {'m': 'castella.bmd'},
-"ChangeStage": {},
-"ChangeStageMerrygoround": {},
-"ChestRevolve": {'m': 'ChestRevolve.bmd'},
-"ChipShine": {'m': 'chip_shine_model1.bmd'},
-"Closet": {'m': 'closet.bmd', 'n': 'ClosetOpen', 'u': 0},
-"cloud": {'m': 'cloud.bmd', 'n': 'cloud_wait', 'u': 0},
-"cluster_block": {'m': 'test_cluster.bmd'},
-"coconut_ball": {'m': 'soccerball.bmd'},
-"cogwheel": {'m': 'cogwheel_wheel.bmd'},
-"CoinFish": {'m': 'CoinFish.bmd', 'n': 'coinfish', 'u': 0},
-"DokanGate": {'m': 'efDokanGate.bmd', 'n': 'efdokangate', 'u': 4},
-"doorHotel": {'m': 'doorHotel.bmd'},
-"dptlight": {'m': 'dptlight.bmd'},
-"dptWeathercock": {'m': 'DptWeathercock.bmd', 'n': 'dptweathercock', 'u': 0},
-"drum_can": {'m': 'drum_can_model.bmd'},
-"eggYoshiEvent": {'m': 'eggYoshi_normal.bmd', 'n': 'eggyoshi_wait', 'u': 0},
-"eggYoshi": {'m': 'eggYoshi_normal.bmd', 'n': 'eggyoshi_wait', 'u': 0},
-"ex1_turn_lift": {'m': 'TurnLift.bmd'},
-"exkickboard": {'m': 'EXKickBoard.bmd'},
-"expand_block": {'m': 'breakable_block.bmd'},
-"exrollcube": {'m': 'EXRollCube.bmd'},
-"fall_slow_block": {'m': 'breakable_block.bmd'},
-"fence3x3": {'m': 'fence_half.bmd'},
-"fence_revolve": {'m': 'fence_revolve_outer.bmd'},
-"FerrisLOD": {'m': 'FerrisLOD.bmd', 'n': 'ferrislod', 'u': 0},
-"FerrisWheel": {'m': 'FerrisWheel.bmd', 'n': 'ferriswheel', 'u': 0},
-"FileLoadBlockA": {'m': 'FileLoadBlockA.bmd'},
-"FileLoadBlockB": {'m': 'FileLoadBlockB.bmd'},
-"FileLoadBlockC": {'m': 'FileLoadBlockC.bmd'},
-"flowerOrange": {'t': 'flower', 'm': 'flowerOrange.bmd'},
-"flowerPink": {'t': 'flower', 'm': 'flowerPink.bmd'},
-"flowerPurple": {'t': 'flower', 'm': 'flowerPurple.bmd'},
-"flowerRed": {'t': 'flower', 'm': 'flowerRed.bmd'},
-"flowerSunflower": {'t': 'flower', 'm': 'flowerSunflower.bmd'},
-"flowerYellow": {'t': 'flower', 'm': 'flowerYellow.bmd'},
-"FluffManager": {},
-"Fluff": {'m': 'Watage.bmd'},
-"football_goal": {'m': 'soccergoal_model.bmd'},
-"football": {'m': 'soccerball.bmd'},
-"FruitBasket": {'m': 'Basket.bmd'},
-"FruitCoverPine": {'m': 'FruitPine.bmd'},
-"FruitHitHideObj": {},
-"GateManta": {'m': 'GateManta.bmd', 'n': 'gatemanta', 'u': 0},
-"Gateshell": {'m': 'Gateshell.bmd', 'n': 'gateshell', 'u': 0},
-"GeneralHitObj": {},
-"GesoSurfBoard": {'m': 'surf_geso.bmd'},
-"GesoSurfBoardStatic": {'m': 'surf_geso.bmd'},
-"getag": {'m': 'getaGreen.bmd'},
-"getao": {'m': 'getaOrange.bmd'},
-"GlassBreak": {'m': 'GlassBreak.bmd'},
-"GoalWatermelon": {},
-"HangingBridge": {},
-"HangingBridgeBoard": {'m': 'mon_bri.bmd'},
-"HatoPop": {'m': 'hatopop_model1.bmd'},
-"HideObj": {},
-"hikidashi": {'m': 'hikidashi.bmd'},
-"HipDropHideObj": {},
-"ice_car": {'m': 'yatai.bmd'},
-"invisible_coin": {},
-"joint_coin": {'m': 'coin.bmd'},
-"jumpbase": {'m': 'jumpbase.bmd'},
-"JumpMushroom": {'m': 'JumpKinoko.bmd'},
-"kamaboko": {'m': 'kamaboko.bmd'},
-"KoopaJrSignM": {'m': 'koopa_jr_sign.bmd'},
-"lampBianco": {'m': 'lampBianco.bmd'},
-"LampSeesaw": {'m': 'lampBianco.bmd'},
-"lamptrapiron": {'m': 'lamptrapiron.bmd'},
-"lamptrapspike": {'m': 'lamptrapspike.bmd'},
-"LeafBoatRotten": {'t': 'LeafBoat'},
-"LeafBoat": {'t': 'LeafBoat'},
-"lean_block": {'m': 'breakable_block.bmd'},
-"lean_direct_block": {'m': 'breakable_block.bmd'},
-"lean_indirect_block": {'m': 'breakable_block.bmd'},
-"manhole": {'m': 'manhole.bmd', 'n': 'manhole', 'u': 0},
-"MapObjNail": {'m': 'kugi.bmd'},
-"MapObjPachinkoNail": {'m': 'PachinkoKugi.bmd'},
-"MapSmoke": {},
-"MareEventBumpyWall": {},
-"mareFall": {'m': 'MareFall.bmd', 'n': 'marefall', 'u': 4},
-"maregate": {'m': 'maregate.bmd', 'n': 'maregate', 'u': 4},
-"mario_cap": {'m': 'mariocap.bmd'},
-"merry": {'m': 'merry.bmd', 'n': 'merry', 'u': 0},
-"merry_pole": {},
-"MiniWindmillL": {'t': 'bianco'},
-"MiniWindmillS": {'t': 'bianco'},
-"monte_chair": {'m': 'monte_chair_model.bmd'},
-"MonteGoalFlag": {'m': 'monteflag.bmd', 'n': 'monteflag_wait', 'u': 0},
-"MonteRoot": {'m': 'nekko.bmd'},
-"monumentshine": {'m': 'monumentshine.bmd'},
-"move_block": {'m': 'breakable_block.bmd'},
-"MoveCoin": {'m': 'SandMoveCoin.bmd', 'n': 'sandmovecoin', 'u': 0},
-"Moyasi": {'m': 'Moyasi.bmd', 'n': 'moyasi_wait', 'u': 0},
-"MuddyBoat": {'m': 'MuddyBoat.bmd'},
-"mushroom1up": {'m': 'mushroom1up.bmd'},
-"mushroom1upR": {'m': 'mushroom1up.bmd'},
-"mushroom1upX": {'m': 'mushroom1up.bmd'},
-"no_data": {},
-"normallift": {'m': 'NormalBlock.bmd'},
-"normal_nozzle_item": {'t': 'nozzleItem'},
-"NozzleBox": {'t': 'nozzleBox', 'm': 'nozzleBox.bmd'},
-"nozzleDoor": {'m': 'nozzleDoor.bmd'},
-"palmLeaf": {'m': 'palmLeaf.bmd'},
-"palmNormal": {'m': 'palmNormal.bmd'},
-"PanelBreak": {'m': 'PanelBreak.bmd'},
-"PanelRevolve": {'m': 'PanelRevolve.bmd'},
-"PinnaHangingBridgeBoard": {'m': 'PinnaBoard.bmd'},
-"PoleNormal": {},
-"Puncher": {'m': 'puncher_model1.bmd'},
-"railblockb": {'m': 'AllPurposeBoardB.bmd'},
-"railblockr": {'m': 'AllPurposeBoardR.bmd'},
-"railblocky": {'m': 'AllPurposeBoardY.bmd'},
-"RailFence": {'m': 'fence_normal.bmd'},
-"riccoBoatL": {'t': 'riccoShip'},
-"riccoBoatS": {'t': 'riccoShip'},
-"riccoPole": {},
-"riccoShipDol": {'t': 'riccoShip'},
-"riccoShipLog": {'t': 'riccoShip'},
-"riccoShip": {'t': 'riccoShip'},
-"riccoSwitchShine": {},
-"riccoYachtL": {'t': 'riccoShip'},
-"riccoYachtS": {'t': 'riccoShip'},
-"rollblockb": {'m': 'AllPurposeBoardB.bmd'},
-"rollblockr": {'m': 'AllPurposeBoardR.bmd'},
-"rollblocky": {'m': 'AllPurposeBoardY.bmd'},
-"rulet00": {'m': 'rulet00.bmd', 'n': 'rulet00', 'u': 0},
-"SandBird": {'m': 'SandBird.bmd', 'n': 'sandbird', 'u': 0},
-"sand_block": {'m': 'SandBlock.bmd'},
-"SandBombBase00": {'t': 'SandBombBase', 'm': 'SandBombBase00.bmd'},
-"SandBombBaseFoot": {'t': 'SandBombBase', 'm': 'SandBombBaseFoot.bmd'},
-"SandBombBaseHand": {'t': 'SandBombBase', 'm': 'SandBombBaseHand.bmd'},
-"SandBombBaseMushroom": {'t': 'SandBombBase', 'm': 'SandBombBaseMushroom.bmd'},
-"SandBombBasePyramid": {'t': 'SandBombBase', 'm': 'SandBombBasePyramid.bmd'},
-"SandBombBaseShit": {'t': 'SandBombBase', 'm': 'SandBombBaseShit.bmd'},
-"SandBombBaseStairs": {'t': 'SandBombBase', 'm': 'SandBombBaseStairs.bmd'},
-"SandBombBaseStar": {'t': 'SandBombBase', 'm': 'SandBombBaseStar.bmd'},
-"SandBombBaseTurtle": {'t': 'SandBombBase', 'm': 'SandBombBaseTurtle.bmd'},
-"SandBomb": {'m': 'SandBomb.bmd', 'n': 'sandbomb_wait', 'u': 0},
-"SandCastle": {'t': 'SandBombBase', 'm': 'SandCastle.bmd'},
-"SandLeafBase00": {'m': 'SandLeafBase00.bmd'},
-"SandLeafBase01": {'m': 'SandLeafBase01.bmd'},
-"SandLeafBase02": {'m': 'SandLeafBase02.bmd'},
-"SandLeafBase03": {'m': 'SandLeafBase03.bmd'},
-"SandLeaf": {'m': 'SandLeaf.bmd', 'n': 'sandleaf_wait', 'u': 0},
-"ShellCup": {'m': 'ShellCup.bmd', 'n': 'shellcup', 'u': 0},
-"shine": {},
-"SignCircle": {'m': 'maru_sign.bmd'},
-"SignCross": {'m': 'batu_sign.bmd'},
-"SignTriangle": {'m': '3kaku_sign.bmd'},
-"SirenabossWall": {'m': 'boss_wall.bmd'},
-"SirenaCasinoRoof": {'m': 'casino_lighting.bmd', 'n': 'casino_lighting', 'u': 5},
-"skate_block": {'m': 'breakable_block.bmd'},
-"SkyIsland": {'m': 'SkyIsland.bmd', 'n': 'skyisland', 'u': 0},
-"spread_block": {'m': 'breakable_block.bmd'},
-"stand_break": {'m': 'stand_break.bmd', 'n': 'stand_break0', 'u': 0},
-"StartDemo": {},
-"SuperHipDropBlock": {'m': 'super_rock.bmd'},
-"supermario_block": {'m': 'breakable_block.bmd'},
-"SurfGesoGreen": {},
-"SurfGesoRed": {},
-"SurfGesoYellow": {},
-"TeethOfJuicer": {'m': 'TeethOfJuicer.bmd', 'n': 'teethofjuicer', 'u': 0},
-"uirou": {'m': 'uirou.bmd'},
-"umaibou": {'m': 'umaibou.bmd'},
-"WaterHitHideObj": {},
-"WaterMelonBlock": {'t': 'WaterMelon', 'm': 'WaterMelonBlock.bmd'},
-"watermelon": {'m': 'watermelon.bmd'},
-"WatermelonStatic": {'m': 'watermelon.bmd'},
-"water_power_inertial_lift": {'m': 'breakable_block.bmd'},
-"water_power_lift": {'m': 'breakable_block.bmd'},
-"water_power_ship": {'m': 'breakable_block.bmd'},
-"WaterRecoverObj": {},
-"water_roll_block": {'m': 'water_roll_block.bmd'},
-"WaterSprayBox": {},
-"WaterSprayCylinder": {},
-"windmill_far": {'m': 'bigWindmill.bmd'},
-"wood_barrel_once": {'t': 'barrel', 'm': 'barrel_normal.bmd'},
-"wood_barrel": {'t': 'barrel', 'm': 'barrel_normal.bmd'},
-"WoodBox": {'t': 'kibako', 'm': 'kibako.bmd'},
-"yoshiblock": {'m': 'yoshiblock.bmd'},
-"yTurnLift": {'m': 'yTurnLift.bmd'},
-}
+from sObjDataTable import sObjDataTable, end_data
 actorDataTable = {
     "SeaIndirect": {"modelName": "SeaIndirect", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
     "ReflectParts": {"modelName": "ReflectParts", "unk9": 0x10210000, "unk15": 0, "flags16": 0x10},
@@ -777,7 +588,8 @@ def getSound(soundKey):
     loop = False
     bank = inst = 0
     volume = 1.0
-    note = 0
+    notes = []
+    transpose = 0
     for i, command in enumerate(commands):
         command = command.strip()
         if len(command) == 0 or command[0] == '#': continue
@@ -789,7 +601,7 @@ def getSound(soundKey):
             if command[0] == 'NOTEON2':
                 key, flags, velocity = command[1:4]
                 volume *= velocity/0x7F
-                note += key
+                notes.append(key)
             elif command[0] == 'SET_BANK_INST':
                 bank, inst = command[1:]
             elif command[0] == 'JMP':
@@ -798,12 +610,36 @@ def getSound(soundKey):
                     loop = True
             elif command[0] == 'TRANSPOSE':
                 assert command[1] == 0x3C
-                note += command[1]
+                transpose = command[1]
             elif command[0] == 'SIMPLEADSR':
                 attackTime, decayTime, decayTime2, sustainLevel, releaseTime = command[1:]
                 volume *= sustainLevel/0xFFFF
-    pitch = 2**((note-0x3C)/12.0)
+    for i in range(len(notes)): notes[i] += transpose
+    note = notes[0]
     
+    ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
+    for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
+        if int(instrument.getAttribute("program")) == inst:
+            pitch = 2**((note-0x3C)/12.0)
+            keyRegions = instrument.getElementsByTagName("key-region")
+            assert len(keyRegions) == 1, keyRegions
+            assert "key" not in keyRegions[0].attributes, keyRegions[0]
+            velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
+            assert len(velocityRegions) == 1, velocityRegions
+            waveId = int(velocityRegions[0].getAttribute("wave-id"))
+            break
+    else:
+        for drumset in ibnk.firstChild.getElementsByTagName("drum-set"):
+            if int(drumset.getAttribute("program")) == inst:
+                pitch = 1.0
+                key = (["C-", "C#", "D-", "Eb", "E-", "F-", "F#", "G-", "G#", "A-", "Bb", "B-"][note%12])+str(note//12)
+                for percussion in drumset.getElementsByTagName("percussion"):
+                    if percussion.getAttribute("key") == key:
+                        velocityRegions = percussion.getElementsByTagName("velocity-region")
+                        assert len(velocityRegions) == 1, velocityRegions
+                        waveId = int(velocityRegions[0].getAttribute("wave-id"))
+                        break
+
     (outpath / "audio").mkdir(parents=True, exist_ok=True)
     metapath = outpath / "audio" / (soundInfo["Name"]+".wav.meta")
     destpath = outpath / "audio" / (soundInfo["Name"]+".wav")
@@ -812,16 +648,6 @@ def getSound(soundKey):
         sounds[soundKey] = parsedInfo
         return parsedInfo
     
-    ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
-    for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
-        if int(instrument.getAttribute("program")) == inst:
-            break
-    keyRegions = instrument.getElementsByTagName("key-region")
-    assert len(keyRegions) == 1, keyRegions
-    assert "key" not in keyRegions[0].attributes, keyRegions[0]
-    velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
-    assert len(velocityRegions) == 1, velocityRegions
-    waveId = int(velocityRegions[0].getAttribute("wave-id"))
     origPath = list((AudioRes / "waves").glob("w2ndLoad_0_%05d.*.wav"%waveId))[0]
     shutil.copy(origPath, destpath)
     guid = writeMeta(soundInfo["Name"]+".wav", {
@@ -878,30 +704,38 @@ for group in strategy.objects:
         elif isinstance(o, TPlacement):
             setupPosition(objXfm, o)
         if isinstance(o, TMapObjBase):
-            lowername = o.model.lower()
-            if lowername in cols:
-                for physName, uuid in cols[lowername]:
-                    # different terrain types ok?
-                    addCol(uuid, objObj)
-        if isinstance(o, TMapObjBase):
-            modelEntry = modelLookup.get(o.model, None)
-            if modelEntry is None or ('t' in modelEntry and 'm' not in modelEntry):
-                bmdFile = scenedirpath / "mapobj" / (o.model+".bmd")
-                if bmdFile.exists():
-                    if modelEntry is None:
-                        modelEntry = {'m': o.model+".bmd"}
-                    else:
-                        modelEntry['m'] = o.model+".bmd"
-            if modelEntry is not None:
-                if 'm' in modelEntry:
-                    bmdFilename = "mapobj/"+modelEntry['m'].lower()
-                    addMeshFilter(bmdFilename, objObj)
+            objData = sObjDataTable.get(o.model, end_data)
+            
+            animInfo = objData.get('animInfo')
+            if animInfo is None:
+                modelName = objData['mdlName']+".bmd"
+            else:
+                animData = animInfo.get('animData')
+                if animData is None:
+                    modelName = None
                 else:
-                    warn("No model for %r"%o.model)
-            # for every TMapObjBaseManager, assign
-            # lodClipSize = (clipRadius/tan(25))/farClip
-            # for every TMapObjBase, search for manager, get LODGroup and assign screenRelativeHeight
-            # could also do with TLiveActor/TLiveManager, but sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
+                    modelName = animData[0]['modelName']
+                    if animData[0].get('basName'):
+                        objObj.getOrCreateComponent(AudioSource)
+            if modelName is not None:
+                renderer, meshFilter = addMeshFilter("mapobj/"+modelName.lower(), objObj)
+                
+                manager = managers.search(objData['managerName'])
+                lod = objObj.getOrCreateComponent(LODGroup)
+                lod.m_FadeMode = 0
+                lod.serializedVersion = 2
+                lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
+                # m_Size is largest extent * 2
+                # m_LocalReferencePoint is center
+                # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
+            
+            mapCollisionInfo = objData.get('mapCollisionInfo')
+            if mapCollisionInfo is not None:
+                colName = mapCollisionInfo['collisionData'][0]['name']
+                if colName is not None:
+                    for physName, uuid in cols["mapobj/"+colName.lower()]:
+                        # different terrain types ok?
+                        addCol(uuid, objObj)
         if isinstance(o, TMapStaticObj):
             # not "static" in the unity sense
             modelEntry = actorDataTable.get(o.baseName, None)
@@ -920,9 +754,10 @@ for group in strategy.objects:
                     bmdFilename = prefix+"/"+modelEntry['modelName'].lower()
                     addMeshFilter(bmdFilename, objObj)
                 if 'collisionManagerName' in modelEntry:
-                    for physName, uuid in cols[modelEntry['collisionManagerName'].lower()]:
-                        # different terrain types ok?
-                        addCol(uuid, objObj)
+                    for prefix in ("map/map/", "mapobj/"):
+                        for physName, uuid in cols[prefix+modelEntry['collisionManagerName'].lower()]:
+                            # different terrain types ok?
+                            addCol(uuid, objObj)
                 if 'soundKey' in modelEntry:
                     audioSource = objObj.getOrCreateComponent(AudioSource)
                     volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
@@ -935,6 +770,17 @@ for group in strategy.objects:
                 if 'particle' in modelEntry:
                     objObj.getOrCreateComponent(ParticleSystemRenderer)
                     objObj.getOrCreateComponent(ParticleSystem)
+        if isinstance(o, TMapObjSoundGroup):
+            audioSource = objObj.getOrCreateComponent(AudioSource)
+            soundKey = {"ms_sea": 0x5000, "ms_harbor": 0x5003}.get(o.graphName, 0)
+            if soundKey != 0:
+                # arbitrary increment - the 2nd environment sounds are the longest
+                # don't want to figure out the listen cone stuff
+                volume, pitch, loop, clipGuid = getSound(soundKey+1)
+                audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
+                audioSource.m_Volume = volume
+                audioSource.m_Pitch = pitch
+                audioSource.Loop = int(loop)
         if isinstance(o, TMap):
             objObj.m_StaticEditorFlags = 0xFFFFFFFF
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}

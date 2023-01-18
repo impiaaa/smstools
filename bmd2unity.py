@@ -739,10 +739,6 @@ def filterScenegraph(sgin, batchIndices):
     return sgout
 
 def addNormals(bmd, newVtxDesc):
-    bmd.vtx1.asFloat = list(bmd.vtx1.asFloat)
-        
-    # assume normal falls back to asFloat
-    
     normals = [Vector((0,0,0)) for p in bmd.vtx1.positions]
     for shape in bmd.shp1.batches:
         # mutates!
@@ -784,7 +780,10 @@ def addNormals(bmd, newVtxDesc):
                     else:
                         warn("Unknown primitive type %s"%primitive.type)
                         break
+    bmd.vtx1.asFloat = list(bmd.vtx1.asFloat)
     bmd.vtx1.asFloat[1] = [c for n in normals for c in n.normalized()]
+    bmd.vtx1.originalData = list(bmd.vtx1.originalData)
+    bmd.vtx1.originalData[1] = bmd.vtx1.asFloat[1]
 
 def splitByVertexFormat(bmd):
     groupedAttribs = {}
