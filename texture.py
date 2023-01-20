@@ -72,7 +72,7 @@ TexFmt.IA4:    'B',
 TexFmt.IA8:    'H',
 TexFmt.RGB565: 'H',
 TexFmt.RGB5A3: 'H',
-TexFmt.RGBA8:  'I',
+TexFmt.RGBA8:  'H',
 TexFmt.C4:     'B',
 TexFmt.C8:     'B',
 TexFmt.C14X2:  'H',
@@ -158,9 +158,9 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    t = c&0xF0
-                    a = c&0x0F
-                    putpixel(x, y, (t | (t >> 4),(a << 4) | a))
+                    l = c&0x0F
+                    a = c&0xF0
+                    putpixel(x, y, ((l << 4) | l,a | (a >> 4)))
     
     elif format == TexFmt.IA8:
         for y in range(yoff, yoff+4):
@@ -169,7 +169,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 c = data[dataidx]
                 dataidx += 1
                 if x < width and y < height:
-                    putpixel(x, y, (c>>8, c&0xFF))
+                    putpixel(x, y, (c&0xFF, c>>8))
     
     elif format == TexFmt.RGB565:
         for y in range(yoff, yoff+4):
@@ -190,13 +190,15 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                     putpixel(x, y, unpackRGB5A3(c))
     
     elif format == TexFmt.RGBA8:
-        for y in range(yoff, yoff+4):
-            for x in range(xoff, xoff+4):
-                if dataidx >= len(data): break
-                c = data[dataidx]
-                dataidx += 4
-                if x < width and y < height:
-                    putpixel(x, y, (c>>24, (c>>16)&0xFF, (c>>8)&0xFF, c&0xFF))
+        for iy in range(4):
+            for x in range(4):
+                r = (data[dataidx   ] & 0x00FF)
+                g = (data[dataidx+16] & 0xFF00)>>8
+                b = (data[dataidx+16] & 0x00FF)
+                a = (data[dataidx   ] & 0xFF00)>>8
+                putpixel(xoff+x, yoff+iy, (r, g, b, a))
+                dataidx += 1
+        dataidx += 16
     
     elif format == TexFmt.C4:
         for y in range(yoff, yoff+8):
@@ -261,6 +263,15 @@ def deblock(format, data, width, height):
                         c = data[dataidx:dataidx+8]
                         dataidx += 8
                         if y+dy+4 <= height: dest[width*(y + dy)//2 + (x + dx)*2:width*(y + dy)//2 + (x + dx)*2 + 8] = fixS3TC1Block(c)
+            elif format == TexFmt.RGBA8:
+                 for dy in range(formatBlockHeight[format]):
+                    for dx in range(int(formatBlockWidth[format])):
+                        if dataidx >= len(data): break
+                        idx = int((width*(y + dy) + x) + dx)*2
+                        dest[idx  ] = data[dataidx   ]
+                        dest[idx+1] = data[dataidx+16]
+                        dataidx += 1
+                 dataidx += 16
             else:
                 for dy in range(formatBlockHeight[format]):
                     for i in range(int(formatBlockWidth[format])):
