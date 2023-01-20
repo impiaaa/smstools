@@ -375,6 +375,12 @@ class IndInitData(ReadableStruct):
         for x in self.indTexMtx: x.write(fout)
         for x in self.indTexCoordScale: x.write(fout)
         for x in self.indTevStage: x.write(fout)
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.indTexOrder == other.indTexOrder and \
+            self.indTexMtx == other.indTexMtx and \
+            self.indTexCoordScale == other.indTexCoordScale and \
+            self.indTevStage == other.indTevStage
 
 class CullMode(Enum):
     NONE  = 0 # Do not cull any primitives.
@@ -557,6 +563,14 @@ class TexMtxInfo(ReadableStruct):
     def __repr__(self):
         return super().__repr__()+", center=%s, scale=%s, rotation=%s, translation=%s, effectMatrix=%s"% \
             (self.center, self.scale, self.rotation, self.translation, self.effectMatrix)
+
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.center == other.center and \
+            self.scale == other.scale and \
+            self.rotation == other.rotation and \
+            self.translation == other.translation and \
+            self.effectMatrix == other.effectMatrix
 
 class ColorChannelID(Enum):
     COLOR0 = 0
@@ -793,6 +807,10 @@ class FogInfo(ReadableStruct):
         fout.write(pack('>10H', *self.table))
     def __hash__(self):
         return hash(super().as_tuple()+(self.color, self.table))
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.color == other.color and \
+            self.table == other.table
 
 def safeGet(arr, idx):
     if idx >= 0 and idx < len(arr):
@@ -1020,6 +1038,39 @@ class Material(ReadableStruct):
             self.blend,
             self.nbtScale
         ))
+
+    def __eq__(self, other):
+        return isinstance(other, __class__) and \
+            self.name == other.name and \
+            self.materialMode == other.materialMode and \
+            self.cullMode == other.cullMode and \
+            self.colorChanNum == other.colorChanNum and \
+            self.texGenNum == other.texGenNum and \
+            self.tevStageNum == other.tevStageNum and \
+            self.zCompLoc == other.zCompLoc and \
+            self.zMode == other.zMode and \
+            self.dither == other.dither and \
+            self.matColors == other.matColors and \
+            self.colorChans == other.colorChans and \
+            self.ambColors == other.ambColors and \
+            self.lightInfos == other.lightInfos and \
+            self.texCoords == other.texCoords and \
+            self.postTexGens == other.postTexGens and \
+            self.texMtxs == other.texMtxs and \
+            self.postTexMtxs == other.postTexMtxs and \
+            self.texNos == other.texNos and \
+            self.tevKColors == other.tevKColors and \
+            self.tevKColorSels == other.tevKColorSels and \
+            self.tevKAlphaSels == other.tevKAlphaSels and \
+            self.tevOrders == other.tevOrders and \
+            self.tevColors == other.tevColors and \
+            self.tevStages == other.tevStages and \
+            self.tevSwapModes == other.tevSwapModes and \
+            self.tevSwapModeTables == other.tevSwapModeTables and \
+            self.fog == other.fog and \
+            self.alphaComp == other.alphaComp and \
+            self.blend == other.blend and \
+            self.nbtScale == other.nbtScale
 
 class MaterialBlock(Section):
     header = Struct('>H2x')
@@ -1370,6 +1421,10 @@ class Primitive(ReadableStruct):
         for currPoint in self.points:
             currPoint.write(fout, attribs)
 
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.points == other.points
+
 class ShapeDraw(ReadableStruct):
     header = Struct('>II')
     fields = ["displayListSize", "displayListStart"]
@@ -1384,6 +1439,9 @@ class ShapeDraw(ReadableStruct):
                 break
             self.primitives.append(currPrimitive)
         self.displayListStart = self.displayListSize = None
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.primitives == other.primitives
 
 class ShapeMtx(ReadableStruct):
     header = Struct('>HHI')
@@ -1400,6 +1458,9 @@ class ShapeMtx(ReadableStruct):
     def write(self, fout):
         self.count = len(self.matrixTable)
         super().write(fout)
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.matrixTable == other.matrixTable
 
 class VtxDesc(ReadableStruct):
     header = Struct('>II')
@@ -1467,6 +1528,13 @@ class Shape(ReadableStruct):
         self.shapeDrawInitDataIndex = self.mtxGroupCount = None
         
         self.matrixGroups = list(map(tuple, zip(draws, matrices)))
+
+    def __eq__(self, other):
+        return super().__eq__(other) and \
+            self.matrixGroups == other.matrixGroups and \
+            self.attribs == other.attribs and \
+            self.bbMin == other.bbMin and \
+            self.bbMax == other.bbMax
 
 class ShapeBlock(Section):
     header = Struct('>H2xIIIIIIII')

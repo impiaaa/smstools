@@ -374,11 +374,11 @@ class DXShaderGen:
             return "((tevA.r == tevB.r) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
         elif op ==TevOp.COMP_GR16_GT:
             return "((TevPack16(tevA.rg) >  TevPack16(tevB.rg)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
-        elif op ==TevOp.COMP_GR16_EQ:
+        elif op == TevOp.COMP_GR16_EQ:
             return "((TevPack16(tevA.rg) == TevPack16(tevB.rg)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
-        elif op ==TevOp.COMP_BGR24_GT:
+        elif op == TevOp.COMP_BGR24_GT:
             return "((TevPack24(tevA.rgb) >  TevPack24(tevB.rgb)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
-        elif op ==TevOp.COMP_BGR24_EQ:
+        elif op == TevOp.COMP_BGR24_EQ:
             return "((TevPack24(tevA.rgb) == TevPack24(tevB.rgb)) ? tevC.{suffix} : ({fmt})(0)) + tevD.{suffix}".format(suffix=suffix, fmt=fmt)
         elif op == TevOp.COMP_RGB8_GT:
             return "((tevA.rgb > tevB.rgb) * tevC.{suffix}) + tevD.{suffix}".format(suffix=suffix)
@@ -537,7 +537,7 @@ class DXShaderGen:
                 comp = CompareType.GREATER
             if comp == CompareType.GREATER:
                 return "clip(colorPrev.a - {}/255.0);".format(ref)
-            else:
+            elif comp == CompareType.LESS:
                 return "clip({}/255.0 - colorPrev.a);".format(ref)
         else:
             return "if (!({})) discard;".format(self.makeComp(comp, ref))
@@ -639,7 +639,7 @@ class UnityShaderGen(DXShaderGen):
                     fout.writeLine("{}_Tex{} (\"{}\", 2D) = \"black\" {{}}".format(tags, i, desc))
                 # still need texmtx center, rotation
                 for i, texMtx in enumerate(mat.texMtxs):
-                    if texMtx is not None: fout.writeLine("_Tex{0}_CR (\"Texture matrix {0} CR\", Vector) = (0, 0, 0, 0)".format(i))
+                    if texMtx is not None: fout.writeLine("_Tex{0}_CR (\"Texture matrix {0} CR\", Vector) = (0.5, 0.5, 0, 0)".format(i))
                 # postTexMtx is never animated
             
             if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans): fout.writeLine("CustomEditor \"EmissiveShaderGUI\"")
@@ -808,7 +808,7 @@ class UnityShaderGen(DXShaderGen):
                         fout.indent -= 1
                         fout.writeLine("ENDCG")
                 
-                if doMeta:
+                if doMeta and mat.materialMode != 4:
                     fout.writeLine("Pass")
                     with fout:
                         fout.writeLine("Tags { \"LightMode\" = \"Meta\" }")

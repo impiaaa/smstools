@@ -279,7 +279,7 @@ def setup3d(objXfm, o):
         rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(180-o.rot[1]), radians(o.rot[2]))
         objXfm.m_LocalScale = {'x': SCALE*o.scale[0], 'y': SCALE*o.scale[1], 'z': -SCALE*o.scale[2]}
     else:
-        rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(-o.rot[1]), radians(o.rot[2]))
+        rot = transforms3d.euler.euler2quat(radians(-o.rot[0]), radians(-o.rot[1]), radians(o.rot[2]))
     rot = transforms3d.quaternions.qmult(rot, [0,0,1,0])
     euler = transforms3d.euler.quat2euler(rot)
     objXfm.m_LocalEulerAnglesHint = {'x': euler[0], 'y': euler[1], 'z': euler[2]}
@@ -363,7 +363,7 @@ for colpath in scenedirpath.rglob("*.col"):
     outcoldir = outpath / colpath_rel.parent
     metapaths = list(outcoldir.glob(colpath_rel.stem+"-*.asset.meta"))
     if len(metapaths) > 0 and all(metapath.stat().st_mtime >= coltime for metapath in metapaths):
-        cols[str(colpath_rel.with_suffix('')).lower()] = [(metapath.stem[:-5], unityparser.UnityDocument.load_yaml(metapath).entry['guid']) for metapath in metapaths]
+        cols[str(colpath_rel.with_suffix('')).lower()] = [(metapath.stem[:-5], unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix('')).entry.m_LocalAABB['m_Center']) for metapath in metapaths]
     else:
         col = ColReader()
         with colpath.open('rb') as fin:
@@ -374,7 +374,7 @@ for colpath in scenedirpath.rglob("*.col"):
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
 from bmd import BModel, VtxDesc, VtxAttr, VtxAttrIn, CompType, CompSize, ArrayFormat
-from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals
+from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -389,24 +389,30 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
     bmddatadir.mkdir(parents=True, exist_ok=True)
     bmdkey = str(bmdpath_rel).lower()
     if bmd.name == "map":
-        print("Exporting textures")
+        #print("Exporting textures")
         textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
         
-        print("Exporting materials")
+        #print("Exporting materials")
         useColor1 = all(map(bool, bmd.vtx1.colors))
         materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, True))
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
         
-        bmds[bmdkey] = [(exportBmd(subBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subBmd.mat3.remapTable]) for subBmd in splitByVertexFormat(bmd)]
+        bmds[bmdkey] = []
+        #print("Splitting by vertex format")
+        for subBmd in splitByVertexFormat(bmd):
+            #print("Splitting", subBmd.name, "into pieces")
+            for subSubBmd in splitByConnectedPieces(subBmd):
+                print(subSubBmd.name)
+                bmds[bmdkey].append((subSubBmd.name, exportBmd(subSubBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[bmdkey] = unityparser.UnityDocument.load_yaml(metapath).entry['guid'], [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
+            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB["m_Center"]), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
         else:
-            print("Exporting textures")
+            #print("Exporting textures")
             textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
             
-            print("Exporting materials")
+            #print("Exporting materials")
             useColor1 = all(map(bool, bmd.vtx1.colors))
             materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, bmd.name in ("map", "sky")))
             materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
@@ -420,8 +426,9 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 bmd.vtx1.formats[1].dataType = CompSize.F32
                 bmd.vtx1.formats[1].decimalPoint = 0
                 addNormals(bmd, newVtxDesc)
-            bmds[bmdkey] = exportBmd(bmd, outbmddir), materialIdInSlot
+            bmds[bmdkey] = bmd.name, exportBmd(bmd, outbmddir), materialIdInSlot
 
+print("Opening scene")
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
 
 ocs = OcclusionCullingSettings(getId(), '')
@@ -459,6 +466,7 @@ for o in marScene.objects:
 
 scene = unityparser.UnityDocument([ocs, rs, lms, nms])
 
+print("Adding base colliders")
 for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
     if baseColliderName not in cols: continue
     grpObj = GameObject(getId(), '')
@@ -472,16 +480,12 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
     rootOrder += 1
     grpXfm.m_Children = []
     colliderGroups = {}
-    for physName, uuid in cols[baseColliderName]:
+    for physName, uuid, center in cols[baseColliderName]:
         baseName = physName.split('.')[0]
         assert baseName.startswith(baseColliderName.split('/')[-1])
         baseName = baseName[len(baseColliderName.split('/')[-1])+1:]
         if baseColliderName == "map/map":
-            assetPath = outpath / "map" / (physName+"asset")
-            if not assetPath.exists():
-                assetPath = outpath / "map" / (physName+".asset")
-            center = unityparser.UnityDocument.load_yaml(assetPath).entry.m_LocalAABB['m_Center']
-            if center['y'] > 8000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
+            if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
                 # put the rooms in the sky underground
                 baseName += "-interior"
         if baseName in colliderGroups:
@@ -504,6 +508,7 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
             colliderGroups[baseName] = objObj
         addCol(uuid, objObj)
 
+print("Loading prefabs")
 prefabsByGuid = {}
 prefabs = {}
 for assetPath in (outpath / "prefabs").glob("*.prefab"):
@@ -574,6 +579,7 @@ actorDataTable = {
 
 import csv, os
 AudioRes = pathlib.Path(os.getcwd()) / "AudioRes"
+print("Loading sound table")
 soundInfos = {int(row["InternalID"], 16): row for row in csv.DictReader(open(AudioRes / "msound.csv"))}
 scenetime = pathlib.Path(__file__).stat().st_mtime
 sounds = {}
@@ -674,9 +680,9 @@ def getSound(soundKey):
 
 def addMeshFilter(bmdFilename, objObj):
     if isinstance(bmdFilename, tuple):
-        asset, materialIds = bmdFilename
+        name, (asset, center), materialIds = bmdFilename
     else:
-        asset, materialIds = bmds[bmdFilename]
+        name, (asset, center), materialIds = bmds[bmdFilename]
     renderer = objObj.getOrCreateComponent(MeshRenderer)
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
@@ -691,6 +697,7 @@ def addMeshFilter(bmdFilename, objObj):
     
     return renderer, meshFilter
 
+print("Adding actors")
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
     grpObj, grpXfm = setupObject(group)
@@ -733,7 +740,7 @@ for group in strategy.objects:
             if mapCollisionInfo is not None:
                 colName = mapCollisionInfo['collisionData'][0]['name']
                 if colName is not None:
-                    for physName, uuid in cols["mapobj/"+colName.lower()]:
+                    for physName, uuid, center in cols["mapobj/"+colName.lower()]:
                         # different terrain types ok?
                         addCol(uuid, objObj)
         if isinstance(o, TMapStaticObj):
@@ -755,7 +762,7 @@ for group in strategy.objects:
                     addMeshFilter(bmdFilename, objObj)
                 if 'collisionManagerName' in modelEntry:
                     for prefix in ("map/map/", "mapobj/"):
-                        for physName, uuid in cols[prefix+modelEntry['collisionManagerName'].lower()]:
+                        for physName, uuid, center in cols[prefix+modelEntry['collisionManagerName'].lower()]:
                             # different terrain types ok?
                             addCol(uuid, objObj)
                 if 'soundKey' in modelEntry:
@@ -791,13 +798,19 @@ for group in strategy.objects:
                 meshObj.m_Component = []
                 meshObj.m_IsActive = 1
                 meshObj.m_StaticEditorFlags = 0xFFFFFFFF
-                meshObj.m_Name = "Mesh"
+                meshObj.m_Name = assetAndMaterials[0]
                 scene.entries.append(meshObj)
                 meshXfm = meshObj.getOrCreateComponent(Transform)
                 meshXfm.m_RootOrder = rootOrder
                 rootOrder += 1
                 meshXfm.m_Father = getObjRef(objXfm)
                 objXfm.m_Children.append(getObjRef(meshXfm))
+                
+                center = assetAndMaterials[1][1]
+                if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
+                    # put the rooms in the sky underground
+                    meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
+                
                 addMeshFilter(assetAndMaterials, meshObj)
         if isinstance(o, TSky):
             objObj.m_StaticEditorFlags = 0xFFFFFFFF
@@ -805,6 +818,7 @@ for group in strategy.objects:
             renderer.m_CastShadows = 0
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
 
+print("Reading tables")
 tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))
 assert tables.name == "NameRefGrp"
 for group in tables.objects:
@@ -858,6 +872,7 @@ BAAAAHQAeQBwAGUAATEAAABDAGkAbgBlAG0AYQBjAGgAaQBuAGUALgBDAGkAbgBlAG0AYQBjAGgAaQBu
 AGUAVgBpAHIAdAB1AGEAbABDAGEAbQBlAHIAYQAsACAAQwBpAG4AZQBtAGEAYwBoAGkAbgBlAAsBBQAA
 AFYAYQBsAHUAZQAAAAAABwUHBQcF""".replace('\n', '')
 
+print("Writing scene")
 scene.dump_yaml(outpath / "map" / "scene.unity")
 
 # game far plane is 3000, but 1530 *should* be good enough in dolpic10

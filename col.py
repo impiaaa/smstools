@@ -56,7 +56,7 @@ if 0:
     import os
     for dirpath, dirnames, filenames in os.walk("."):
         for name in filenames:
-            if not name.endswith(".col"): continue
+            if not name.lower().endswith(".col"): continue
             fin = open(os.path.join(dirpath, name), 'rb')
             c = ColReader()
             c.read(fin)

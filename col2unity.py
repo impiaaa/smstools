@@ -156,7 +156,7 @@ def exportCol(col, outputFolderLocation, physNameBase, shouldSplit=True):
             }
             assetName = physName+".asset"
             asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
-            yield physName, writeNativeMeta(assetName, 4300000, outputFolderLocation)
+            yield physName, writeNativeMeta(assetName, 4300000, outputFolderLocation), mesh.m_LocalAABB["m_Center"]
 
 if __name__ == '__main__':
     fixUnityParserFloats()

@@ -364,7 +364,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
 
     indexBuffer = array('H')
     
-    print("Setting submeshes")
+    #print("Setting submeshes")
 
     minXTotal = minYTotal = minZTotal = maxXTotal = maxYTotal = maxZTotal = None
     for triangles, positions in zip(subMeshTriangles, subMeshVertices):
@@ -419,7 +419,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     }
     
     if doBones:
-        print("Generating armature")
+        #print("Generating armature")
         mesh.m_BindPose = [{'e%d%d'%(i,j): mat[i][j] for i in range(4) for j in range(4)} for mat in jointMatrices]
         boneNames = [None]*len(joints)
         rootIndex = None
@@ -446,7 +446,7 @@ def exportBmd(bmd, outputFolderLocation):
     doBones = len(bmd.jnt1.frames) > 1
     
     if doBones:
-        print("Transforming verts")
+        #print("Transforming verts")
         transformedPositions, transformedNormals = transformVerts(bmd, bmd.shp1.batches, bmd.vtx1.positions, bmd.vtx1.normals if hasattr(bmd.vtx1, "normals") else None)
         transformedPositionsArray = array('f', [c for v in transformedPositions for c in v])
         if transformedNormals is None:
@@ -459,13 +459,13 @@ def exportBmd(bmd, outputFolderLocation):
         else: transformedNormals = None
         transformedPositionsArray = transformedNormalsArray = None
     
-    print("Setting channels")
+    #print("Setting channels")
     vertexStruct, uChannels, maxWeightCount, MyVertexFormat, dataForArrayType, boneIndices, weights = setupChannels(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat, bmd.evp1.weightedIndices, bmd.evp1.weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones)
 
-    print("Collecting vertices")
+    #print("Collecting vertices")
     indexMap, uniqueVertices = collectVertices(bmd.shp1.batches, maxWeightCount, dataForArrayType, doBones, bmd.drw1.isWeighted, bmd.drw1.data, transformedPositions, transformedNormals, boneIndices, weights)
     
-    print("Making sub-meshes")
+    #print("Making sub-meshes")
     subMeshTriangles, subMeshVertices = makeSubMeshes(len(bmd.mat3.remapTable), bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
     
     #import meshoptimizer
@@ -473,12 +473,12 @@ def exportBmd(bmd, outputFolderLocation):
     #remap = meshoptimizer.generateVertexRemap(indices, uniqueVertices, MyVertexFormat)
     
     asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
-    print("Writing asset")
+    #print("Writing asset")
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
         
-    return meshId
+    return meshId, asset.entry.m_LocalAABB["m_Center"]
 
 filterModes = [0, 1, 0, 1, 0, 2]
 blurRadius = sqrt(-1/(2*log(3/240, e)))
@@ -700,7 +700,7 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
         asset.dump_yaml(os.path.join(bmddir, assetName))
         yield writeNativeMeta(assetName, 2100000, bmddir)
 
-def printFlatScenegraph(sg):
+def printFlatScenegraph(sg, indent=0):
     for node in sg:
         if node.type == 1:
             indent += 1
@@ -719,18 +719,22 @@ def filterScenegraph(sgin, batchIndices):
     sgout.type = sgin.type
     sgout.index = sgin.index
     sgout.children = []
-    for c in sgin.children:
-        fc = filterScenegraph(c, batchIndices)
-        newIdx = batchIndices[fc.index]
-        if fc.type == 0x12:
-            if newIdx is None:
-                sgout.children.extend(fc.children)
+    for child in sgin.children:
+        filtChild = filterScenegraph(child, batchIndices)
+        if filtChild.type == 0x12:
+            for newIdx in batchIndices[filtChild.index]:
+                newChild = SceneGraph()
+                newChild.type = filtChild.type
+                newChild.index = newIdx
+                newChild.children = []
+                sgout.children.append(newChild)
+            if len(batchIndices[filtChild.index]) == 1:
+                newChild.children = filtChild.children
             else:
-                fc.index = newIdx
-                sgout.children.append(fc)
+                sgout.children.extend(filtChild.children) # should be safe - batches don't change state
         else:
-            sgout.children.append(fc)
-    sgout.children = [c for c in sgout.children if c.type == 0x12 or len(c.children) > 0]
+            sgout.children.append(filtChild)
+    sgout.children = [child for child in sgout.children if child.type == 0x12 or len(child.children) > 0]
     if len(sgout.children) == 1 and sgout.type == 0x11 and sgout.children[0].type == 0x11:
         return sgout.children[0]
     if len(sgout.children) == 1 and sgout.type == 0x10 and sgout.children[0].type == 0x10:
@@ -794,7 +798,7 @@ def splitByVertexFormat(bmd):
     
     for vtxDescs, shapeGroup in groupedAttribs.items():
         subBmd = BModel()
-        subBmd.scenegraph = filterScenegraph(bmd.scenegraph, [shapeGroup.index(shape) if shape in shapeGroup else None for shape in bmd.shp1.batches])
+        subBmd.scenegraph = filterScenegraph(bmd.scenegraph, [[shapeGroup.index(shape)] if shape in shapeGroup else [] for shape in bmd.shp1.batches])
         subBmd.inf1 = ModelInfoBlock()
         subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
         
@@ -806,29 +810,38 @@ def splitByVertexFormat(bmd):
         subBmd.vtx1.normals = None # unused when doBones off
         subBmd.vtx1.originalData = bmd.vtx1.originalData
         subBmd.vtx1.asFloat = bmd.vtx1.asFloat
-
         attribs = {a.attrib for a in vtxDescs}
         assert VtxAttr.POS in attribs, attribs
+        subBmd.vtx1.formats = [f if f is None or f.arrayType in attribs else None for f in bmd.vtx1.formats]
+
         if VtxAttr.NRM not in attribs and VtxAttr.TEX1 not in attribs:
             newVtxDesc = VtxDesc()
             newVtxDesc.attrib = VtxAttr.NRM
             newVtxDesc.dataType = VtxAttrIn.INDEX16
             vtxDescs += (newVtxDesc,)
-            attribs.add(VtxAttr.NRM)
             
+            subBmd.vtx1.formats[1] = ArrayFormat()
+            subBmd.vtx1.formats[1].arrayType = VtxAttr.NRM
+            subBmd.vtx1.formats[1].componentCount = CompType.NRM_XYZ
+            subBmd.vtx1.formats[1].dataType = CompSize.F32
+            subBmd.vtx1.formats[1].decimalPoint = 0
+
             addNormals(subBmd, newVtxDesc)
-            
-            '''bmd.vtx1.originalData = list(bmd.vtx1.originalData)
+        
+        if 0 and VtxAttr.TEX1 not in attribs:
             newVtxDesc = VtxDesc()
             newVtxDesc.attrib = VtxAttr.TEX1
             newVtxDesc.dataType = VtxAttrIn.INDEX16
             vtxDescs += (newVtxDesc,)
-            attribs.add(VtxAttr.TEX1)
+        
+            subBmd.vtx1.formats[6] = ArrayFormat()
+            subBmd.vtx1.formats[6].arrayType = VtxAttr.TEX1
+            subBmd.vtx1.formats[6].componentCount = CompType.TEX_ST
+            subBmd.vtx1.formats[6].dataType = CompSize.F32
+            subBmd.vtx1.formats[6].decimalPoint = 0
             
-            assert bmd.vtx1.formats[6].arrayType == VtxAttr.TEX1 and bmd.vtx1.formats[6].componentCount == CompType.TEX_ST and bmd.vtx1.formats[6].dataType == CompSize.F32, bmd.vtx1.formats[6]'''
-        
-        subBmd.vtx1.formats = [f if f is None or f.arrayType in attribs else None for f in bmd.vtx1.formats]
-        
+            addLightmapUVs(subBmd, newVtxDesc)
+
         subBmd.jnt1 = JointBlock()
         #usedJointIndices = {sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x10}
         # just force doBones off
@@ -837,7 +850,7 @@ def splitByVertexFormat(bmd):
         
         subBmd.mat3 = MaterialBlock()
         usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
-        subBmd.mat3.remapTable = usedMaterialSlots # only need length
+        subBmd.mat3.remapTable = usedMaterialSlots
         for sg in subBmd.inf1.scenegraph:
             if sg.type == 0x11:
                 sg.index = usedMaterialSlots.index(sg.index)
@@ -849,7 +862,64 @@ def splitByVertexFormat(bmd):
         yield subBmd
 
 def splitByConnectedPieces(bmd):
-    pass
+    allPrimitives = [(shapeIdx, prim, {point.posIndex for point in prim.points}) for shapeIdx, shape in enumerate(bmd.shp1.batches) for draw, matrix in shape.matrixGroups for prim in draw.primitives]
+    print(len(allPrimitives), "primitives to search")
+    j = 0
+    while len(allPrimitives) > 0:
+        shapeIdx, prim, indices = allPrimitives.pop()
+        prims = [(shapeIdx, prim)]
+        i = 0
+        while i < len(allPrimitives):
+            otherShapeIdx, otherPrim, otherIndices = allPrimitives[i]
+            if indices.isdisjoint(otherIndices):
+                i += 1
+            else:
+                indices.update(otherIndices)
+                prims.append((otherShapeIdx, otherPrim))
+                del allPrimitives[i]
+                i = 0
+        print("now", j+1, "pieces,", len(allPrimitives), "primitives left")
+        
+        subBmd = BModel()
+        
+        batchedDraws = {}
+        for shapeIdx, prim in prims:
+            if shapeIdx in batchedDraws:
+                batchedDraws[shapeIdx].append(prim)
+            else:
+                batchedDraws[shapeIdx] = [prim]
+        subBmd.shp1 = ShapeBlock()
+        newShapeIndices = [[] for shape in bmd.shp1.batches]
+        subBmd.shp1.batches = []
+        for shapeIdx, batchedPrims in batchedDraws.items():
+            newDraw = ShapeDraw()
+            newDraw.primitives = batchedPrims
+            newShape = Shape()
+            newShape.matrixGroups = [(newDraw, None)]
+            newShapeIndices[shapeIdx].append(len(subBmd.shp1.batches))
+            subBmd.shp1.batches.append(newShape)
+        
+        subBmd.scenegraph = filterScenegraph(bmd.scenegraph, newShapeIndices)
+        subBmd.inf1 = ModelInfoBlock()
+        subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
+        
+        subBmd.vtx1 = bmd.vtx1
+        
+        subBmd.jnt1 = bmd.jnt1
+        
+        subBmd.mat3 = MaterialBlock()
+        usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
+        subBmd.mat3.remapTable = usedMaterialSlots
+        for sg in subBmd.inf1.scenegraph:
+            if sg.type == 0x11:
+                sg.index = usedMaterialSlots.index(sg.index)
+        
+        subBmd.tex1 = bmd.tex1
+        subBmd.evp1 = bmd.evp1
+        subBmd.drw1 = bmd.drw1
+        subBmd.name = bmd.name+'-'+str(j)
+        yield subBmd
+        j += 1
 
 if __name__ == "__main__":
     import sys
