@@ -268,8 +268,8 @@ def deblock(format, data, width, height):
                     for dx in range(int(formatBlockWidth[format])):
                         if dataidx >= len(data): break
                         idx = int((width*(y + dy) + x) + dx)*2
-                        dest[idx  ] = data[dataidx   ]
-                        dest[idx+1] = data[dataidx+16]
+                        dest[idx+1] = data[dataidx   ]
+                        dest[idx  ] = data[dataidx+16]
                         dataidx += 1
                  dataidx += 16
             else:
@@ -452,7 +452,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
         caps |= DDSCAPS.COMPLEX
     fout.write(struct.pack('<IIII4x', caps.value, 0, 0, 0))
     
-    mipSize = int(calcTextureSize(format, width, height)/data.itemsize)
+    mipSize = calcTextureSize(format, width, height)//data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
     if format in (TexFmt.I4, TexFmt.I8): componentsIn = 1
@@ -469,7 +469,7 @@ def decodeTextureDDS(fout, data, format, width, height, paletteFormat=None, pale
     for arrayIdx in range(arrayCount):
         for mipIdx in range(mipmapCount):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
-            dataOffset = (arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3))//data.itemsize
+            dataOffset = (arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3))
             if format in (TexFmt.I4, TexFmt.I8, TexFmt.IA4, TexFmt.IA8, TexFmt.RGB565, TexFmt.RGB5A3, TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
                 dest = array('B', (0,)*mipWidth*mipHeight*componentsOut)
                 if componentsIn == 1:
@@ -511,6 +511,7 @@ class GL:
     UNSIGNED_SHORT_5_6_5          = 0x8363
     COMPRESSED_RGB_S3TC_DXT1_EXT  = 0x83F0
     RGB565                        = 0x8D62
+    BGRA                          = 0x80E1
 
 #                  glType                    glFormat glInternalFormat                 glBaseInternalFormat
 glFormats = {
@@ -520,7 +521,7 @@ glFormats = {
     TexFmt.IA8:    (GL.UNSIGNED_BYTE,        GL.RG,   GL.RG8,                          GL.RG),
     TexFmt.RGB565: (GL.UNSIGNED_SHORT_5_6_5, GL.RGB,  GL.RGB565,                       GL.RGB),
     TexFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
-    TexFmt.RGBA8:  (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
+    TexFmt.RGBA8:  (GL.UNSIGNED_BYTE,        GL.BGRA, GL.RGBA8,                        GL.RGBA),
     TexFmt.CMPR:   (                      0,       0, GL.COMPRESSED_RGB_S3TC_DXT1_EXT, GL.RGBA)
 }
 glPaletteFormats = {
@@ -553,7 +554,7 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
     fout.write(struct.pack('I', 23))
     fout.write(b'KTXorientation\0S=r,T=d\0\0')
 
-    mipSize = int(calcTextureSize(format, width, height)/data.itemsize)
+    mipSize = calcTextureSize(format, width, height)//data.itemsize
     sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
     palette = convertPalette(paletteData, paletteFormat)
     if format in (TexFmt.I4, TexFmt.I8): components = 1
@@ -568,7 +569,7 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
     for mipIdx in range(mipmapCount):
         for arrayIdx in range(max(1, arrayCount)):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
-            dataOffset = (arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3))//data.itemsize
+            dataOffset = arrayIdx*sliceSize + int(mipSize*(4-4**(1-mipIdx))/3)
             if format in (TexFmt.I4, TexFmt.IA4, TexFmt.RGB5A3) or (format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and paletteFormat in (TlutFmt.IA8, TlutFmt.RGB5A3)):
                 pixelData = array('B', (0,)*mipWidth*mipHeight*components)
                 if components == 1:
