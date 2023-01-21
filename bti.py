@@ -53,8 +53,9 @@ class Image(ReadableStruct):
             
             fin.seek(nextHeader)
     
-    def write(self, fout):
-        self.dataOffset = fout.tell()+self.header.size
+    def write(self, fout, offset=None):
+        if offset is None: offset=fout.tell()
+        self.dataOffset = offset+self.header.size
         self.paletteOffset = self.dataOffset + len(self.data)*self.data.itemsize
         super().write(fout)
         swapArray(self.data).tofile(fout)

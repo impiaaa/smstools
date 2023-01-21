@@ -70,6 +70,7 @@ class BFile(Readable):
     def __init__(self, *args, **kwargs):
         self.aligned = False
         super().__init__(*args, **kwargs)
+        self.alignment = 32
     
     def readHeader(self, fin):
         self.signature, self.fileLength, self.chunkCount, self.svr = self.header.unpack(fin.read(0x20))
@@ -106,7 +107,7 @@ class BFile(Readable):
         for chunk in self.chunks:
             buffer = io.BytesIO()
             chunk.write(buffer)
-            alignFile(buffer, 32, 8)
+            alignFile(buffer, self.alignment, 8)
             data = buffer.getvalue()
             fout.write(struct.pack('>4sL', chunk.chunkId, len(data)+8))
             fout.write(data)
