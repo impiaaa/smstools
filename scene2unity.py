@@ -279,7 +279,7 @@ def setup3d(objXfm, o):
         rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(180-o.rot[1]), radians(o.rot[2]))
         objXfm.m_LocalScale = {'x': SCALE*o.scale[0], 'y': SCALE*o.scale[1], 'z': -SCALE*o.scale[2]}
     else:
-        rot = transforms3d.euler.euler2quat(radians(-o.rot[0]), radians(-o.rot[1]), radians(o.rot[2]))
+        rot = transforms3d.euler.euler2quat(radians(o.rot[0]), radians(o.rot[1]), radians(o.rot[2]))
     rot = transforms3d.quaternions.qmult(rot, [0,0,1,0])
     euler = transforms3d.euler.quat2euler(rot)
     objXfm.m_LocalEulerAnglesHint = {'x': euler[0], 'y': euler[1], 'z': euler[2]}
@@ -398,16 +398,15 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
         
         bmds[bmdkey] = []
-        #print("Splitting by vertex format")
         for subBmd in splitByVertexFormat(bmd):
-            #print("Splitting", subBmd.name, "into pieces")
-            for subSubBmd in splitByConnectedPieces(subBmd):
-                print(subSubBmd.name)
-                bmds[bmdkey].append((subSubBmd.name, exportBmd(subSubBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
+            subSubBmd = subBmd
+            #for subSubBmd in splitByConnectedPieces(subBmd):
+            print(subSubBmd.name)
+            bmds[bmdkey].append((subSubBmd.name, exportBmd(subSubBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB["m_Center"]), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
+            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
         else:
             #print("Exporting textures")
             textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
@@ -420,13 +419,29 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 newVtxDesc = VtxDesc()
                 newVtxDesc.attrib = VtxAttr.NRM
                 newVtxDesc.dataType = VtxAttrIn.INDEX16
-                bmd.vtx1.formats[1] = ArrayFormat()
-                bmd.vtx1.formats[1].arrayType = VtxAttr.NRM
-                bmd.vtx1.formats[1].componentCount = CompType.NRM_XYZ
-                bmd.vtx1.formats[1].dataType = CompSize.F32
-                bmd.vtx1.formats[1].decimalPoint = 0
                 addNormals(bmd, newVtxDesc)
             bmds[bmdkey] = bmd.name, exportBmd(bmd, outbmddir), materialIdInSlot
+
+materials = {}
+for bmtpath in scenedirpath.rglob("*.bmt"):
+    bmtpath_rel = bmtpath.relative_to(scenedirpath)
+    print(bmtpath_rel)
+    outbmtdir = outpath / bmtpath_rel.parent
+    bmt = BModel()
+    bmt.name = bmtpath_rel.stem.lower()
+    with bmtpath.open('rb') as fin:
+        bmt.read(fin)
+    bmtdatadir = outbmtdir / bmtpath_rel.stem
+    bmtdatadir.mkdir(parents=True, exist_ok=True)
+    bmtkey = str(bmtpath_rel).lower()
+    #print("Exporting textures")
+    textureIds = list(exportTextures(bmt.tex1.textures, bmtdatadir))
+    
+    #print("Exporting materials")
+    if hasattr(bmt, "mat3"):
+        materialIds = list(exportMaterials(bmt.mat3.materials[:max(bmt.mat3.remapTable)+1], bmt.mat3.indirectArray, bmt.tex1.textures, bmtdatadir, textureIds, True, 1/SCALE, bmt.name in ("map", "sky")))
+        materialIdInSlot = [materialIds[matIndex] for matIndex in bmt.mat3.remapTable]
+        materials[bmtkey] = bmt.name, materialIdInSlot
 
 print("Opening scene")
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
@@ -680,9 +695,9 @@ def getSound(soundKey):
 
 def addMeshFilter(bmdFilename, objObj):
     if isinstance(bmdFilename, tuple):
-        name, (asset, center), materialIds = bmdFilename
+        name, (asset, aabb), materialIds = bmdFilename
     else:
-        name, (asset, center), materialIds = bmds[bmdFilename]
+        name, (asset, aabb), materialIds = bmds[bmdFilename]
     renderer = objObj.getOrCreateComponent(MeshRenderer)
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
@@ -732,9 +747,17 @@ for group in strategy.objects:
                 lod.m_FadeMode = 0
                 lod.serializedVersion = 2
                 lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
-                # m_Size is largest extent * 2
-                # m_LocalReferencePoint is center
+                aabb = bmds["mapobj/"+modelName.lower()][1][1]
+                lod.m_Size = max(aabb["m_Extent"].values())*2
+                lod.m_LocalReferencePoint = aabb["m_Center"]
                 # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
+                
+                if animInfo is not None and animData is not None:
+                    material = animData[0].get('material')
+                    if material is not None:
+                        name, materialIds = materials["mapobj/"+material.lower()+".bmt"]
+                        if materialIds is not None:
+                            renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
             
             mapCollisionInfo = objData.get('mapCollisionInfo')
             if mapCollisionInfo is not None:
@@ -806,7 +829,7 @@ for group in strategy.objects:
                 meshXfm.m_Father = getObjRef(objXfm)
                 objXfm.m_Children.append(getObjRef(meshXfm))
                 
-                center = assetAndMaterials[1][1]
+                center = assetAndMaterials[1][1]["m_Center"]
                 if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
                     # put the rooms in the sky underground
                     meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
@@ -817,6 +840,9 @@ for group in strategy.objects:
             renderer, meshFilter = addMeshFilter("map/map/sky.bmd", objObj)
             renderer.m_CastShadows = 0
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+            name, materialIds = materials["map/map/sky.bmt"]
+            if materialIds is not None:
+                renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
 
 print("Reading tables")
 tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))

@@ -73,8 +73,6 @@ class JPADynamicsBlock(Section):
         self._accelRndm = int(self.accelRndm*0x8000)
         super().write(fout)
 
-from bmd import *
-
 class ShapeType(Enum):
     Point            = 0x00
     Line             = 0x01
@@ -117,7 +115,7 @@ class JPABaseShape(Section):
         'baseSizeX', 'baseSizeY',
         'anmRndm', 'texAnmCalcFlags', 'colorAnmCalcFlags',
         ('shapeType', ShapeType), ('dirType', DirType), ('rotType', RotType),
-        'colorInSelect', ('blendMode', BlendMode), 'blendSrcFactor', 'blendDstFactor', 'logicOp',
+        'colorInSelect', 'blendMode', 'blendSrcFactor', 'blendDstFactor', 'logicOp',
         'alphaCmp0', 'alphaRef0', 'alphaOp', 'alphaCmp1', 'alphaRef1',
         ('zCompLoc', bool), ('zTest', bool), 'zCompare', ('zWrite', bool), ('zPrepass', bool),
         ('isEnableProjection', bool), 'flags',
@@ -253,7 +251,7 @@ class JPAExtraShape(Section):
         self._rotateSpeedRandom = int(self.rotateSpeedRandom*0x8000)
         super().write(fout)
 
-class JPAChildShape(Section):
+class JPASweepShape(Section):
     header = Struct('>8xBBBxHHHB13xffHH11xBBBB4xff2xBBII')
     fields = [
         ('shapeType', ShapeType), ('dirType', DirType), ('rotType', RotType),
@@ -405,7 +403,7 @@ class JPA(BFile):
         b'BEM1': JPADynamicsBlock,
         b'BSP1': JPABaseShape,
         b'ESP1': JPAExtraShape,
-        b'SSP1': JPAChildShape,
+        b'SSP1': JPASweepShape,
         b'ETX1': JPAExTexShape,
         b'KFA1': JPAKeyBlock,
         b'FLD1': JPAFieldBlock,

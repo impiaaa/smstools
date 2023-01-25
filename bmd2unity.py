@@ -344,6 +344,10 @@ def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
             batch = batches[batchIndex]
             subMeshTriangles[materialIndex].extend(getBatchTriangles(batch, indexMap))
             # TODO mesh metrics
+            # - "largest value of vertex area/UV area" seems to work for small meshes
+            # - https://docs.unity3d.com/2019.4/Documentation/ScriptReference/Mesh.GetUVDistributionMetric.html
+            # - that says "Average of triangle area / uv area"
+            # - and links an article that says "min_over_mesh(top_mipmap_texel_area / world_area)" or "screen_area / area_in_uv_space"
             for shapeDraw, shapeMatrix in batch.matrixGroups:
                 subMeshVertices[materialIndex].extend([transformedPositions[point.posIndex] for primitive in shapeDraw.primitives for point in primitive.points])
         else:
@@ -478,10 +482,9 @@ def exportBmd(bmd, outputFolderLocation):
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
         
-    return meshId, asset.entry.m_LocalAABB["m_Center"]
+    return meshId, asset.entry.m_LocalAABB
 
 filterModes = [0, 1, 0, 1, 0, 2]
-blurRadius = sqrt(-1/(2*log(3/240, e)))
 def exportTexture(img, bmddir):
     textureSettings = {
         "serializedVersion": 2,
@@ -534,7 +537,6 @@ def exportTexture(img, bmddir):
         elif img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB565:
             platformSettings[0]["textureFormat"] = 7 # RGB565
         elif img.format == TexFmt.I4:
-            # actually already seems to be selected automatically
             platformSettings.append({
                 "serializedVersion": 3,
                 "buildTarget": "Standalone",
@@ -542,7 +544,7 @@ def exportTexture(img, bmddir):
                 "textureFormat": 26, # BC4
                 "textureCompression": 2,
                 "compressionQuality": 50,
-                "overridden": 0
+                "overridden": 1
             })
             platformSettings.append({
                 "serializedVersion": 3,
@@ -551,10 +553,9 @@ def exportTexture(img, bmddir):
                 "textureFormat": 41, # EAC_R
                 "textureCompression": 2,
                 "compressionQuality": 50,
-                "overridden": 0
+                "overridden": 1
             })
         elif img.format == TexFmt.IA4:
-            # actually already seems to be selected automatically
             platformSettings.append({
                 "serializedVersion": 3,
                 "buildTarget": "Standalone",
@@ -562,7 +563,7 @@ def exportTexture(img, bmddir):
                 "textureFormat": 27, # BC5
                 "textureCompression": 2,
                 "compressionQuality": 50,
-                "overridden": 0
+                "overridden": 1
             })
             platformSettings.append({
                 "serializedVersion": 3,
@@ -571,7 +572,7 @@ def exportTexture(img, bmddir):
                 "textureFormat": 43, # EAC_RG
                 "textureCompression": 2,
                 "compressionQuality": 50,
-                "overridden": 0
+                "overridden": 1
             })
         elif img.format == TexFmt.IA8:
             platformSettings[0]["textureFormat"] = 62 # RG16
@@ -593,7 +594,7 @@ def exportTexture(img, bmddir):
                 "maxTextureSize": 2048,
                 "lightmap": 0,
                 "compressionQuality": 50,
-                "alphaUsage": 1,#int(bool(img.transparency)), # all this does is remove the alpha channel when 0
+                "alphaUsage": int((img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8) or img.format in (TexFmt.IA4, TexFmt.IA8)),
                 "alphaIsTransparency": 0, # dilates color around transparent areas
                 "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
                 "textureShape": 1,
@@ -743,6 +744,12 @@ def filterScenegraph(sgin, batchIndices):
     return sgout
 
 def addNormals(bmd, newVtxDesc):
+    bmd.vtx1.formats[1] = ArrayFormat()
+    bmd.vtx1.formats[1].arrayType = VtxAttr.NRM
+    bmd.vtx1.formats[1].componentCount = CompType.NRM_XYZ
+    bmd.vtx1.formats[1].dataType = CompSize.F32
+    bmd.vtx1.formats[1].decimalPoint = 0
+    # just average all normals of connected triangles. not very accurate
     normals = [Vector((0,0,0)) for p in bmd.vtx1.positions]
     for shape in bmd.shp1.batches:
         # mutates!
@@ -789,6 +796,31 @@ def addNormals(bmd, newVtxDesc):
     bmd.vtx1.originalData = list(bmd.vtx1.originalData)
     bmd.vtx1.originalData[1] = bmd.vtx1.asFloat[1]
 
+# in getBatchTriangles, addNormals: support flat triangle lists
+# in splitByConnectedPieces, addNormals: use oldPosIndex
+# - actually, might not need to modify existing position index
+# generate lightmap uvs all at once, one shape per mesh
+# at least in dolpic, all meshes with existing tex1 also have tex2, so don't need to mark/split off
+# don't generate for shapes that already have tex1, still need to be remapped
+# new tex1 indices need to be shifted by all existing
+# want to use getBatchTriangles, but that needs an indexMap, which needs to be generated from collectVertices, which needs to have channels from setupChannels...
+
+def addLightmapUVs(bmd, newVtxDesc):
+    import xatlas
+    
+    newVtxDesc = VtxDesc()
+    newVtxDesc.attrib = VtxAttr.TEX1
+    newVtxDesc.dataType = VtxAttrIn.INDEX16
+    
+    assert bmd.vtx1.formats[6].arrayType == VtxAttr.TEX1
+    assert bmd.vtx1.formats[6].componentCount == CompType.TEX_ST
+    assert bmd.vtx1.formats[6].dataType == CompSize.F32
+    assert bmd.vtx1.formats[6].decimalPoint == 0
+
+    atlas = xatlas.Atlas()
+    for shape in bmd.shp1.batches:
+        atlas.add_mesh(positions, indices, uvs, normals)
+
 def splitByVertexFormat(bmd):
     groupedAttribs = {}
     for shape in bmd.shp1.batches:
@@ -814,34 +846,14 @@ def splitByVertexFormat(bmd):
         assert VtxAttr.POS in attribs, attribs
         subBmd.vtx1.formats = [f if f is None or f.arrayType in attribs else None for f in bmd.vtx1.formats]
 
-        if VtxAttr.NRM not in attribs and VtxAttr.TEX1 not in attribs:
+        if VtxAttr.NRM not in attribs and VtxAttr.TEX2 not in attribs:
             newVtxDesc = VtxDesc()
             newVtxDesc.attrib = VtxAttr.NRM
             newVtxDesc.dataType = VtxAttrIn.INDEX16
             vtxDescs += (newVtxDesc,)
-            
-            subBmd.vtx1.formats[1] = ArrayFormat()
-            subBmd.vtx1.formats[1].arrayType = VtxAttr.NRM
-            subBmd.vtx1.formats[1].componentCount = CompType.NRM_XYZ
-            subBmd.vtx1.formats[1].dataType = CompSize.F32
-            subBmd.vtx1.formats[1].decimalPoint = 0
 
             addNormals(subBmd, newVtxDesc)
         
-        if 0 and VtxAttr.TEX1 not in attribs:
-            newVtxDesc = VtxDesc()
-            newVtxDesc.attrib = VtxAttr.TEX1
-            newVtxDesc.dataType = VtxAttrIn.INDEX16
-            vtxDescs += (newVtxDesc,)
-        
-            subBmd.vtx1.formats[6] = ArrayFormat()
-            subBmd.vtx1.formats[6].arrayType = VtxAttr.TEX1
-            subBmd.vtx1.formats[6].componentCount = CompType.TEX_ST
-            subBmd.vtx1.formats[6].dataType = CompSize.F32
-            subBmd.vtx1.formats[6].decimalPoint = 0
-            
-            addLightmapUVs(subBmd, newVtxDesc)
-
         subBmd.jnt1 = JointBlock()
         #usedJointIndices = {sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x10}
         # just force doBones off
