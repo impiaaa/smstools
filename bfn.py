@@ -91,7 +91,7 @@ if __name__ == "__main__":
     bfn = BFont()
     bfn.read(fin)
     fin.close()
-    #bfn.gly1.export(os.path.splitext(sys.argv[1])[0])
+    bfn.gly1.export(os.path.splitext(sys.argv[1])[0])
 
     print("INF", bfn.inf1.fontType, bfn.inf1.ascent, bfn.inf1.descent, bfn.inf1.width, bfn.inf1.leading, bfn.inf1.defaultCharacterCode)
     for chunk in bfn.chunks:
