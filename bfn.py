@@ -15,10 +15,10 @@ class Gly1(Section):
     
     def read(self, fin, start, size):
         super().read(fin, start, size)
-        self.arrayCount = (size-self.header.size-8)//self.arraySize
+        arrayCount = (size-self.header.size-8)//self.arraySize
         #self.h = (size-0x18)/w
         #if format == 0: self.h *= 2
-        self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=self.arrayCount)
+        self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=arrayCount)
     
     def write(self, fout):
         super().write(fout)
@@ -43,11 +43,12 @@ class Map1(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         self.spans = array.array('H')
-        self.spans.fromfile(fin, self.spanCount)
+        self.spans.fromfile(fin, self.spanCount*self.spans.itemsize)
         if sys.byteorder == 'little': self.spans.byteswap()
+        self.spanCount = None
     
     def write(self, fout):
-        self.spanCount = len(self.spans)
+        self.spanCount = len(self.spans)//self.spans.itemsize
         super().write(fout)
         swapArray(self.spans).tofile(fout)
     
@@ -66,7 +67,7 @@ class Wid1(Section):
     def read(self, fin, start, size):
         super().read(fin, start, size)
         self.widths = array.array('H')
-        self.widths.fromfile(fin, (self.maximumFontCode-self.minimumFontCode))
+        self.widths.fromfile(fin, (size-self.header.size-8)//self.widths.itemsize)
         if sys.byteorder == 'little': self.widths.byteswap()
     
     def write(self, fout):
