@@ -13,6 +13,7 @@ glType, glTypeSize, glFormat, glInternalFormat, glBaseInternalFormat, pixelWidth
 assert glType == 0 and glFormat == 0 and glInternalFormat == COMPRESSED_RGB_S3TC_DXT1_EXT
 fout.write(struct.pack('IIIIIIIIIIII', glType, glTypeSize, glFormat, COMPRESSED_RGBA_S3TC_DXT5_EXT, glBaseInternalFormat, pixelWidth, pixelHeight, pixelDepth, numberOfArrayElements, numberOfFaces, numberOfMipmapLevels, bytesOfKeyValueData))
 fout.write(fin.read(bytesOfKeyValueData))
+hasTransparency = False
 for mipmap_level in range(max(1, numberOfMipmapLevels)):
     imageSize, = struct.unpack('I', fin.read(4))
     fout.write(struct.pack('I', imageSize*2))
@@ -25,6 +26,9 @@ for mipmap_level in range(max(1, numberOfMipmapLevels)):
         else:
             for j in range(16): alphas |= ((pixels>>(j*2))&3 != 3)<<(j*3)
             #print('x', bin(alphas))
+            hasTransparency = True
         fout.write(struct.pack('BB3HHHI', 0, 255, alphas&0xFFFF, (alphas>>16)&0xFFFF, alphas>>32, color0, color1, pixels))
+if not hasTransparency:
+    print("Warning:", sys.argv[1], "doesn't have any transparent pixels. Converting is a waste", file=sys.stderr)
 fout.close()
 fin.close()
