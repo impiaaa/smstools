@@ -764,7 +764,6 @@ class TevKColorSel(IntEnum):
     CONST_3_8 = 0x05 # constant 3/8
     CONST_1_4 = 0x06 # constant 1/4
     CONST_1_8 = 0x07 # constant 1/8
-    NONE = 0x09
     K0 = 0x0C # K0[RGB] register
     K1 = 0x0D # K1[RGB] register
     K2 = 0x0E # K2[RGB] register
@@ -1625,6 +1624,7 @@ class ShapeBlock(Section):
                     for currPoint in primitive.points:
                         for attrib in shape.attribs:
                             shapeDraw.displayListSize += Index.sizeStructs[attrib.dataType].size
+                shapeDraw.displayListSize += Primitive.header.size
                 shapeDraw.displayListSize = alignOffset(shapeDraw.displayListSize, 32)
                 offset += shapeDraw.displayListSize
         
@@ -1661,6 +1661,10 @@ class ShapeBlock(Section):
             for shapeDraw, shapeMatrix in shape.matrixGroups:
                 for primitive in shapeDraw.primitives:
                     primitive.write(fout, shape.attribs)
+                primitive = Primitive()
+                primitive.type = PrimitiveType.NONE
+                primitive.count = 0
+                primitive.write(fout, shape.attribs)
                 alignFile(fout, 32, 8)
         for shape in self.batches:
             for shapeDraw, shapeMatrix in shape.matrixGroups:
@@ -2064,4 +2068,18 @@ def buildMatrices(sg, bmd, onDown=True, matIndex=0, p=None, indent=0):
 
     for node in sg.children:
         buildMatrices(node, bmd, onDown, matIndex, effP, indent+1)
+
+def printFlatScenegraph(sg, indent=0):
+    for node in sg:
+        if node.type == 1:
+            indent += 1
+        elif node.type == 2:
+            indent -= 1
+        else:
+            print('  '*indent+(("frame", "material", "batch")[node.type-0x10]), node.index)
+
+def printScenegraphHierarchy(sg, indent=0):
+    print('  '*indent+(("frame", "material", "batch")[sg.type-0x10]), sg.index)
+    for c in sg.children:
+        printScenegraphHierarchy(c, indent+1)
 

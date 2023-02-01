@@ -21,7 +21,7 @@ class LoopMode(Enum):
     MIRRORED_ONCE = 3
     MIRRORED_REPEAT = 4
 
-class Ank1(Section):
+class J3DAnmTransformKeyData(Section):
     header = Struct('>BBHHHHHIIII')
     fields = [
         ('loopMode', LoopMode), 'angleMultiplier', 'animationLength',
@@ -131,7 +131,7 @@ class Ank1(Section):
         translations.tofile(fout)
 
 class Bck(BFile):
-    sectionHandlers = {b'ANK1': Ank1}
+    sectionHandlers = {b'ANK1': J3DAnmTransformKeyData}
 
 class AnimatedJoint(Readable):
     def __init__(self, f=None):

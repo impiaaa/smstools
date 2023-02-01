@@ -22,37 +22,37 @@ import os
 from bisect import bisect
 from bck import *
 
-def doCurve(action, data_path, loopFlags, animationLength, data):
+def doCurve(action, data_path, loopMode, animationLength, data):
     for i, subData in enumerate(data):
         curve = action.fcurves.new(data_path=data_path, index=i)
         
-        if loopFlags == LoopMode.ONCE:
+        if loopMode == LoopMode.ONCE:
             pass
-        elif loopFlags == LoopMode.ONCE_AND_RESET:
+        elif loopMode == LoopMode.ONCE_AND_RESET:
             repeat = curve.modifiers.new('CYCLES')
-            repeat.mode_before = 'NO_CYCLES'
-            repeat.mode_after = 'REPEAT_MOTION'
+            repeat.mode_before = 'NONE'
+            repeat.mode_after = 'REPEAT'
             repeat.cycles_after = 1
             limit = curve.modifiers.new('LIMITS')
             limit.use_max_x = True
             limit.max_x = animationLength
-        elif loopFlags == LoopMode.REPEAT:
+        elif loopMode == LoopMode.REPEAT:
             repeat = curve.modifiers.new('CYCLES')
-            repeat.mode_before = 'NO_CYCLES'
-            repeat.mode_after = 'REPEAT_MOTION'
+            repeat.mode_before = 'NONE'
+            repeat.mode_after = 'REPEAT'
             repeat.cycles_after = 0
-        elif loopFlags == LoopMode.MIRRORED_ONCE:
+        elif loopMode == LoopMode.MIRRORED_ONCE:
             repeat = curve.modifiers.new('CYCLES')
-            repeat.mode_before = 'NO_CYCLES'
-            repeat.mode_after = 'REPEAT_MIRRORED'
+            repeat.mode_before = 'NONE'
+            repeat.mode_after = 'MIRROR'
             repeat.cycles_after = 2
             limit = curve.modifiers.new('LIMITS')
             limit.use_max_x = True
             limit.max_x = animationLength*2
-        elif loopFlags == LoopMode.MIRRORED_REPEAT:
+        elif loopMode == LoopMode.MIRRORED_REPEAT:
             repeat = curve.modifiers.new('CYCLES')
-            repeat.mode_before = 'NO_CYCLES'
-            repeat.mode_after = 'REPEAT_MIRRORED'
+            repeat.mode_before = 'NONE'
+            repeat.mode_after = 'MIRROR'
             repeat.cycles_after = 0
         
         curve.keyframe_points.add(len(subData))
@@ -157,16 +157,13 @@ def importFile(filepath, context):
             s[1][1] = scale[1]
             s[2][2] = scale[2]
             rest = rest@s
+        # adjust for bone placement
+        rest = rest@Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))
         # from armature-relative to parent-relative
         if bone.parent:
-            rest = bone.parent.matrix_local.inverted()@rest
-        #rest = Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))@rest
-        #rest = Matrix(eval(bone['_bmd_rest']))
-        #print("local", repr(bone.matrix_local))
-        #print("scale", scale)
-        #if bone.parent: print("parent", repr(bone.parent.matrix_local))
-        #print("target", repr(Matrix(eval(bone['_bmd_rest']))))
-        #print("rest", repr(rest))
+            parent = bone.parent.matrix_local
+            parent = parent@Matrix(((0,0,1,0),(1,0,0,0),(0,1,0,0),(0,0,0,1)))
+            rest = parent.inverted()@rest
         
         # big table of transformation components so that we can index them easily
         animList = (anim.scalesX, anim.scalesY, anim.scalesZ,
@@ -222,11 +219,11 @@ def importFile(filepath, context):
                         translation = animate(key.time, animList[6:9])
                         mat = Matrix.Translation(translation).to_4x4()
                 
-                # adjust for bone placement
-                #mat = mat@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
-                
                 # here's where the magic happens
                 mat = rest.inverted()@mat
+                
+                # from X-pointing to Y-pointing
+                mat = Matrix((mat[2].zxyw, mat[0].zxyw, mat[1].zxyw, mat[3].zxyw))
                 
                 # decompose the new matrix
                 newLoc, newRot, newScale = mat.decompose()
@@ -239,15 +236,17 @@ def importFile(filepath, context):
                 newKey = Key()
                 newAnimData[animDataSubIndex] = newKey
                 newKey.time = key.time
+                # now get the component that this key was originally for
                 newKey.value = newData[animDataIndex]
+                
                 # Downside of this whole process is that there's no direct analog to transform the bezier handles.
                 # TODO: Could probably get a good estimate by adding the tangent to the data, re-do the matrix undo, and subtract the undid data
 
         bone_path = 'pose.bones["%s"]' % bone.name
         
-        doCurve(action, bone_path+'.scale', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[0:3])
-        doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[3:6])
-        doCurve(action, bone_path+'.location', bck.ank1.loopFlags, bck.ank1.animationLength, newAnim[6:9])
+        doCurve(action, bone_path+'.scale', bck.ank1.loopMode, bck.ank1.animationLength, newAnim[0:3])
+        doCurve(action, bone_path+'.rotation_euler', bck.ank1.loopMode, bck.ank1.animationLength, newAnim[3:6])
+        doCurve(action, bone_path+'.location', bck.ank1.loopMode, bck.ank1.animationLength, newAnim[6:9])
     
     # TODO: Shouldn't affect the scene state
     context.scene.frame_start = 0

@@ -594,7 +594,7 @@ def exportTexture(img, bmddir):
                 "maxTextureSize": 2048,
                 "lightmap": 0,
                 "compressionQuality": 50,
-                "alphaUsage": int((img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8) or img.format in (TexFmt.IA4, TexFmt.IA8)),
+                "alphaUsage": int((img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.RGB5A3) or img.format in (TexFmt.RGB5A3, TexFmt.RGBA8)),
                 "alphaIsTransparency": 0, # dilates color around transparent areas
                 "textureType": 10 if img.format in (TexFmt.I4, TexFmt.I8) else 0,
                 "textureShape": 1,
@@ -701,20 +701,6 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
         asset.dump_yaml(os.path.join(bmddir, assetName))
         yield writeNativeMeta(assetName, 2100000, bmddir)
 
-def printFlatScenegraph(sg, indent=0):
-    for node in sg:
-        if node.type == 1:
-            indent += 1
-        elif node.type == 2:
-            indent -= 1
-        else:
-            print('  '*indent+(("frame", "material", "batch")[node.type-0x10]), node.index)
-
-def printScenegraphHierarchy(sg, indent=0):
-    print('  '*indent+(("frame", "material", "batch")[sg.type-0x10]), sg.index)
-    for c in sg.children:
-        printScenegraphHierarchy(c, indent+1)
-
 def filterScenegraph(sgin, batchIndices):
     sgout = SceneGraph()
     sgout.type = sgin.type
@@ -804,6 +790,7 @@ def addNormals(bmd, newVtxDesc):
 # don't generate for shapes that already have tex1, still need to be remapped
 # new tex1 indices need to be shifted by all existing
 # want to use getBatchTriangles, but that needs an indexMap, which needs to be generated from collectVertices, which needs to have channels from setupChannels...
+# maybe work with converted & split assets instead? would need to decode buffers, make sure extra attributes are handled correctly
 
 def addLightmapUVs(bmd, newVtxDesc):
     import xatlas

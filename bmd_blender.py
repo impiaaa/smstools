@@ -716,17 +716,21 @@ def drawSkeleton(bmd, sg, arm, onDown=True, p=None, parent=None, indent=0):
         #bone = arm.edit_bones[f.name]
         bone = arm.edit_bones.new(name=f.name)
         bone.head = Vector((0,0,0))
-        bone.tail = Vector((0,0,10))
-        ts = [bmd.jnt1.frames[node.index].translation for node in sg.children if node.type == 0x10]
+        bone.tail = Vector((0,10,0))
+        childBones = sg.children
+        while not (len(childBones) == 0 or any(node.type == 0x10 for node in childBones)):
+            childBones = [child for node in childBones for child in node.children]
+        ts = [bmd.jnt1.frames[node.index].translation for node in childBones if node.type == 0x10]
         if len(ts) > 0:
-            bone.tail = reduce(operator.add, ts)/len(sg.children)
+            bone.tail = reduce(operator.add, ts)/len(ts)
             if bone.tail.magnitude < 0.01:
-                bone.tail = Vector((0,0,10))
+                bone.tail = Vector((0,10,0))
+        # from X-pointing to Y-pointing
         bone.matrix = effP@Matrix(((0,1,0,0),(0,0,1,0),(1,0,0,0),(0,0,0,1)))
-        #Matrix(((0,1,0,0),(-1,0,0,0),(0,0,1,0),(0,0,0,1)))
         if parent is not None:
             bone.parent = parent
             bone.use_connect = parent.tail == bone.head
+        bone.inherit_scale = 'NONE' if f.calcFlags & 1 else 'FULL'
         # edit bones don't have a scale, so save it here for later animations
         bone['_bmd_rest_scale'] = ','.join([repr(x) for x in f.scale])
         bone['_bmd_rest'] = repr(frameMatrix(f)[:])
