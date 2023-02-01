@@ -15,7 +15,7 @@ class Gly1(Section):
     
     def read(self, fin, start, size):
         super().read(fin, start, size)
-        arrayCount = (size-self.header.size-8)//self.arraySize
+        self.arrayCount = (size-self.header.size-8)//self.arraySize
         #self.h = (size-0x18)/w
         #if format == 0: self.h *= 2
         self.data = readTextureData(fin, self.format, self.w, self.h, arrayCount=arrayCount)
@@ -56,7 +56,7 @@ class Map1(Section):
 class Inf1(Section):
     header = struct.Struct('>hhhhhH')
     fields = ['fontType', 'ascent', 'descent', 'width', 'leading', 'defaultCharacterCode']
-    # fontType 0: 1-byte (e.g. ASCII)
+    # fontType 0: 1-byte (e.g. CP-1252)
     # fontType 1: 2-byte (e.g. UTF-16)
     # fontType 2: Shift-JIS
 
@@ -66,7 +66,7 @@ class Wid1(Section):
     fields = ['minimumFontCode', 'maximumFontCode']
     def read(self, fin, start, size):
         super().read(fin, start, size)
-        self.widths = array.array('H')
+        self.widths = array.array('B')
         self.widths.fromfile(fin, (size-self.header.size-8)//self.widths.itemsize)
         if sys.byteorder == 'little': self.widths.byteswap()
     
