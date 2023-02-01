@@ -136,7 +136,7 @@ def decodeBlock(format, data, dataidx, width, height, xoff, yoff, putpixel, pale
                 if dataidx >= len(data): break
                 c = data[dataidx]
                 dataidx += 1
-                if x < width and y < height:
+                if x+1 < width and y < height:
                     t = c&0xF0
                     putpixel(x, y, t | (t >> 4))
                     t = c&0x0F

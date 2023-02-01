@@ -78,14 +78,10 @@ if __name__ == "__main__":
     fin.close()
     print("%dx%d, fmt=%s, mips=%d, pfmt=%s" % (img.width, img.height, img.format, img.mipmapCount, img.paletteFormat))
 
-    #images = decodeTexturePIL(data, format, width, height, paletteFormat, palette, mipmapCount)
-    #images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
+    images = decodeTexturePIL(img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+    images[0][0].save(os.path.splitext(sys.argv[1])[0]+'.png')
 
     fout = open(os.path.splitext(sys.argv[1])[0]+".ktx", 'wb')
     decodeTextureKTX(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
     fout.close()
-
-    #fout = open(os.path.splitext(sys.argv[1])[0]+".ktx", 'wb')
-    #decodeTextureKTX(fout, data, format, width, height, paletteFormat, palette, mipmapCount)
-    #fout.close()
 
