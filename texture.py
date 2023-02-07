@@ -504,14 +504,15 @@ class GL:
     RED                           = 0x1903
     RGB                           = 0x1907
     RGBA                          = 0x1908
+    RGB8                          = 0x8051
     RGBA8                         = 0x8058
+    BGRA                          = 0x80E1
     RG                            = 0x8227
     R8                            = 0x8229
     RG8                           = 0x822B
     UNSIGNED_SHORT_5_6_5          = 0x8363
     COMPRESSED_RGB_S3TC_DXT1_EXT  = 0x83F0
     RGB565                        = 0x8D62
-    BGRA                          = 0x80E1
 
 #                  glType                    glFormat glInternalFormat                 glBaseInternalFormat
 glFormats = {
@@ -530,12 +531,30 @@ glPaletteFormats = {
     TlutFmt.RGB5A3: (GL.UNSIGNED_BYTE,        GL.RGBA, GL.RGBA8,                        GL.RGBA),
 }
 
-def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=0):
-    fout.write(bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]))
+def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, paletteData=None, mipmapCount=1, arrayCount=0, safety=False):
     if format in glFormats:
         glType, glFormat, glInternalFormat, glBaseInternalFormat = glFormats[format]
     else:
         glType, glFormat, glInternalFormat, glBaseInternalFormat = glPaletteFormats[paletteFormat]
+
+    mipSize = calcTextureSize(format, width, height)//data.itemsize
+    sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
+    palette = convertPalette(paletteData, paletteFormat)
+    if format in (TexFmt.I4, TexFmt.I8): components = 1
+    elif format in (TexFmt.IA4, TexFmt.IA8): components = 2
+    elif format == TexFmt.RGB565: components = 3
+    elif format in (TexFmt.RGB5A3, TexFmt.RGBA8, TexFmt.CMPR): components = 4
+    elif format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
+        if paletteFormat == TlutFmt.IA8: components = 2
+        elif paletteFormat == TlutFmt.RGB565: components = 3
+        elif paletteFormat == TlutFmt.RGB5A3: components = 4
+
+    if safety and components <= 2:
+        glFormat = GL.RGB
+        glInternalFormat = GL.RGB8
+        glBaseInternalFormat = GL.RGB
+
+    fout.write(bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]))
     fout.write(struct.pack('IIIIIIIIIIIII',
         0x04030201,
         glType,
@@ -554,18 +573,6 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
     fout.write(struct.pack('I', 23))
     fout.write(b'KTXorientation\0S=r,T=d\0\0')
 
-    mipSize = calcTextureSize(format, width, height)//data.itemsize
-    sliceSize = int(mipSize*(4-4**(1-mipmapCount))/3)
-    palette = convertPalette(paletteData, paletteFormat)
-    if format in (TexFmt.I4, TexFmt.I8): components = 1
-    elif format in (TexFmt.IA4, TexFmt.IA8): components = 2
-    elif format == TexFmt.RGB565: components = 3
-    elif format in (TexFmt.RGB5A3, TexFmt.RGBA8, TexFmt.CMPR): components = 4
-    elif format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2):
-        if paletteFormat == TlutFmt.IA8: components = 2
-        elif paletteFormat == TlutFmt.RGB565: components = 3
-        elif paletteFormat == TlutFmt.RGB5A3: components = 4
-
     for mipIdx in range(mipmapCount):
         for arrayIdx in range(max(1, arrayCount)):
             mipWidth, mipHeight = width>>mipIdx, height>>mipIdx
@@ -583,12 +590,18 @@ def decodeTextureKTX(fout, data, format, width, height, paletteFormat=None, pale
                     for x in range(0, mipWidth, formatBlockWidth[format]):
                         dataOffset = decodeBlock(format, data, dataOffset, mipWidth, mipHeight, x, y, putpixelarray, palette)
             elif format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and paletteFormat == TlutFmt.RGB565:
-                pixelData = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
-                if sys.byteorder == 'big': pixelData.byteswap()
+                deblocked = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
+                if sys.byteorder == 'big': deblocked.byteswap()
                 pixelData = array('H', [paletteData[px] for px in deblocked])
             else:
                 pixelData = deblock(format, data[dataOffset:dataOffset+(mipSize>>(mipIdx*2))], mipWidth, mipHeight)
                 if sys.byteorder == 'big': pixelData.byteswap()
+            if safety and components <= 2:
+                if pixelData.itemsize == 2:
+                    pixelData = array('B', pixelData.tobytes())
+                pixels = zip(*(pixelData[i::components] for i in range(components)))
+                extraChannels = (0,)*(3-components)
+                pixelData = array('B', [c for origPixel in pixels for c in origPixel+extraChannels])
             fout.write(struct.pack('I', len(pixelData)*pixelData.itemsize))
             pixelData.tofile(fout)
 

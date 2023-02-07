@@ -4,15 +4,19 @@ COMPRESSED_RGB_S3TC_DXT1_EXT  = 0x83F0
 COMPRESSED_RGBA_S3TC_DXT5_EXT = 0x83F3
 
 fin = open(sys.argv[1], 'rb')
-fout = open(sys.argv[1][:sys.argv[1].rfind('.')]+"-dxt5.ktx", 'wb')
 identifier, endianness = struct.unpack('12sI', fin.read(16))
-assert identifier == bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A])
-assert endianness == 0x04030201
-fout.write(struct.pack('12sI', identifier, endianness))
+assert identifier == bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]), identifier.hex()
+assert endianness == 0x04030201, hex(endianness)
 glType, glTypeSize, glFormat, glInternalFormat, glBaseInternalFormat, pixelWidth, pixelHeight, pixelDepth, numberOfArrayElements, numberOfFaces, numberOfMipmapLevels, bytesOfKeyValueData = struct.unpack('IIIIIIIIIIII', fin.read(48))
-assert glType == 0 and glFormat == 0 and glInternalFormat == COMPRESSED_RGB_S3TC_DXT1_EXT
+assert glType == 0, glType
+assert glFormat == 0, glFormat
+assert glInternalFormat == COMPRESSED_RGB_S3TC_DXT1_EXT, glInternalFormat
+
+fout = open(sys.argv[1][:sys.argv[1].rfind('.')]+"-dxt5.ktx", 'wb')
+fout.write(struct.pack('12sI', identifier, endianness))
 fout.write(struct.pack('IIIIIIIIIIII', glType, glTypeSize, glFormat, COMPRESSED_RGBA_S3TC_DXT5_EXT, glBaseInternalFormat, pixelWidth, pixelHeight, pixelDepth, numberOfArrayElements, numberOfFaces, numberOfMipmapLevels, bytesOfKeyValueData))
 fout.write(fin.read(bytesOfKeyValueData))
+
 hasTransparency = False
 for mipmap_level in range(max(1, numberOfMipmapLevels)):
     imageSize, = struct.unpack('I', fin.read(4))

@@ -237,10 +237,7 @@ class PrefabInstance(gocci(1001, 'PrefabInstance')):
 def getObjRef(obj):
     return {'fileID': int(obj.anchor)}
 
-rootOrder = 0
-
 def setupObject(o):
-    global rootOrder
     if o.name in prefabs:
         objObj = PrefabInstance(*prefabs[o.name])
         objObj.serializedVersion = 2
@@ -261,8 +258,6 @@ def setupObject(o):
     scene.entries.append(objObj)
     objObj.m_Name = o.description
     objXfm = objObj.getOrCreateComponent(Transform)
-    objXfm.m_RootOrder = rootOrder
-    rootOrder += 1
     return objObj, objXfm
 
 UndergroundShift = 528
@@ -300,20 +295,16 @@ def lookAt(direction):
                        direction]).transpose()
     return list(map(degrees, transforms3d.euler.mat2euler(mat))), transforms3d.quaternions.mat2quat(mat)
 
-def srgbToLinearrgb(c):
-    """
-    >>> round(srgbToLinearrgb(0.019607843), 6)
-    0.001518
-    >>> round(srgbToLinearrgb(0.749019608), 6)
-    0.520996
-    """
-    if c < 0.04045:
-        return 0.0 if c < 0.0 else (c * (1.0 / 12.92))
+def GammaToLinearSpaceExact(value):
+    if value <= 0.04045:
+        return value / 12.92
+    elif value < 1.0:
+        return ((value + 0.055) * (1.0 / 1.055)) ** 2.4
     else:
-        return ((c + 0.055) * (1.0 / 1.055)) ** 2.4
+        return value ** 2.2
 
 def color8ToLinear(c):
-    res = srgbToLinearrgb(c[0]/255), srgbToLinearrgb(c[1]/255), srgbToLinearrgb(c[2]/255)
+    res = GammaToLinearSpaceExact(c[0]/255), GammaToLinearSpaceExact(c[1]/255), GammaToLinearSpaceExact(c[2]/255)
     if len(c) == 4:
         res += (c[3]/255,)
     return res
@@ -374,7 +365,7 @@ for colpath in scenedirpath.rglob("*.col"):
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
 from bmd import BModel, VtxDesc, VtxAttr, VtxAttrIn, CompType, CompSize, ArrayFormat
-from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces
+from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces, buildMesh, exportAsset
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -397,12 +388,16 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, True))
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
         
-        bmds[bmdkey] = []
+        meshes = []
         for subBmd in splitByVertexFormat(bmd):
             subSubBmd = subBmd
             #for subSubBmd in splitByConnectedPieces(subBmd):
             print(subSubBmd.name)
-            bmds[bmdkey].append((subSubBmd.name, exportBmd(subSubBmd, outbmddir), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
+            meshes.append((subSubBmd, buildMesh(subSubBmd)))
+        bmds[bmdkey] = []
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct) in meshes:
+            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
+        del meshes
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
@@ -470,6 +465,9 @@ for o in marScene.objects:
         ambColor = o.search("太陽アンビエント（オブジェクト）")
         assert ambColor.name == 'AmbColor'
         rs.m_AmbientSkyColor = doColor(ambColor.color)
+        #rs.m_AmbientSkyColor = {'r': 0.0, 'g': 0.44313725490196076, 'b': 0.7372549019607844, 'a': 1.0}
+        rs.m_AmbientEquatorColor = {'r': 0.803921568627451, 'g': 0.8431372549019608, 'b': 1.0, 'a': 1.0}
+        rs.m_AmbientGroundColor = doColor(ambColor.color)
         rs.m_AmbientMode = 3
         rs.m_AmbientIntensity = 1
         rs.m_SkyboxMaterial = {'fileID': 0}
@@ -477,7 +475,7 @@ for o in marScene.objects:
         ambColor = o.search("影アンビエント（オブジェクト）")
         assert ambColor.name == 'AmbColor'
         rs.m_SubtractiveShadowColor = doColor(ambColor.color)
-        # or {r: 0.08494473, g: 0.2297351, b: 0.46647662, a: 1}
+        # or {'r': 0.06274509803921569, 'g': 0.1568627450980392, 'b': 0.42745098039215684, 'a': 1.0}
 
 scene = unityparser.UnityDocument([ocs, rs, lms, nms])
 
@@ -491,8 +489,6 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
     grpObj.serializedVersion = 6
     grpObj.m_Component = []
     grpXfm = grpObj.getOrCreateComponent(Transform)
-    grpXfm.m_RootOrder = rootOrder
-    rootOrder += 1
     grpXfm.m_Children = []
     colliderGroups = {}
     for physName, uuid, center in cols[baseColliderName]:
@@ -513,8 +509,7 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
             objObj.serializedVersion = 6
             objObj.m_Component = []
             objXfm = objObj.getOrCreateComponent(Transform)
-            objXfm.m_RootOrder = rootOrder
-            rootOrder += 1
+            objXfm.m_RootOrder = len(grpXfm.m_Children)
             grpXfm.m_Children.append(getObjRef(objXfm))
             objXfm.m_Father = getObjRef(grpXfm)
             objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -1*SCALE}
@@ -547,6 +542,7 @@ for o in marScene.objects:
         objXfm.m_LocalEulerAnglesHint = dict(zip('xyz', euler))
         objXfm.m_LocalRotation = dict(zip('wxyz', quat.tolist()))
         
+        objXfm.m_RootOrder = len(lightgrpXfm.m_Children)
         lightgrpXfm.m_Children.append(getObjRef(objXfm))
         objXfm.m_Father = getObjRef(lightgrpXfm)
         
@@ -712,137 +708,158 @@ def addMeshFilter(bmdFilename, objObj):
     
     return renderer, meshFilter
 
+def doActor(o, grpXfm):
+    objObj, objXfm = setupObject(o)
+    objXfm.m_RootOrder = len(grpXfm.m_Children)
+    grpXfm.m_Children.append(getObjRef(objXfm))
+    objXfm.m_Father = getObjRef(grpXfm)
+    if isinstance(o, TActor):
+        setup3d(objXfm, o)
+    elif isinstance(o, TPlacement):
+        setupPosition(objXfm, o)
+    if isinstance(o, TMapObjBase):
+        objData = sObjDataTable.get(o.model, end_data)
+        
+        animInfo = objData.get('animInfo')
+        if animInfo is None:
+            modelName = objData['mdlName']+".bmd"
+        else:
+            animData = animInfo.get('animData')
+            if animData is None:
+                modelName = None
+            else:
+                modelName = animData[0]['modelName']
+                if animData[0].get('basName'):
+                    objObj.getOrCreateComponent(AudioSource)
+        if modelName is not None:
+            renderer, meshFilter = addMeshFilter("mapobj/"+modelName.lower(), objObj)
+            
+            manager = managers.search(objData['managerName'])
+            lod = objObj.getOrCreateComponent(LODGroup)
+            lod.m_FadeMode = 0
+            lod.serializedVersion = 2
+            lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
+            aabb = bmds["mapobj/"+modelName.lower()][1][1]
+            lod.m_Size = max(aabb["m_Extent"].values())*2
+            lod.m_LocalReferencePoint = aabb["m_Center"]
+            # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
+            
+            if animInfo is not None and animData is not None:
+                material = animData[0].get('material')
+                if material is not None:
+                    name, materialIds = materials["mapobj/"+material.lower()+".bmt"]
+                    if materialIds is not None:
+                        renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+        
+        mapCollisionInfo = objData.get('mapCollisionInfo')
+        if mapCollisionInfo is not None:
+            colName = mapCollisionInfo['collisionData'][0]['name']
+            if colName is not None:
+                for physName, uuid, center in cols["mapobj/"+colName.lower()]:
+                    # different terrain types ok?
+                    addCol(uuid, objObj)
+    if isinstance(o, TMapStaticObj):
+        # not "static" in the unity sense
+        modelEntry = actorDataTable.get(o.baseName, None)
+        if modelEntry is None:
+            warn("No static model for %r"%o.baseName)
+        else:
+            if 'modelName' in modelEntry:
+                if modelEntry['flags16'] & 2 == 0:
+                    if modelEntry['flags16'] & 4 == 0:
+                        prefix = "map/map"
+                    else:
+                        prefix = "mapobj"
+                else:
+                    prefix = "map"
+                    # todo: common arc
+                bmdFilename = prefix+"/"+modelEntry['modelName'].lower()+".bmd"
+                addMeshFilter(bmdFilename, objObj)
+            if 'collisionManagerName' in modelEntry:
+                for prefix in ("map/map/", "mapobj/"):
+                    for physName, uuid, center in cols[prefix+modelEntry['collisionManagerName'].lower()]:
+                        # different terrain types ok?
+                        addCol(uuid, objObj)
+            if 'soundKey' in modelEntry:
+                audioSource = objObj.getOrCreateComponent(AudioSource)
+                volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
+                audioSource.m_Enabled = 1
+                audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
+                audioSource.m_PlayOnAwake = 1
+                audioSource.m_Volume = volume
+                audioSource.m_Pitch = pitch
+                audioSource.Loop = int(loop)
+            if 'particle' in modelEntry:
+                objObj.getOrCreateComponent(ParticleSystemRenderer)
+                objObj.getOrCreateComponent(ParticleSystem)
+    if isinstance(o, TMapObjSoundGroup):
+        audioSource = objObj.getOrCreateComponent(AudioSource)
+        soundKey = {"ms_sea": 0x5000, "ms_harbor": 0x5003}.get(o.graphName, 0)
+        if soundKey != 0:
+            # arbitrary increment - the 2nd environment sounds are the longest
+            # don't want to figure out the listen cone stuff
+            volume, pitch, loop, clipGuid = getSound(soundKey+1)
+            audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
+            audioSource.m_Volume = volume
+            audioSource.m_Pitch = pitch
+            audioSource.Loop = int(loop)
+    if isinstance(o, TMap):
+        objObj.m_StaticEditorFlags = 0xFFFFFFFF
+        objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+        objXfm.m_Children = []
+        for assetAndMaterials in bmds["map/map/map.bmd"]:
+            meshObj = GameObject(getId(), '')
+            meshObj.serializedVersion = 6
+            meshObj.m_Component = []
+            meshObj.m_IsActive = 1
+            meshObj.m_StaticEditorFlags = 0xFFFFFFFF
+            meshObj.m_Name = assetAndMaterials[0]
+            scene.entries.append(meshObj)
+            meshXfm = meshObj.getOrCreateComponent(Transform)
+            meshXfm.m_Father = getObjRef(objXfm)
+            meshXfm.m_RootOrder = len(objXfm.m_Children)
+            objXfm.m_Children.append(getObjRef(meshXfm))
+            
+            center = assetAndMaterials[1][1]["m_Center"]
+            if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
+                # put the rooms in the sky underground
+                meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
+            
+            addMeshFilter(assetAndMaterials, meshObj)
+        waveDistantView = TMapStaticObj()
+        waveDistantView.name = "MapStaticObj"
+        waveDistantView.description = "波（遠景）"
+        waveDistantView.baseName = "sea"
+        waveObj, waveXfm = doActor(waveDistantView, objXfm)
+        waveXfm.m_LocalScale['x'] /= SCALE
+        waveXfm.m_LocalScale['y'] /= SCALE
+        waveXfm.m_LocalScale['z'] /= -SCALE
+        
+        indirectWave = TMapStaticObj()
+        indirectWave.name = "MapStaticObj"
+        indirectWave.description = "インダイレクト波"
+        indirectWave.baseName = "SeaIndirect"
+        waveObj, waveXfm = doActor(indirectWave, objXfm)
+        waveXfm.m_LocalScale['x'] /= SCALE
+        waveXfm.m_LocalScale['y'] /= SCALE
+        waveXfm.m_LocalScale['z'] /= -SCALE
+    if isinstance(o, TSky):
+        objObj.m_StaticEditorFlags = 0xFFFFFFFF
+        renderer, meshFilter = addMeshFilter("map/map/sky.bmd", objObj)
+        renderer.m_CastShadows = 0
+        objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+        name, materialIds = materials["map/map/sky.bmt"]
+        if materialIds is not None:
+            renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+    return objObj, objXfm
+
 print("Adding actors")
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
     grpObj, grpXfm = setupObject(group)
     grpXfm.m_Children = []
     for o in group.objects:
-        objObj, objXfm = setupObject(o)
-        grpXfm.m_Children.append(getObjRef(objXfm))
-        objXfm.m_Father = getObjRef(grpXfm)
-        if isinstance(o, TActor):
-            setup3d(objXfm, o)
-        elif isinstance(o, TPlacement):
-            setupPosition(objXfm, o)
-        if isinstance(o, TMapObjBase):
-            objData = sObjDataTable.get(o.model, end_data)
-            
-            animInfo = objData.get('animInfo')
-            if animInfo is None:
-                modelName = objData['mdlName']+".bmd"
-            else:
-                animData = animInfo.get('animData')
-                if animData is None:
-                    modelName = None
-                else:
-                    modelName = animData[0]['modelName']
-                    if animData[0].get('basName'):
-                        objObj.getOrCreateComponent(AudioSource)
-            if modelName is not None:
-                renderer, meshFilter = addMeshFilter("mapobj/"+modelName.lower(), objObj)
-                
-                manager = managers.search(objData['managerName'])
-                lod = objObj.getOrCreateComponent(LODGroup)
-                lod.m_FadeMode = 0
-                lod.serializedVersion = 2
-                lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
-                aabb = bmds["mapobj/"+modelName.lower()][1][1]
-                lod.m_Size = max(aabb["m_Extent"].values())*2
-                lod.m_LocalReferencePoint = aabb["m_Center"]
-                # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
-                
-                if animInfo is not None and animData is not None:
-                    material = animData[0].get('material')
-                    if material is not None:
-                        name, materialIds = materials["mapobj/"+material.lower()+".bmt"]
-                        if materialIds is not None:
-                            renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
-            
-            mapCollisionInfo = objData.get('mapCollisionInfo')
-            if mapCollisionInfo is not None:
-                colName = mapCollisionInfo['collisionData'][0]['name']
-                if colName is not None:
-                    for physName, uuid, center in cols["mapobj/"+colName.lower()]:
-                        # different terrain types ok?
-                        addCol(uuid, objObj)
-        if isinstance(o, TMapStaticObj):
-            # not "static" in the unity sense
-            modelEntry = actorDataTable.get(o.baseName, None)
-            if modelEntry is None:
-                warn("No static model for %r"%o.baseName)
-            else:
-                if 'modelName' in modelEntry:
-                    if modelEntry['flags16'] & 2 == 0:
-                        if modelEntry['flags16'] & 4 == 0:
-                            prefix = "map/map"
-                        else:
-                            prefix = "mapobj"
-                    else:
-                        prefix = "map"
-                        # todo: common arc
-                    bmdFilename = prefix+"/"+modelEntry['modelName'].lower()
-                    addMeshFilter(bmdFilename, objObj)
-                if 'collisionManagerName' in modelEntry:
-                    for prefix in ("map/map/", "mapobj/"):
-                        for physName, uuid, center in cols[prefix+modelEntry['collisionManagerName'].lower()]:
-                            # different terrain types ok?
-                            addCol(uuid, objObj)
-                if 'soundKey' in modelEntry:
-                    audioSource = objObj.getOrCreateComponent(AudioSource)
-                    volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
-                    audioSource.m_Enabled = 1
-                    audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
-                    audioSource.m_PlayOnAwake = 1
-                    audioSource.m_Volume = volume
-                    audioSource.m_Pitch = pitch
-                    audioSource.Loop = int(loop)
-                if 'particle' in modelEntry:
-                    objObj.getOrCreateComponent(ParticleSystemRenderer)
-                    objObj.getOrCreateComponent(ParticleSystem)
-        if isinstance(o, TMapObjSoundGroup):
-            audioSource = objObj.getOrCreateComponent(AudioSource)
-            soundKey = {"ms_sea": 0x5000, "ms_harbor": 0x5003}.get(o.graphName, 0)
-            if soundKey != 0:
-                # arbitrary increment - the 2nd environment sounds are the longest
-                # don't want to figure out the listen cone stuff
-                volume, pitch, loop, clipGuid = getSound(soundKey+1)
-                audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
-                audioSource.m_Volume = volume
-                audioSource.m_Pitch = pitch
-                audioSource.Loop = int(loop)
-        if isinstance(o, TMap):
-            objObj.m_StaticEditorFlags = 0xFFFFFFFF
-            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
-            objXfm.m_Children = []
-            for assetAndMaterials in bmds["map/map/map.bmd"]:
-                meshObj = GameObject(getId(), '')
-                meshObj.serializedVersion = 6
-                meshObj.m_Component = []
-                meshObj.m_IsActive = 1
-                meshObj.m_StaticEditorFlags = 0xFFFFFFFF
-                meshObj.m_Name = assetAndMaterials[0]
-                scene.entries.append(meshObj)
-                meshXfm = meshObj.getOrCreateComponent(Transform)
-                meshXfm.m_RootOrder = rootOrder
-                rootOrder += 1
-                meshXfm.m_Father = getObjRef(objXfm)
-                objXfm.m_Children.append(getObjRef(meshXfm))
-                
-                center = assetAndMaterials[1][1]["m_Center"]
-                if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
-                    # put the rooms in the sky underground
-                    meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
-                
-                addMeshFilter(assetAndMaterials, meshObj)
-        if isinstance(o, TSky):
-            objObj.m_StaticEditorFlags = 0xFFFFFFFF
-            renderer, meshFilter = addMeshFilter("map/map/sky.bmd", objObj)
-            renderer.m_CastShadows = 0
-            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
-            name, materialIds = materials["map/map/sky.bmt"]
-            if materialIds is not None:
-                renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+        doActor(o, grpXfm)
 
 print("Reading tables")
 tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))
@@ -854,6 +871,7 @@ for group in tables.objects:
         for o in group.objects:
             assert o.name == "StagePositionInfo"
             objObj, objXfm = setupObject(o)
+            objXfm.m_RootOrder = len(grpXfm.m_Children)
             grpXfm.m_Children.append(getObjRef(objXfm))
             objXfm.m_Father = getObjRef(grpXfm)
             setupPosition(objXfm, o)
@@ -862,6 +880,7 @@ for group in tables.objects:
         for o in group.objects:
             assert o.name == "CameraMapInfo"
             objObj, objXfm = setupObject(o)
+            objXfm.m_RootOrder = len(grpXfm.m_Children)
             grpXfm.m_Children.append(getObjRef(objXfm))
             objXfm.m_Father = getObjRef(grpXfm)
             setup3d(objXfm, o)
@@ -869,6 +888,7 @@ for group in tables.objects:
     elif group.name in ("CubeGeneralInfoTable", "StreamGeneralInfoTable"):
         for o in group.objects:
             objObj, objXfm = setupObject(o)
+            objXfm.m_RootOrder = len(grpXfm.m_Children)
             grpXfm.m_Children.append(getObjRef(objXfm))
             objXfm.m_Father = getObjRef(grpXfm)
             setup3d(objXfm, o)

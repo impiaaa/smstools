@@ -1167,6 +1167,9 @@ class TDoroHaneKuriManager(THaneHamuKuriManager): pass
 
 
 class TPlacement(TViewObj):
+    def __init__(self):
+        super().__init__()
+        self.pos = (0,0,0)
     def read(self, fin):
         super().read(fin)
         self.pos = unpack('>fff', fin.read(12))
@@ -1207,6 +1210,10 @@ class CPolarSubCamera(TLookAtCamera):
 
 
 class TActor(TPlacement):
+    def __init__(self):
+        super().__init__()
+        self.rot = (0,0,0)
+        self.scale = (1,1,1)
     def read(self, fin):
         super().read(fin)
         self.rot = unpack('>fff', fin.read(12))

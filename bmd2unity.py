@@ -446,7 +446,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     
     return asset
 
-def exportBmd(bmd, outputFolderLocation):
+def buildMesh(bmd):
     doBones = len(bmd.jnt1.frames) > 1
     
     if doBones:
@@ -472,10 +472,10 @@ def exportBmd(bmd, outputFolderLocation):
     #print("Making sub-meshes")
     subMeshTriangles, subMeshVertices = makeSubMeshes(len(bmd.mat3.remapTable), bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
     
-    #import meshoptimizer
-    #indices = [i for subMesh in subMeshTriangles for i in subMesh]
-    #remap = meshoptimizer.generateVertexRemap(indices, uniqueVertices, MyVertexFormat)
-    
+    return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct
+
+def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct):
+    doBones = len(bmd.jnt1.frames) > 1
     asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
     #print("Writing asset")
     assetName = bmd.name+".asset"
@@ -483,6 +483,10 @@ def exportBmd(bmd, outputFolderLocation):
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
         
     return meshId, asset.entry.m_LocalAABB
+
+def exportBmd(bmd, outputFolderLocation):
+    subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct = buildMesh(bmd)
+    return exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct)
 
 filterModes = [0, 1, 0, 1, 0, 2]
 def exportTexture(img, bmddir):
@@ -497,9 +501,8 @@ def exportTexture(img, bmddir):
     }
     # TODO: use ETC2 for CMPR on mobile
     if img.format in (TexFmt.RGBA8, TexFmt.CMPR) or img.mipmapCount > 1:
-        # TODO: Unity doesn't understand the other formats but they're used for textures with mipmaps
         fout = open(os.path.join(bmddir, img.name+".ktx"), 'wb')
-        decodeTextureKTX(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount)
+        decodeTextureKTX(fout, img.data, img.format, img.width, img.height, img.paletteFormat, img.palette, img.mipmapCount, safety=True)
         fout.close()
         return writeMeta(img.name+".ktx", {
             "IHVImageFormatImporter": {
@@ -574,10 +577,11 @@ def exportTexture(img, bmddir):
                 "compressionQuality": 50,
                 "overridden": 1
             })
-        elif img.format == TexFmt.IA8:
-            platformSettings[0]["textureFormat"] = 62 # RG16
-        elif img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8:
-            platformSettings[0]["textureFormat"] = 62 # RG16
+        # Unity says we can't use RG16 on desktop or Android
+        #elif img.format == TexFmt.IA8:
+        #    platformSettings[0]["textureFormat"] = 62 # RG16
+        #elif img.format in (TexFmt.C4, TexFmt.C8, TexFmt.C14X2) and img.paletteFormat == TlutFmt.IA8:
+        #    platformSettings[0]["textureFormat"] = 62 # RG16
         elif img.format == TexFmt.I8:
             platformSettings[0]["textureFormat"] = 63 # R8
         return writeMeta(img.name+".png", {

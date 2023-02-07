@@ -5,6 +5,7 @@
 
 from jarray import *
 from ghidra.program.model.data import *
+from ghidra.program.model.listing import *
 
 symdb = currentProgram.symbolTable
 listing = currentProgram.getListing()
@@ -30,6 +31,7 @@ while len(namespaceSymbols) > 0:
         #
         #continue
     
+        if not isinstance(sym.object, Data): continue
         if sym.object.isDefined(): continue
         arr = zeros(length, 'b')
         try:

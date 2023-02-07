@@ -6,7 +6,7 @@ from texture import *
 from common import *
 
 class Image(ReadableStruct):
-    header = Struct('>BBHHBBBBHIBBBBBBBBBxHI')
+    header = Struct('>BBHHBBBBHIBBBBBBBBBxhI')
     fields = [
         ("format", TexFmt),
         "transparency",

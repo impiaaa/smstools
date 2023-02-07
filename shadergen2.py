@@ -508,7 +508,8 @@ class DXShaderGen:
 
     def sampleTexture(self, texSlot, texture, coord):
         if texture.mipmapCount > 1:
-            s = "tex2Dbias(_Tex{}, float4(({}).xy, 0, sceneTextureLODBias+{}))".format(texSlot, coord, texture.lodBias/self.objectScale)
+            # the texture's factor is in texture import settings
+            s = "tex2Dbias(_Tex{}, float4({}, 0, sceneTextureLODBias))".format(texSlot, coord)
         else:
             s = "tex2D(_Tex{}, {})".format(texSlot, coord)
         if not texture.usePalette and texture.format in (TexFmt.I4, TexFmt.I8): suffix = "rrrr"
@@ -647,6 +648,8 @@ class UnityShaderGen(DXShaderGen):
             fout.writeLine("CGINCLUDE")
             fout.indent += 1
             
+            # TODO: I don't know if target/multi_compile features affect CGINCLUDE blocks
+            
             fout.writeLine("#include \"UnityCG.cginc\"")
             
             fout.writeLine("struct appdata_t")
@@ -730,19 +733,21 @@ class UnityShaderGen(DXShaderGen):
                     fout.writeLine("#pragma fragment frag")
                     fout.writeLine("#pragma target 2.0")
                     if mat.fog is not None: fout.writeLine("#pragma multi_compile_fog")
+                    if not doMeta: fout.writeLine("#pragma multi_compile_instancing")
                     
                     fout.writeLine("struct v2f")
                     with fout:
                         fout.writeLine("float4 position : SV_POSITION;")
                         self.genv2f(mat, fout)
                         if mat.fog is not None: fout.writeLine("UNITY_FOG_COORDS({})".format(mat.texGenNum))
+                        fout.writeLine("UNITY_VERTEX_INPUT_INSTANCE_ID")
                         fout.writeLine("UNITY_VERTEX_OUTPUT_STEREO")
                     fout.writeLine(";")
                     
                     fout.writeLine("v2f vert(appdata_t v)")
                     with fout:
-                        fout.writeLine("v2f o;")
                         fout.writeLine("UNITY_SETUP_INSTANCE_ID(v);")
+                        fout.writeLine("v2f o;")
                         fout.writeLine("UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);")
                         fout.writeLine("float3 viewpos = UnityObjectToViewPos(v.vertex);")
                         if usesNormal(mat): fout.writeLine("float3 viewN = normalize (mul((float3x3)UNITY_MATRIX_IT_MV, v.normal));")
@@ -777,17 +782,19 @@ class UnityShaderGen(DXShaderGen):
                         fout.writeLine("#pragma fragment fragShadow")
                         fout.writeLine("#pragma target 2.0")
                         fout.writeLine("#pragma multi_compile_shadowcaster")
+                        if not doMeta: fout.writeLine("#pragma multi_compile_instancing")
                         fout.writeLine("struct v2fShadow")
                         with fout:
                             fout.writeLine("V2F_SHADOW_CASTER;")
                             if not mat.zCompLoc: self.genv2f(mat, fout)
+                            fout.writeLine("UNITY_VERTEX_INPUT_INSTANCE_ID")
                             fout.writeLine("UNITY_VERTEX_OUTPUT_STEREO")
                         fout.writeLine(";")
 
                         fout.writeLine("v2fShadow vertShadow({} v)".format("appdata_base" if mat.zCompLoc else "appdata_t"))
                         with fout:
-                            fout.writeLine("v2fShadow o;")
                             fout.writeLine("UNITY_SETUP_INSTANCE_ID(v);")
+                            fout.writeLine("v2fShadow o;")
                             fout.writeLine("UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);")
                             if mat.zCompLoc or usesNormal(mat): fout.writeLine("TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)")
                             else: fout.writeLine("TRANSFER_SHADOW_CASTER(o)")
