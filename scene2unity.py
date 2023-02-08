@@ -366,6 +366,15 @@ import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
 from bmd import BModel, VtxDesc, VtxAttr, VtxAttrIn, CompType, CompSize, ArrayFormat
 from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces, buildMesh, exportAsset
+import xatlas
+
+def getChannelData(uChannels, uniqueVertices, ch):
+    if uChannels[ch]["dimension"] > 0:
+        start = sum(channel["dimension"] for channel in uChannels[:ch])
+        end = start+uChannels[ch]["dimension"]
+        return [vert[start:end] for vert in uniqueVertices]
+    else:
+        return None
 
 bmds = {}
 for bmdpath in scenedirpath.rglob("*.bmd"):
@@ -390,12 +399,49 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         
         meshes = []
         for subBmd in splitByVertexFormat(bmd):
-            subSubBmd = subBmd
-            #for subSubBmd in splitByConnectedPieces(subBmd):
-            print(subSubBmd.name)
-            meshes.append((subSubBmd, buildMesh(subSubBmd)))
+            for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd)):
+                #if i > 31: break
+                print(subSubBmd.name)
+                meshes.append((subSubBmd, buildMesh(subSubBmd)))
+        print("Setting up atlas")
+        atlas = xatlas.Atlas()
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct) in meshes:
+            if uChannels[5]["dimension"] > 0:
+                continue
+            positions = getChannelData(uChannels, uniqueVertices, 0)
+            normals = getChannelData(uChannels, uniqueVertices, 1)
+            uvs = getChannelData(uChannels, uniqueVertices, 4)
+            materialIndices = [i for i, indices in enumerate(subMeshTriangles) for j in range(len(indices)//3)]
+            indices = [idx for indices in subMeshTriangles for idx in indices]
+            indices = list(zip(indices[0::3], indices[1::3], indices[2::3]))
+            # parameter order does not match documentation!!!
+            atlas.add_mesh(positions, indices, normals, uvs)
+        print("Generating atlas")
+        atlas.generate()
+        print("Exporting assets")
+        atlasIdx = 0
         bmds[bmdkey] = []
         for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct) in meshes:
+            if uChannels[5]["dimension"] == 0:
+                vmapping, newIndices, uvs = atlas[atlasIdx]
+                assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
+                uniqueVertices = [uniqueVertices[oldIdx] for oldIdx in vmapping]
+                groupedTriangles = [set(zip(indices[0::3], indices[1::3], indices[2::3])) for indices in subMeshTriangles]
+                # set is not equivalent to list
+                # meaning some tris are duplicate
+                # bug in splitByConnected? or the index mapping func?
+                newSubMeshTriangles = [[] for x in subMeshTriangles]
+                for newTriangle in newIndices:
+                    oldTriangle = tuple(vmapping[idx] for idx in newTriangle)
+                    found = False
+                    for triGrpIdx, oldTriGrp in enumerate(groupedTriangles):
+                        if oldTriangle in oldTriGrp:
+                            assert not found, "triangle {} {} in two different submeshes".format(newTriangle, oldTriangle)
+                            found = True
+                            newSubMeshTriangles[triGrpIdx].extend(map(int, newTriangle))
+                    assert found, "can't find new {} old {}".format(newTriangle, oldTriangle)
+                subMeshTriangles = newSubMeshTriangles
+                atlasIdx += 1
             bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
         del meshes
     else:

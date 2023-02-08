@@ -165,17 +165,21 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
         if fmt.arrayType == VtxAttr.POS:
             count = {CompType.POS_XY: 2, CompType.POS_XYZ: 3}[fmt.componentCount]
             channel = 0
+            stream = 0
         elif fmt.arrayType == VtxAttr.NRM:
             count = {CompType.NRM_XYZ: 3}[fmt.componentCount]
             channel = 1
+            stream = 0 # unity shadow casting uses normals to offset
         elif fmt.arrayType == VtxAttr.CLR0:
             count = {CompType.CLR_RGB: 3, CompType.CLR_RGBA: 4}[fmt.componentCount]
             channel = 3
+            stream = 1
         elif fmt.arrayType == VtxAttr.CLR1:
             raise NotImplementedError()
         elif fmt.arrayType.value >= VtxAttr.TEX0.value and fmt.arrayType.value <= VtxAttr.TEX7.value:
             count = {CompType.TEX_S: 1, CompType.TEX_ST: 2}[fmt.componentCount]
             channel = 4+(fmt.arrayType.value-VtxAttr.TEX0.value)
+            stream = 1
         else:
             raise ValueError(fmt.arrayType)
         uChannels[channel]["dimension"] = count
@@ -241,6 +245,7 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
     
         count = maxWeightCount
         channel = 12
+        stream = 2
         
         uChannels[channel]["dimension"] = count
         uChannels[channel]["offset"] = offset
@@ -408,7 +413,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
                 "serializedVersion": 2
             })
             indexBuffer.extend(triangles)
-
+    
     mesh.m_VertexData = {
         "serializedVersion": 2,
         "m_VertexCount": len(uniqueVertices),
@@ -785,32 +790,6 @@ def addNormals(bmd, newVtxDesc):
     bmd.vtx1.asFloat[1] = [c for n in normals for c in n.normalized()]
     bmd.vtx1.originalData = list(bmd.vtx1.originalData)
     bmd.vtx1.originalData[1] = bmd.vtx1.asFloat[1]
-
-# in getBatchTriangles, addNormals: support flat triangle lists
-# in splitByConnectedPieces, addNormals: use oldPosIndex
-# - actually, might not need to modify existing position index
-# generate lightmap uvs all at once, one shape per mesh
-# at least in dolpic, all meshes with existing tex1 also have tex2, so don't need to mark/split off
-# don't generate for shapes that already have tex1, still need to be remapped
-# new tex1 indices need to be shifted by all existing
-# want to use getBatchTriangles, but that needs an indexMap, which needs to be generated from collectVertices, which needs to have channels from setupChannels...
-# maybe work with converted & split assets instead? would need to decode buffers, make sure extra attributes are handled correctly
-
-def addLightmapUVs(bmd, newVtxDesc):
-    import xatlas
-    
-    newVtxDesc = VtxDesc()
-    newVtxDesc.attrib = VtxAttr.TEX1
-    newVtxDesc.dataType = VtxAttrIn.INDEX16
-    
-    assert bmd.vtx1.formats[6].arrayType == VtxAttr.TEX1
-    assert bmd.vtx1.formats[6].componentCount == CompType.TEX_ST
-    assert bmd.vtx1.formats[6].dataType == CompSize.F32
-    assert bmd.vtx1.formats[6].decimalPoint == 0
-
-    atlas = xatlas.Atlas()
-    for shape in bmd.shp1.batches:
-        atlas.add_mesh(positions, indices, uvs, normals)
 
 def splitByVertexFormat(bmd):
     groupedAttribs = {}

@@ -815,7 +815,7 @@ class UnityShaderGen(DXShaderGen):
                         fout.indent -= 1
                         fout.writeLine("ENDCG")
                 
-                if doMeta and mat.materialMode != 4:
+                if doMeta:
                     fout.writeLine("Pass")
                     with fout:
                         fout.writeLine("Tags { \"LightMode\" = \"Meta\" }")
