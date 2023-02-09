@@ -1,5 +1,4 @@
 from bmd import *
-from ctypes import *
 from struct import *
 from math import *
 from array import array
@@ -10,28 +9,19 @@ from unityassets import *
 from binascii import crc32
 from PIL import Image
 
-fmtCTypes = {
-    CompSize.U8:  c_ubyte,
-    CompSize.S8:  c_byte,
-    CompSize.U16: c_ushort,
-    CompSize.S16: c_short,
-    CompSize.F32: c_float
-}
-
 class kVertexFormat:
     Float = 0
     Float16 = 1
-    Color = 2
-    UNorm8 = 3
-    SNorm8 = 4
-    UNorm16 = 5
-    SNorm16 = 6
-    UInt8 = 7
-    SInt8 = 8
-    UInt16 = 9
-    SInt16 = 10
-    UInt32 = 11
-    SInt32 = 12
+    UNorm8 = 2
+    SNorm8 = 3
+    UNorm16 = 4
+    SNorm16 = 5
+    UInt8 = 6
+    SInt8 = 7
+    UInt16 = 8
+    SInt16 = 9
+    UInt32 = 10
+    SInt32 = 11
 
 fmtUTypes = {
     CompSize.U8:  kVertexFormat.UNorm8,
@@ -152,13 +142,12 @@ def transformVerts(bmd, batches, positions, normals=None):
                         transformedNormals[p.normalIndex] = (mat@normals[p.normalIndex].resized(4)).resized(3)
     return transformedPositions, transformedNormals
 
-def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones):
-    fields = []
-    vertexStruct = ['<']
+def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones, isOpaque):
+    vertexStruct = [[], [], []]
     uChannels = [{"stream": 0, "offset": 0, "format": 0, "dimension": 0} for i in range(14)]
     dataForArrayType = [None]*21
     
-    offset = 0
+    offset = [0, 0, 0]
 
     for fmt, original, asFloat in zip(formats, originalData, asFloat):
         if fmt is None: continue
@@ -173,18 +162,22 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
         elif fmt.arrayType == VtxAttr.CLR0:
             count = {CompType.CLR_RGB: 3, CompType.CLR_RGBA: 4}[fmt.componentCount]
             channel = 3
-            stream = 1
+            stream = 1 if isOpaque else 0
         elif fmt.arrayType == VtxAttr.CLR1:
             raise NotImplementedError()
         elif fmt.arrayType.value >= VtxAttr.TEX0.value and fmt.arrayType.value <= VtxAttr.TEX7.value:
             count = {CompType.TEX_S: 1, CompType.TEX_ST: 2}[fmt.componentCount]
             channel = 4+(fmt.arrayType.value-VtxAttr.TEX0.value)
-            stream = 1
+            stream = 1 if isOpaque else 0
         else:
             raise ValueError(fmt.arrayType)
+        
         uChannels[channel]["dimension"] = count
-        uChannels[channel]["offset"] = offset
+        uChannels[channel]["offset"] = offset[stream]
+        uChannels[channel]["stream"] = stream
+        
         assert dataForArrayType[fmt.arrayType.value] is None
+        
         if doBones and fmt.arrayType in (VtxAttr.POS, VtxAttr.NRM):
             if fmt.arrayType == VtxAttr.POS:
                 if fmt.componentCount != CompType.POS_XYZ: raise ValueError()
@@ -192,9 +185,8 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
             elif fmt.arrayType == VtxAttr.NRM:
                 assert fmt.componentCount == CompType.NRM_XYZ
                 arr = transformedNormalsArray
-            ctype = c_float
-            vertexStruct.append(str(count)+'f')
-            uChannels[channel]["format"] = kVertexFormat.Float
+            formatCode = 'f'
+            channelFormat = kVertexFormat.Float
         elif (fmt.arrayType not in (VtxAttr.CLR0, VtxAttr.CLR1) and \
                 (\
                  (fmt.dataType == CompSize.F32) or \
@@ -204,28 +196,27 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
                  (fmt.dataType == CompSize.S16 and fmt.decimalPoint == 15) \
                 )):
             arr = original
-            ctype = fmtCTypes[fmt.dataType]
-            vertexStruct.append(str(count)+fmtStructTypes[fmt.dataType])
-            uChannels[channel]["format"] = fmtUTypes[fmt.dataType]
+            formatCode = fmtStructTypes[fmt.dataType]
+            channelFormat = fmtUTypes[fmt.dataType]
+        # TODO: e.g. normals typically use decimalPoint 14, but only so that
+        # they can represent 1.0 exactly. check for this and similar cases
         elif fmt.arrayType in (VtxAttr.CLR0, VtxAttr.CLR1) and \
               (fmt.dataType in (CompSize.RGB8, CompSize.RGBX8, CompSize.RGBA8)):
             arr = original
-            ctype = c_ubyte
-            vertexStruct.append(str(count)+'B')
-            uChannels[channel]["format"] = kVertexFormat.Color
+            formatCode = 'B'
+            channelFormat = kVertexFormat.UNorm8
         elif (fmt.dataType != CompSize.F32) and \
               (log2(max(original)-min(original)) <= 11):
             arr = list(map(floatToHalf, asFloat))
-            ctype = c_ushort
-            vertexStruct.append(str(count)+'H')
-            uChannels[channel]["format"] = kVertexFormat.Float16
+            formatCode = 'H'
+            channelFormat = kVertexFormat.Float16
         else:
             arr = asFloat
-            ctype = c_float
-            vertexStruct.append(str(count)+'f')
-            uChannels[channel]["format"] = kVertexFormat.Float
-        fields.extend([ctype]*count)
-        offset += sizeof(ctype)*count
+            formatCode = 'f'
+            channelFormat = kVertexFormat.Float
+        vertexStruct[stream].append(str(count)+formatCode)
+        offset[stream] += count*calcsize(formatCode)
+        uChannels[channel]["format"] = channelFormat
         
         #formatForArrayType[fmt.arrayType.value] = fmt
         dataForArrayType[fmt.arrayType.value] = splitVertexArray(arr, count)
@@ -245,46 +236,39 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
     
         count = maxWeightCount
         channel = 12
-        stream = 2
+        stream = 2 if isOpaque else 1
         
         uChannels[channel]["dimension"] = count
-        uChannels[channel]["offset"] = offset
+        uChannels[channel]["offset"] = offset[stream]
+        uChannels[channel]["stream"] = stream
         
         arr = weights
-        ctype = c_float
-        vertexStruct.append(str(count)+'f')
+        vertexStruct[stream].append(str(count)+'f')
         uChannels[channel]["format"] = kVertexFormat.Float
-        
-        fields.extend([ctype]*count)
-        offset += sizeof(ctype)*count
+        offset[stream] += count*calcsize('f')
         
         count = maxWeightCount
         channel = 13
+        stream = 2 if isOpaque else 1
         
         uChannels[channel]["dimension"] = count
-        uChannels[channel]["offset"] = offset
+        uChannels[channel]["offset"] = offset[stream]
+        uChannels[channel]["stream"] = stream
         
         arr = boneIndices
-        ctype = c_byte
-        vertexStruct.append(str(count)+'b')
-        uChannels[channel]["format"] = kVertexFormat.SInt8
-        
-        fields.extend([ctype]*maxWeightCount)
-        offset += sizeof(ctype)*count
+        vertexStruct[stream].append(str(count)+'B')
+        uChannels[channel]["format"] = kVertexFormat.UInt8
+        offset[stream] += count*calcsize('B')
         #dataForArrayType[0] = splitVertexArray(arr, count)
     elif maxWeightCount == 0:
         maxWeightCount = 1
 
-    vertexStruct = Struct(''.join(vertexStruct))
-    class MyVertexFormat(Structure):
-        _pack_ = 1
-        _fields_ = list(zip(string.ascii_letters, fields))
-    assert sizeof(MyVertexFormat) == vertexStruct.size, (MyVertexFormat._fields_, sizeof(MyVertexFormat), vertexStruct.format, vertexStruct.size)
+    vertexStruct = [Struct('<'+''.join(v)) for v in vertexStruct]
     
-    return vertexStruct, uChannels, maxWeightCount, MyVertexFormat, dataForArrayType, boneIndices, weights
+    return vertexStruct, uChannels, maxWeightCount, dataForArrayType, boneIndices, weights
 
-def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeighted, weightData, transformedPositions, transformedNormals, boneIndices, weights):
-    uniqueVertices = []
+def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeighted, weightData, transformedPositions, transformedNormals, boneIndices, weights, isOpaque):
+    uniqueVertices = [[], [], []]
     indexMap = {}
     for batch in batches:
         for shapeDraw, shapeMatrix in batch.matrixGroups:
@@ -292,42 +276,48 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
             mmw = [1.0]+[0.0]*(maxWeightCount-1)
             for primitive in shapeDraw.primitives:
                 for point in primitive.points:
-                    if point.indices not in indexMap:
-                        uniqueVertex = []
-                        for arrayType in range(1, 21):
-                            data = dataForArrayType[arrayType]
-                            if point.indices[arrayType] == INVALID_INDEX and data is None:
-                                pass
-                            elif point.indices[arrayType] == INVALID_INDEX and data is not None:
-                                uniqueVertex.extend((0,)*len(data[0]))
-                            elif data is None:
-                                raise ValueError("{} references a vertex format {} that doesn't exist".format(primitive, arrayType))
+                    if point.indices in indexMap:
+                        continue
+                    uniqueVertex = [[], [], []]
+                    for arrayType in range(1, 21):
+                        stream = [2, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1][arrayType]
+                        if not isOpaque: stream = max(0, stream-1)
+                        data = dataForArrayType[arrayType]
+                        if point.indices[arrayType] == INVALID_INDEX and data is None:
+                            pass
+                        elif point.indices[arrayType] == INVALID_INDEX and data is not None:
+                            uniqueVertex[stream].extend((0,)*len(data[0]))
+                        elif data is None:
+                            raise ValueError("{} references a vertex format {} that doesn't exist".format(primitive, arrayType))
+                        else:
+                            if doBones:
+                                isint = isinstance(data[0][0], int)
+                                if arrayType == VtxAttr.POS.value:
+                                    data = transformedPositions
+                                elif arrayType == VtxAttr.NRM.value:
+                                    data = transformedNormals
+                                if isint and data in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
+                            uniqueVertex[stream].extend(data[point.indices[arrayType]])
+                    if doBones:
+                        stream = 2 if isOpaque else 1
+                        if batch.hasMatrixIndices:
+                            index = shapeMatrix.matrixTable[point.matrixIndex//3]
+                        else:
+                            index = shapeMatrix.matrixTable[0]
+                        if index != 0xffff:
+                            if isWeighted[index]:
+                                mmi = boneIndices[weightData[index]]
+                                mmw = weights[weightData[index]]
                             else:
-                                if doBones:
-                                    isint = isinstance(data[0][0], int)
-                                    if arrayType == VtxAttr.POS.value:
-                                        data = transformedPositions
-                                    elif arrayType == VtxAttr.NRM.value:
-                                        data = transformedNormals
-                                    if isint and data in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
-                                uniqueVertex.extend(data[point.indices[arrayType]])
-                        if doBones:
-                            if batch.hasMatrixIndices:
-                                index = shapeMatrix.matrixTable[point.matrixIndex//3]
-                            else:
-                                index = shapeMatrix.matrixTable[0]
-                            if index != 0xffff:
-                                if isWeighted[index]:
-                                    mmi = boneIndices[weightData[index]]
-                                    mmw = weights[weightData[index]]
-                                else:
-                                    mmi = [weightData[index]]+[0]*(maxWeightCount-1)
-                                    mmw = [1.0]+[0.0]*(maxWeightCount-1)
-                            uniqueVertex.extend(mmw)
-                            uniqueVertex.extend(mmi)
-                        uniqueIndex = len(uniqueVertices)
-                        uniqueVertices.append(tuple(uniqueVertex))
-                        indexMap[point.indices] = uniqueIndex
+                                mmi = [weightData[index]]+[0]*(maxWeightCount-1)
+                                mmw = [1.0]+[0.0]*(maxWeightCount-1)
+                        uniqueVertex[stream].extend(mmw)
+                        uniqueVertex[stream].extend(mmi)
+                    uniqueIndex = len(uniqueVertices[0])
+                    for vertexStream, newVertex in zip(uniqueVertices, uniqueVertex):
+                        vertexStream.append(tuple(newVertex))
+                    indexMap[point.indices] = uniqueIndex
+    assert all(len(v) == len(uniqueVertices[0]) for v in uniqueVertices)
     return indexMap, uniqueVertices
 
 def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
@@ -359,15 +349,15 @@ def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
             raise ValueError(node.type)
     return subMeshTriangles, subMeshVertices
 
-def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, jointMatrices, joints, scenegraph):
+def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, jointMatrices, joints, scenegraph):
     mesh = Mesh(str(4300000), '')
     asset = unityparser.UnityDocument([mesh])
 
     mesh.m_Name = name
-    mesh.serializedVersion = 9
+    mesh.serializedVersion = 10
     mesh.m_IsReadable = 0
-    mesh.m_KeepVertices = int(doBones)
-    mesh.m_KeepIndices = int(doBones)
+    mesh.m_KeepVertices = 0
+    mesh.m_KeepIndices = 0
     mesh.m_IndexFormat = 0
     mesh.m_SubMeshes = []
 
@@ -414,13 +404,18 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
             })
             indexBuffer.extend(triangles)
     
+    typelessdata = b''
+    for subStruct, vertexStream in zip(vertexStruct, uniqueVertices):
+        typelessdata += b''.join(subStruct.pack(*v) for v in vertexStream)
+        typelessdata += b'\0'*alignAmt(len(typelessdata), 16)
     mesh.m_VertexData = {
-        "serializedVersion": 2,
-        "m_VertexCount": len(uniqueVertices),
+        "serializedVersion": 3,
+        "m_VertexCount": len(uniqueVertices[0]),
         "m_Channels": uChannels,
-        "m_DataSize": len(uniqueVertices)*sizeof(MyVertexFormat),
-        "_typelessdata": (b''.join([vertexStruct.pack(*v) for v in uniqueVertices])).hex()
+        "m_DataSize": len(typelessdata),
+        "_typelessdata": typelessdata.hex()
     }
+    del typelessdata
     mesh.m_IndexBuffer = indexBuffer.tobytes().hex()
     mesh.m_LocalAABB = {
         "m_Center": {'x': (minXTotal+maxXTotal)/2, 'y': (minYTotal+maxYTotal)/2, 'z': (minZTotal+maxZTotal)/2},
@@ -468,20 +463,22 @@ def buildMesh(bmd):
         else: transformedNormals = None
         transformedPositionsArray = transformedNormalsArray = None
     
+    isOpaque = all(bmd.mat3.materials[matIdx].zCompLoc and bmd.mat3.materials[matIdx].materialMode != 4 for matIdx in bmd.mat3.remapTable)
+    
     #print("Setting channels")
-    vertexStruct, uChannels, maxWeightCount, MyVertexFormat, dataForArrayType, boneIndices, weights = setupChannels(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat, bmd.evp1.weightedIndices, bmd.evp1.weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones)
+    vertexStruct, uChannels, maxWeightCount, dataForArrayType, boneIndices, weights = setupChannels(bmd.vtx1.formats, bmd.vtx1.originalData, bmd.vtx1.asFloat, bmd.evp1.weightedIndices, bmd.evp1.weightedWeights, transformedPositionsArray, transformedNormalsArray, doBones, isOpaque)
 
     #print("Collecting vertices")
-    indexMap, uniqueVertices = collectVertices(bmd.shp1.batches, maxWeightCount, dataForArrayType, doBones, bmd.drw1.isWeighted, bmd.drw1.data, transformedPositions, transformedNormals, boneIndices, weights)
+    indexMap, uniqueVertices = collectVertices(bmd.shp1.batches, maxWeightCount, dataForArrayType, doBones, bmd.drw1.isWeighted, bmd.drw1.data, transformedPositions, transformedNormals, boneIndices, weights, isOpaque)
     
     #print("Making sub-meshes")
     subMeshTriangles, subMeshVertices = makeSubMeshes(len(bmd.mat3.remapTable), bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
     
-    return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct
+    return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct
 
-def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct):
+def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct):
     doBones = len(bmd.jnt1.frames) > 1
-    asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
+    asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
     #print("Writing asset")
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
@@ -490,8 +487,8 @@ def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, un
     return meshId, asset.entry.m_LocalAABB
 
 def exportBmd(bmd, outputFolderLocation):
-    subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct = buildMesh(bmd)
-    return exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct)
+    subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct = buildMesh(bmd)
+    return exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct)
 
 filterModes = [0, 1, 0, 1, 0, 2]
 def exportTexture(img, bmddir):
@@ -791,6 +788,20 @@ def addNormals(bmd, newVtxDesc):
     bmd.vtx1.originalData = list(bmd.vtx1.originalData)
     bmd.vtx1.originalData[1] = bmd.vtx1.asFloat[1]
 
+def adjustScenegraphMaterials(m, usedMaterialSlots):
+    if m.type == 0x11:
+        m.index = usedMaterialSlots.index(m.index)
+    for n in m.children:
+        adjustScenegraphMaterials(n, usedMaterialSlots)
+
+def addFilteredMaterialBlock(subBmd, bmd):
+    subBmd.mat3 = MaterialBlock()
+    subBmd.mat3.materials = bmd.mat3.materials
+    usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
+    subBmd.mat3.remapTable = [bmd.mat3.remapTable[slotIdx] for slotIdx in usedMaterialSlots]
+    adjustScenegraphMaterials(subBmd.scenegraph, usedMaterialSlots)
+    subBmd.inf1.scenegraph = subBmd.scenegraph.to_array()
+
 def splitByVertexFormat(bmd):
     groupedAttribs = {}
     for shape in bmd.shp1.batches:
@@ -816,11 +827,10 @@ def splitByVertexFormat(bmd):
         assert VtxAttr.POS in attribs, attribs
         subBmd.vtx1.formats = [f if f is None or f.arrayType in attribs else None for f in bmd.vtx1.formats]
 
-        if VtxAttr.NRM not in attribs and VtxAttr.TEX2 not in attribs:
+        if VtxAttr.NRM not in attribs and VtxAttr.TEX1 not in attribs:
             newVtxDesc = VtxDesc()
             newVtxDesc.attrib = VtxAttr.NRM
             newVtxDesc.dataType = VtxAttrIn.INDEX16
-            vtxDescs += (newVtxDesc,)
 
             addNormals(subBmd, newVtxDesc)
         
@@ -830,12 +840,7 @@ def splitByVertexFormat(bmd):
         subBmd.jnt1.matrices = []#[m for i, m in enumerate(bmd.jnt1.matrices) if i in usedJoints]
         subBmd.jnt1.frames = []#[f for i, f in enumerate(bmd.jnt1.frames) if i in usedJoints]
         
-        subBmd.mat3 = MaterialBlock()
-        usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
-        subBmd.mat3.remapTable = usedMaterialSlots
-        for sg in subBmd.inf1.scenegraph:
-            if sg.type == 0x11:
-                sg.index = usedMaterialSlots.index(sg.index)
+        addFilteredMaterialBlock(subBmd, bmd)
         
         subBmd.tex1 = bmd.tex1
         subBmd.evp1 = bmd.evp1 # unused when doBones off
@@ -889,12 +894,7 @@ def splitByConnectedPieces(bmd):
         
         subBmd.jnt1 = bmd.jnt1
         
-        subBmd.mat3 = MaterialBlock()
-        usedMaterialSlots = list({sg.index for sg in subBmd.inf1.scenegraph if sg.type == 0x11})
-        subBmd.mat3.remapTable = usedMaterialSlots
-        for sg in subBmd.inf1.scenegraph:
-            if sg.type == 0x11:
-                sg.index = usedMaterialSlots.index(sg.index)
+        addFilteredMaterialBlock(subBmd, bmd)
         
         subBmd.tex1 = bmd.tex1
         subBmd.evp1 = bmd.evp1

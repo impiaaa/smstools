@@ -370,9 +370,9 @@ import xatlas
 
 def getChannelData(uChannels, uniqueVertices, ch):
     if uChannels[ch]["dimension"] > 0:
-        start = sum(channel["dimension"] for channel in uChannels[:ch])
+        start = sum(channel["dimension"] for channel in uChannels[:ch] if channel["stream"] == uChannels[ch]["stream"])
         end = start+uChannels[ch]["dimension"]
-        return [vert[start:end] for vert in uniqueVertices]
+        return [vert[start:end] for vert in uniqueVertices[uChannels[ch]["stream"]]]
     else:
         return None
 
@@ -388,28 +388,31 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
     bmddatadir = outbmddir / bmdpath_rel.stem
     bmddatadir.mkdir(parents=True, exist_ok=True)
     bmdkey = str(bmdpath_rel).lower()
-    if bmd.name == "map":
+    if bmd.name in ("map", "sky"):
         #print("Exporting textures")
         textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
         
         #print("Exporting materials")
         useColor1 = all(map(bool, bmd.vtx1.colors))
         materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, True))
-        materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
         
         meshes = []
         for subBmd in splitByVertexFormat(bmd):
-            for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd)):
+            for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd) if bmd.name == "map" else [subBmd]):
                 #if i > 31: break
                 print(subSubBmd.name)
                 meshes.append((subSubBmd, buildMesh(subSubBmd)))
         print("Setting up atlas")
         atlas = xatlas.Atlas()
-        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct) in meshes:
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
             if uChannels[5]["dimension"] > 0:
                 continue
             positions = getChannelData(uChannels, uniqueVertices, 0)
-            normals = getChannelData(uChannels, uniqueVertices, 1)
+            # only seed with normals if they weren't generated
+            if 'NRM' in subSubBmd.name:
+                normals = getChannelData(uChannels, uniqueVertices, 1)
+            else:
+                normals = None
             uvs = getChannelData(uChannels, uniqueVertices, 4)
             materialIndices = [i for i, indices in enumerate(subMeshTriangles) for j in range(len(indices)//3)]
             indices = [idx for indices in subMeshTriangles for idx in indices]
@@ -421,11 +424,11 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         print("Exporting assets")
         atlasIdx = 0
         bmds[bmdkey] = []
-        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct) in meshes:
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
             if uChannels[5]["dimension"] == 0:
                 vmapping, newIndices, uvs = atlas[atlasIdx]
                 assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
-                uniqueVertices = [uniqueVertices[oldIdx] for oldIdx in vmapping]
+                uniqueVertices = [[stream[oldIdx] for oldIdx in vmapping] for stream in uniqueVertices]
                 groupedTriangles = [set(zip(indices[0::3], indices[1::3], indices[2::3])) for indices in subMeshTriangles]
                 # set is not equivalent to list
                 # meaning some tris are duplicate
@@ -442,7 +445,8 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                     assert found, "can't find new {} old {}".format(newTriangle, oldTriangle)
                 subMeshTriangles = newSubMeshTriangles
                 atlasIdx += 1
-            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, MyVertexFormat, vertexStruct), [materialIdInSlot[oldSlot] for oldSlot in subSubBmd.mat3.remapTable]))
+            materialIdInSlot = [materialIds[matIndex] for matIndex in subSubBmd.mat3.remapTable]
+            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct), materialIdInSlot))
         del meshes
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
@@ -454,13 +458,8 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             
             #print("Exporting materials")
             useColor1 = all(map(bool, bmd.vtx1.colors))
-            materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, bmd.name in ("map", "sky")))
+            materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, False))
             materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
-            if bmd.name == "sky":
-                newVtxDesc = VtxDesc()
-                newVtxDesc.attrib = VtxAttr.NRM
-                newVtxDesc.dataType = VtxAttrIn.INDEX16
-                addNormals(bmd, newVtxDesc)
             bmds[bmdkey] = bmd.name, exportBmd(bmd, outbmddir), materialIdInSlot
 
 materials = {}
@@ -891,12 +890,26 @@ def doActor(o, grpXfm):
         waveXfm.m_LocalScale['z'] /= -SCALE
     if isinstance(o, TSky):
         objObj.m_StaticEditorFlags = 0xFFFFFFFF
-        renderer, meshFilter = addMeshFilter("map/map/sky.bmd", objObj)
-        renderer.m_CastShadows = 0
         objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
-        name, materialIds = materials["map/map/sky.bmt"]
-        if materialIds is not None:
-            renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+        objXfm.m_Children = []
+        for assetAndMaterials in bmds["map/map/sky.bmd"]:
+            meshObj = GameObject(getId(), '')
+            meshObj.serializedVersion = 6
+            meshObj.m_Component = []
+            meshObj.m_IsActive = 1
+            meshObj.m_StaticEditorFlags = 0xFFFFFFFF
+            meshObj.m_Name = assetAndMaterials[0]
+            scene.entries.append(meshObj)
+            meshXfm = meshObj.getOrCreateComponent(Transform)
+            meshXfm.m_Father = getObjRef(objXfm)
+            meshXfm.m_RootOrder = len(objXfm.m_Children)
+            objXfm.m_Children.append(getObjRef(meshXfm))
+            
+            renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
+            renderer.m_CastShadows = 0
+            name, materialIds = materials["map/map/sky.bmt"]
+            if materialIds is not None:
+                renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
     return objObj, objXfm
 
 print("Adding actors")
