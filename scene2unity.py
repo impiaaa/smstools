@@ -365,7 +365,7 @@ for colpath in scenedirpath.rglob("*.col"):
 import bmd2unity, bmd, shadergen2
 bmdtime = max(pathlib.Path(bmd2unity.__file__).stat().st_mtime, pathlib.Path(bmd.__file__).stat().st_mtime, pathlib.Path(shadergen2.__file__).stat().st_mtime, btitime)
 from bmd import BModel, VtxDesc, VtxAttr, VtxAttrIn, CompType, CompSize, ArrayFormat
-from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces, buildMesh, exportAsset
+from bmd2unity import exportBmd, exportTextures, exportMaterials, splitByVertexFormat, addNormals, splitByConnectedPieces, buildMesh, exportAsset, kVertexFormat
 import xatlas
 
 def getChannelData(uChannels, uniqueVertices, ch):
@@ -399,8 +399,6 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         meshes = []
         for subBmd in splitByVertexFormat(bmd):
             for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd) if bmd.name == "map" else [subBmd]):
-                #if i > 31: break
-                print(subSubBmd.name)
                 meshes.append((subSubBmd, buildMesh(subSubBmd)))
         print("Setting up atlas")
         atlas = xatlas.Atlas()
@@ -414,7 +412,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             else:
                 normals = None
             uvs = getChannelData(uChannels, uniqueVertices, 4)
-            materialIndices = [i for i, indices in enumerate(subMeshTriangles) for j in range(len(indices)//3)]
+            #materialIndices = [i for i, indices in enumerate(subMeshTriangles) for j in range(len(indices)//3)]
             indices = [idx for indices in subMeshTriangles for idx in indices]
             indices = list(zip(indices[0::3], indices[1::3], indices[2::3]))
             # parameter order does not match documentation!!!
@@ -428,7 +426,8 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             if uChannels[5]["dimension"] == 0:
                 vmapping, newIndices, uvs = atlas[atlasIdx]
                 assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
-                uniqueVertices = [[stream[oldIdx] for oldIdx in vmapping] for stream in uniqueVertices]
+                assert len(uvs) == len(vmapping)
+                
                 groupedTriangles = [set(zip(indices[0::3], indices[1::3], indices[2::3])) for indices in subMeshTriangles]
                 # set is not equivalent to list
                 # meaning some tris are duplicate
@@ -444,6 +443,20 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                             newSubMeshTriangles[triGrpIdx].extend(map(int, newTriangle))
                     assert found, "can't find new {} old {}".format(newTriangle, oldTriangle)
                 subMeshTriangles = newSubMeshTriangles
+                
+                isOpaque = all(subSubBmd.mat3.materials[matIdx].zCompLoc and subSubBmd.mat3.materials[matIdx].materialMode != 4 for matIdx in subSubBmd.mat3.remapTable)
+                stream = 2 if isOpaque else 1
+
+                uniqueVertices = [[vertexStream[oldIdx] for oldIdx in vmapping] for vertexStream in uniqueVertices]
+                uniqueVertices[stream] = [uniqueVertex+tuple(uv) for uniqueVertex, uv in zip(uniqueVertices[stream], uvs)]
+                
+                uChannels[5]["stream"] = stream
+                uChannels[5]["offset"] = vertexStruct[stream].size
+                uChannels[5]["format"] = kVertexFormat.Float
+                uChannels[5]["dimension"] = 2
+
+                vertexStruct[stream] = struct.Struct(vertexStruct[stream].format+'2f')
+                
                 atlasIdx += 1
             materialIdInSlot = [materialIds[matIndex] for matIndex in subSubBmd.mat3.remapTable]
             bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct), materialIdInSlot))
