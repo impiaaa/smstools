@@ -664,6 +664,8 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
         # in the m_Colors block
         for i, color in enumerate(mat.matColors):
             if color is not None: colors["_MatColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
+            # hard-coded lightmap parameter
+            if color is not None and i == 0: colors["_Color"] = {c: v/255 for c, v in zip('rgba', color)}
         # amb color is never animated, so not exposed in material properties
         #for i, color in enumerate(mat.ambColors):
         #    if color is not None: colors["_AmbColor%d"%i] = {c: v/255 for c, v in zip('rgba', color)}
@@ -693,13 +695,24 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
                 texEnv["m_Texture"] = {"fileID": 2800000, "guid": textureIds[texIdx], "type": 3}
             
             texEnvs["_Tex%d"%i] = texEnv
+            # hard-coded lightmap parameter
+            if i == 0:
+                texEnvs["_MainTex"] = {
+                    "m_Scale": dict(texEnv["m_Scale"]),
+                    "m_Offset": dict(texEnv["m_Offset"]),
+                    "m_Texture": dict(texEnv["m_Texture"])
+                }
         # send texmtx center, rotation
         for i, texMtx in enumerate(mat.texMtxs):
             if texMtx is not None: colors["_Tex%d_CR"%i] = {"r": texMtx.center[0], "g": texMtx.center[1], "b": texMtx.center[2], "a": texMtx.rotation*pi}
+        floats = {}
+        # hard-coded lightmap parameter
+        if mat.alphaComp is not None: floats["_Cutoff"] = (mat.alphaComp.ref1 if (mat.alphaComp.comp0 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND) or (mat.alphaComp.comp0 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR) else mat.alphaComp.ref0)/255
         uMat.m_SavedProperties = {
             "serializedVersion": 3,
             "m_TexEnvs": texEnvs,
-            "m_Colors": colors
+            "m_Colors": colors,
+            "m_Floats": floats
         }
         uMat.m_Shader = getFileRef(shader, id=4800000, type=3)
         asset = unityparser.UnityDocument([uMat])

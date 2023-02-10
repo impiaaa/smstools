@@ -617,6 +617,8 @@ class UnityShaderGen(DXShaderGen):
                 # in the ShaderLab properties. "Vector" types are not converted.
                 for i, color in enumerate(mat.matColors):
                     if color is not None: fout.writeLine("_MatColor{0} (\"Material color {0}\", Vector) = (0, 0, 0, 1)".format(i))
+                    # hard-coded lightmap parameter
+                    if color is not None and i == 0: fout.writeLine("_Color (\"Material color {0} for lightmap\", Color) = (0, 0, 0, 1)".format(i))
                 # amb color is never animated
                 #for i, color in enumerate(mat.ambColors):
                 #    if color is not None: fout.writeLine("_AmbColor{0} (\"Ambient color {0}\", Vector) = (0, 0, 0, 1)".format(i))
@@ -638,10 +640,14 @@ class UnityShaderGen(DXShaderGen):
                         if texMtx is not None: desc += "/"
                     if texMtx is not None: desc += "Texture matrix {} ST".format(i)
                     fout.writeLine("{}_Tex{} (\"{}\", 2D) = \"black\" {{}}".format(tags, i, desc))
+                    # hard-coded lightmap parameter
+                    if i == 0: fout.writeLine("{}_MainTex (\"{} for lightmap\", 2D) = \"black\" {{}}".format(tags, desc))
                 # still need texmtx center, rotation
                 for i, texMtx in enumerate(mat.texMtxs):
                     if texMtx is not None: fout.writeLine("_Tex{0}_CR (\"Texture matrix {0} CR\", Vector) = (0.5, 0.5, 0, 0)".format(i))
                 # postTexMtx is never animated
+                # hard-coded lightmap parameter
+                if mat.alphaComp is not None: fout.writeLine("_Cutoff (\"Alpha compare for lightmap\", Range(0,1)) = 1")
             
             if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans): fout.writeLine("CustomEditor \"EmissiveShaderGUI\"")
             

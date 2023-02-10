@@ -263,7 +263,7 @@ def setupObject(o):
 UndergroundShift = 528
 def setupPosition(objXfm, o):
     x, y, z = SCALE*o.pos[0], SCALE*o.pos[1], -1*SCALE*o.pos[2]
-    if y > 80 and abs(x) < 1000 and abs(z) < 1000:
+    if y > 92 and y < 120 and abs(x) < 120 and abs(z) < 77:
         # put the rooms in the sky underground
         z += UndergroundShift
     objXfm.m_LocalPosition = {'x': x, 'y': y, 'z': z}
@@ -418,8 +418,10 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             atlas.add_mesh(positions, indices, normals, uvs)
         print("Generating atlas")
         packOpt = xatlas.PackOptions()
-        packOpt.padding = 1
-        packOpt.texels_per_unit = 0.64/16 # resolution of the "wanted" posters
+        packOpt.padding = 2
+        # largest mesh size is 125967.453125
+        #packOpt.texels_per_unit = 40/100
+        packOpt.resolution = 4096
         atlas.generate(pack_options=packOpt, verbose=True)
         atlasIdx = 0
         bmds[bmdkey] = []
@@ -429,6 +431,8 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
                 assert len(uvs) == len(vmapping)
                 scaleInLightmap = float(max(uvs[:,0].max()-uvs[:,0].min(), uvs[:,1].max()-uvs[:,1].min()))
+                scaleInLightmap /= 4095/4096
+                scaleInLightmap = min(scaleInLightmap, 1)
                 
                 groupedTriangles = [set(zip(indices[0::3], indices[1::3], indices[2::3])) for indices in subMeshTriangles]
                 # set is not equivalent to list
@@ -499,156 +503,6 @@ for bmtpath in scenedirpath.rglob("*.bmt"):
         materialIds = list(exportMaterials(bmt.mat3.materials[:max(bmt.mat3.remapTable)+1], bmt.mat3.indirectArray, bmt.tex1.textures, bmtdatadir, textureIds, True, 1/SCALE, bmt.name in ("map", "sky")))
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmt.mat3.remapTable]
         materials[bmtkey] = bmt.name, materialIdInSlot
-
-print("Opening scene")
-scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
-
-ocs = OcclusionCullingSettings(getId(), '')
-rs = RenderSettings(getId(), '')
-lms = LightmapSettings(getId(), '')
-nms = NavMeshSettings(getId(), '')
-
-# Subtractive light mode. Only works if the main light is set to realtime-only.
-lms.m_UseShadowmask = 0
-lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1}
-
-managers = scene.search("コンダクター初期化用")
-for o in managers.objects:
-    if isinstance(o, TMapObjBaseManager):
-        o.lodClipSize = (o.clipRadius/tan(radians(25)))/o.farClip
-
-for o in scene.objects:
-    if o.name == 'MarScene':
-        marScene = o
-        break
-
-for o in marScene.objects:
-    if o.name == 'AmbAry' and len(o.objects) > 0:
-        ambColor = o.search("太陽アンビエント（オブジェクト）")
-        assert ambColor.name == 'AmbColor'
-        rs.m_AmbientSkyColor = doColor(ambColor.color)
-        #rs.m_AmbientSkyColor = {'r': 0.0, 'g': 0.44313725490196076, 'b': 0.7372549019607844, 'a': 1.0}
-        rs.m_AmbientEquatorColor = {'r': 0.803921568627451, 'g': 0.8431372549019608, 'b': 1.0, 'a': 1.0}
-        rs.m_AmbientGroundColor = doColor(ambColor.color)
-        rs.m_AmbientMode = 3
-        rs.m_AmbientIntensity = 1
-        rs.m_SkyboxMaterial = {'fileID': 0}
-        
-        ambColor = o.search("影アンビエント（オブジェクト）")
-        assert ambColor.name == 'AmbColor'
-        rs.m_SubtractiveShadowColor = doColor(ambColor.color)
-        # or {'r': 0.06274509803921569, 'g': 0.1568627450980392, 'b': 0.42745098039215684, 'a': 1.0}
-
-scene = unityparser.UnityDocument([ocs, rs, lms, nms])
-
-print("Adding base colliders")
-for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
-    if baseColliderName not in cols: continue
-    grpObj = GameObject(getId(), '')
-    scene.entries.append(grpObj)
-    grpObj.m_Name = baseColliderName
-    grpObj.m_IsActive = 1
-    grpObj.serializedVersion = 6
-    grpObj.m_Component = []
-    grpXfm = grpObj.getOrCreateComponent(Transform)
-    grpXfm.m_Children = []
-    colliderGroups = {}
-    for physName, uuid, center in cols[baseColliderName]:
-        baseName = physName.split('.')[0]
-        assert baseName.startswith(baseColliderName.split('/')[-1])
-        baseName = baseName[len(baseColliderName.split('/')[-1])+1:]
-        if baseColliderName == "map/map":
-            if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
-                # put the rooms in the sky underground
-                baseName += "-interior"
-        if baseName in colliderGroups:
-            objObj = colliderGroups[baseName]
-        else:
-            objObj = GameObject(getId(), '')
-            scene.entries.append(objObj)
-            objObj.m_Name = baseName
-            objObj.m_IsActive = 1
-            objObj.serializedVersion = 6
-            objObj.m_Component = []
-            objXfm = objObj.getOrCreateComponent(Transform)
-            objXfm.m_RootOrder = len(grpXfm.m_Children)
-            grpXfm.m_Children.append(getObjRef(objXfm))
-            objXfm.m_Father = getObjRef(grpXfm)
-            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -1*SCALE}
-            if baseName.endswith("-interior"):
-                objXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': float(UndergroundShift)}
-            colliderGroups[baseName] = objObj
-        addCol(uuid, objObj)
-
-print("Loading prefabs")
-prefabsByGuid = {}
-prefabs = {}
-for assetPath in (outpath / "prefabs").glob("*.prefab"):
-    metapath = assetPath.with_suffix(".prefab.meta")
-    guid = unityparser.UnityDocument.load_yaml(metapath).entry['guid']
-    prefabData = unityparser.UnityDocument.load_yaml(assetPath)
-    prefabsByGuid[guid] = prefabData
-    prefabs[assetPath.stem] = guid, prefabData
-
-for o in marScene.objects:
-    if o.name == 'LightAry':
-        lightgrpObj, lightgrpXfm = setupObject(o)
-        lightgrpXfm.m_Children = []
-        o2 = o.search("太陽（オブジェクト）")
-        assert o2.name == 'Light'
-        objObj, objXfm = setupObject(o2)
-        
-        setupPosition(objXfm, o2)
-        
-        euler, quat = lookAt(numpy.array([-o2.pos[0], -o2.pos[1], o2.pos[2]]))
-        objXfm.m_LocalEulerAnglesHint = dict(zip('xyz', euler))
-        objXfm.m_LocalRotation = dict(zip('wxyz', quat.tolist()))
-        
-        objXfm.m_RootOrder = len(lightgrpXfm.m_Children)
-        lightgrpXfm.m_Children.append(getObjRef(objXfm))
-        objXfm.m_Father = getObjRef(lightgrpXfm)
-        
-        light = objObj.getOrCreateComponent(Light)
-        light.serializedVersion = 10
-        light.m_Color = doColor(o2.color)
-        light.m_Intensity = 1
-        light.m_Type = 1 # directional
-        light.m_Shadows = {"m_Type": 1} # hard shadows
-        light.m_Lightmapping = 4 # realtime (required for subtractive GI)
-    if o.name == 'Strategy':
-        strategy = o
-
-from sObjDataTable import sObjDataTable, end_data
-actorDataTable = {
-    "SeaIndirect": {"modelName": "SeaIndirect", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
-    "ReflectParts": {"modelName": "ReflectParts", "unk9": 0x10210000, "unk15": 0, "flags16": 0x10},
-    "ReflectSky": {"modelName": "ReflectSky", "unk9": 0x10210000, "unk15": 0, "flags16": 0x08},
-    "sun_mirror": {"modelName": "sun_mirror", "unk9": 0x10220000, "unk15": 0, "flags16": 0x62},
-    "sea": {"groupName": "マップグループ", "modelName": "sea", "unk9": 0x10220000, "unk15": 0, "flags16": 0x80},
-    "falls": {"unk9": 0x10210000, "soundKey": 0x3022, "unk15": 0, "flags16": 0x00},
-    "fountain": {"unk9": 0x10210000, "soundKey": 0x3000, "unk15": 0, "flags16": 0x00},
-    "TopOfCorona": {"hitFlags": 0x40000024, "unk9": 0x10210000, "particle": "/scene/mapObj/ms_coronasmoke.jpa", "particleId": 0x146, "unk15": 1, "flags16": 0x00},
-    "BiancoRiver": {"modelName": "BiancoRiver", "unk9": 0x10210000, "unk15": 0, "flags16": 0x40},
-    "SoundObjRiver": {"unk9": 0x10210000, "soundKey": 0x500f, "unk15": 0, "flags16": 0x00},
-    "SoundObjWaterIntoWater": {"unk9": 0x10210000, "soundKey": 0x5010, "unk15": 0, "flags16": 0x00},
-    "BiancoAirWall": {"unk9": 0x10210000, "collisionManagerName": "BiaAirWall", "unk15": 0, "flags16": 0x02},
-    "BiancoBossEffectLight": {"unk9": 0x10210000, "particle": "/scene/map/map/ms_wmlin_light.jpa", "particleId": 0x151, "unk15": 1, "flags16": 0x00},
-    "BiaWaterPollution": {"modelName": "BiaWaterPollution", "unk9": 0x11220000, "unk15": 0, "flags16": 0x40},
-    "riccoSea": {"unk9": 0x10210000, "collisionManagerName": "riccoSea", "unk15": 0, "flags16": 0x00},
-    "riccoSeaPollutionS0": {"modelName": "riccoSeaPollutionS0", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS0", "unk15": 0, "flags16": 0x40},
-    "riccoSeaPollutionS1": {"modelName": "riccoSeaPollutionS1", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS1", "unk15": 0, "flags16": 0x40},
-    "riccoSeaPollutionS2": {"modelName": "riccoSeaPollutionS2", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS2", "unk15": 0, "flags16": 0x40},
-    "riccoSeaPollutionS3": {"modelName": "riccoSeaPollutionS3", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS3", "unk15": 0, "flags16": 0x40},
-    "riccoSeaPollutionS4": {"modelName": "riccoSeaPollutionS4", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS4", "unk15": 0, "flags16": 0x40},
-    "MareFalls": {"unk9": 0x10210000, "soundKey": 0x3000, "unk15": 0, "flags16": 0x00},
-    "mareSeaPollutionS0": {"modelName": "mareSeaPollutionS0", "unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS0", "unk15": 0, "flags16": 0x00},
-    "mareSeaPollutionS12": {"modelName": "mareSeaPollutionS12", "unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS12", "unk15": 0, "flags16": 0x00},
-    "mareSeaPollutionS34567": {"unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS34567", "unk15": 0, "flags16": 0x00},
-    "Mare5ExGate": {"modelName": "Mare5ExGate", "unk9": 0x10210000, "unk15": 0, "flags16": 0x40},
-    "MonteRiver": {"modelName": "MonteRiver", "unk9": 0x10210000, "collisionManagerName": "MonteRiver", "unk15": 0, "flags16": 0x40},
-    "IndirectObj": {"modelName": "IndirectObj", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
-    "TargetArrow": {"modelName": "TargetArrow", "unk9": 0x10210000, "unk15": 0, "flags16": 0x04},
-}
 
 import csv, os
 AudioRes = pathlib.Path(os.getcwd()) / "AudioRes"
@@ -750,6 +604,156 @@ def getSound(soundKey):
     parsedInfo = (volume, pitch, loop, guid)
     sounds[soundKey] = parsedInfo
     return parsedInfo
+
+print("Opening scene")
+scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
+
+ocs = OcclusionCullingSettings(getId(), '')
+rs = RenderSettings(getId(), '')
+lms = LightmapSettings(getId(), '')
+nms = NavMeshSettings(getId(), '')
+
+# Subtractive light mode. Only works if the main light is set to realtime-only.
+lms.m_UseShadowmask = 0
+lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1, "m_AtlasSize": 4096}
+
+managers = scene.search("コンダクター初期化用")
+for o in managers.objects:
+    if isinstance(o, TMapObjBaseManager):
+        o.lodClipSize = (o.clipRadius/tan(radians(25)))/o.farClip
+
+for o in scene.objects:
+    if o.name == 'MarScene':
+        marScene = o
+        break
+
+for o in marScene.objects:
+    if o.name == 'AmbAry' and len(o.objects) > 0:
+        ambColor = o.search("太陽アンビエント（オブジェクト）")
+        assert ambColor.name == 'AmbColor'
+        rs.m_AmbientSkyColor = doColor(ambColor.color)
+        #rs.m_AmbientSkyColor = {'r': 0.0, 'g': 0.44313725490196076, 'b': 0.7372549019607844, 'a': 1.0}
+        rs.m_AmbientEquatorColor = {'r': 0.803921568627451, 'g': 0.8431372549019608, 'b': 1.0, 'a': 1.0}
+        rs.m_AmbientGroundColor = doColor(ambColor.color)
+        rs.m_AmbientMode = 3
+        rs.m_AmbientIntensity = 1
+        rs.m_SkyboxMaterial = {'fileID': 0}
+        
+        ambColor = o.search("影アンビエント（オブジェクト）")
+        assert ambColor.name == 'AmbColor'
+        rs.m_SubtractiveShadowColor = doColor(ambColor.color)
+        # or {'r': 0.06274509803921569, 'g': 0.1568627450980392, 'b': 0.42745098039215684, 'a': 1.0}
+
+scene = unityparser.UnityDocument([ocs, rs, lms, nms])
+
+print("Adding base colliders")
+for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
+    if baseColliderName not in cols: continue
+    grpObj = GameObject(getId(), '')
+    scene.entries.append(grpObj)
+    grpObj.m_Name = baseColliderName
+    grpObj.m_IsActive = 1
+    grpObj.serializedVersion = 6
+    grpObj.m_Component = []
+    grpXfm = grpObj.getOrCreateComponent(Transform)
+    grpXfm.m_Children = []
+    colliderGroups = {}
+    for physName, uuid, center in cols[baseColliderName]:
+        baseName = physName.split('.')[0]
+        assert baseName.startswith(baseColliderName.split('/')[-1])
+        baseName = baseName[len(baseColliderName.split('/')[-1])+1:]
+        if baseColliderName == "map/map":
+            if center['y'] >= 9250 and center['y'] < 12002 and abs(center['x']) < 12031 and abs(center['z']) < 7696:
+                # put the rooms in the sky underground
+                baseName += "-interior"
+        if baseName in colliderGroups:
+            objObj = colliderGroups[baseName]
+        else:
+            objObj = GameObject(getId(), '')
+            scene.entries.append(objObj)
+            objObj.m_Name = baseName
+            objObj.m_IsActive = 1
+            objObj.serializedVersion = 6
+            objObj.m_Component = []
+            objXfm = objObj.getOrCreateComponent(Transform)
+            objXfm.m_RootOrder = len(grpXfm.m_Children)
+            grpXfm.m_Children.append(getObjRef(objXfm))
+            objXfm.m_Father = getObjRef(grpXfm)
+            objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -1*SCALE}
+            if baseName.endswith("-interior"):
+                objXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': float(UndergroundShift)}
+            colliderGroups[baseName] = objObj
+        addCol(uuid, objObj)
+
+print("Loading prefabs")
+prefabsByGuid = {}
+prefabs = {}
+for assetPath in (outpath / "prefabs").glob("*.prefab"):
+    metapath = assetPath.with_suffix(".prefab.meta")
+    guid = unityparser.UnityDocument.load_yaml(metapath).entry['guid']
+    prefabData = unityparser.UnityDocument.load_yaml(assetPath)
+    prefabsByGuid[guid] = prefabData
+    prefabs[assetPath.stem] = guid, prefabData
+
+for o in marScene.objects:
+    if o.name == 'LightAry':
+        lightgrpObj, lightgrpXfm = setupObject(o)
+        lightgrpXfm.m_Children = []
+        o2 = o.search("太陽（オブジェクト）")
+        assert o2.name == 'Light'
+        objObj, objXfm = setupObject(o2)
+        
+        setupPosition(objXfm, o2)
+        
+        euler, quat = lookAt(numpy.array([-o2.pos[0], -o2.pos[1], o2.pos[2]]))
+        objXfm.m_LocalEulerAnglesHint = dict(zip('xyz', euler))
+        objXfm.m_LocalRotation = dict(zip('wxyz', quat.tolist()))
+        
+        objXfm.m_RootOrder = len(lightgrpXfm.m_Children)
+        lightgrpXfm.m_Children.append(getObjRef(objXfm))
+        objXfm.m_Father = getObjRef(lightgrpXfm)
+        
+        light = objObj.getOrCreateComponent(Light)
+        light.serializedVersion = 10
+        light.m_Color = doColor(o2.color)
+        light.m_Intensity = 1
+        light.m_Type = 1 # directional
+        light.m_Shadows = {"m_Type": 1} # hard shadows
+        light.m_Lightmapping = 4 # realtime (required for subtractive GI)
+    if o.name == 'Strategy':
+        strategy = o
+
+from sObjDataTable import sObjDataTable, end_data
+actorDataTable = {
+    "SeaIndirect": {"modelName": "SeaIndirect", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
+    "ReflectParts": {"modelName": "ReflectParts", "unk9": 0x10210000, "unk15": 0, "flags16": 0x10},
+    "ReflectSky": {"modelName": "ReflectSky", "unk9": 0x10210000, "unk15": 0, "flags16": 0x08},
+    "sun_mirror": {"modelName": "sun_mirror", "unk9": 0x10220000, "unk15": 0, "flags16": 0x62},
+    "sea": {"groupName": "マップグループ", "modelName": "sea", "unk9": 0x10220000, "unk15": 0, "flags16": 0x80},
+    "falls": {"unk9": 0x10210000, "soundKey": 0x3022, "unk15": 0, "flags16": 0x00},
+    "fountain": {"unk9": 0x10210000, "soundKey": 0x3000, "unk15": 0, "flags16": 0x00},
+    "TopOfCorona": {"hitFlags": 0x40000024, "unk9": 0x10210000, "particle": "/scene/mapObj/ms_coronasmoke.jpa", "particleId": 0x146, "unk15": 1, "flags16": 0x00},
+    "BiancoRiver": {"modelName": "BiancoRiver", "unk9": 0x10210000, "unk15": 0, "flags16": 0x40},
+    "SoundObjRiver": {"unk9": 0x10210000, "soundKey": 0x500f, "unk15": 0, "flags16": 0x00},
+    "SoundObjWaterIntoWater": {"unk9": 0x10210000, "soundKey": 0x5010, "unk15": 0, "flags16": 0x00},
+    "BiancoAirWall": {"unk9": 0x10210000, "collisionManagerName": "BiaAirWall", "unk15": 0, "flags16": 0x02},
+    "BiancoBossEffectLight": {"unk9": 0x10210000, "particle": "/scene/map/map/ms_wmlin_light.jpa", "particleId": 0x151, "unk15": 1, "flags16": 0x00},
+    "BiaWaterPollution": {"modelName": "BiaWaterPollution", "unk9": 0x11220000, "unk15": 0, "flags16": 0x40},
+    "riccoSea": {"unk9": 0x10210000, "collisionManagerName": "riccoSea", "unk15": 0, "flags16": 0x00},
+    "riccoSeaPollutionS0": {"modelName": "riccoSeaPollutionS0", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS0", "unk15": 0, "flags16": 0x40},
+    "riccoSeaPollutionS1": {"modelName": "riccoSeaPollutionS1", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS1", "unk15": 0, "flags16": 0x40},
+    "riccoSeaPollutionS2": {"modelName": "riccoSeaPollutionS2", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS2", "unk15": 0, "flags16": 0x40},
+    "riccoSeaPollutionS3": {"modelName": "riccoSeaPollutionS3", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS3", "unk15": 0, "flags16": 0x40},
+    "riccoSeaPollutionS4": {"modelName": "riccoSeaPollutionS4", "unk9": 0x11210000, "collisionManagerName": "riccoSeaPollutionS4", "unk15": 0, "flags16": 0x40},
+    "MareFalls": {"unk9": 0x10210000, "soundKey": 0x3000, "unk15": 0, "flags16": 0x00},
+    "mareSeaPollutionS0": {"modelName": "mareSeaPollutionS0", "unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS0", "unk15": 0, "flags16": 0x00},
+    "mareSeaPollutionS12": {"modelName": "mareSeaPollutionS12", "unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS12", "unk15": 0, "flags16": 0x00},
+    "mareSeaPollutionS34567": {"unk9": 0x10210000, "collisionManagerName": "mareSeaPollutionS34567", "unk15": 0, "flags16": 0x00},
+    "Mare5ExGate": {"modelName": "Mare5ExGate", "unk9": 0x10210000, "unk15": 0, "flags16": 0x40},
+    "MonteRiver": {"modelName": "MonteRiver", "unk9": 0x10210000, "collisionManagerName": "MonteRiver", "unk15": 0, "flags16": 0x40},
+    "IndirectObj": {"modelName": "IndirectObj", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
+    "TargetArrow": {"modelName": "TargetArrow", "unk9": 0x10210000, "unk15": 0, "flags16": 0x04},
+}
 
 def addMeshFilter(bmdFilename, objObj):
     if isinstance(bmdFilename, tuple):
@@ -884,11 +888,15 @@ def doActor(o, grpXfm):
             objXfm.m_Children.append(getObjRef(meshXfm))
             
             center = assetAndMaterials[1][1]["m_Center"]
-            if center['y'] > 8000 and center['y'] < 12000 and abs(center['x']) < 100000 and abs(center['z']) < 100000:
+            if center['y'] >= 9250 and center['y'] < 12002 and abs(center['x']) < 12031 and abs(center['z']) < 7696:
                 # put the rooms in the sky underground
                 meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
             
-            addMeshFilter(assetAndMaterials, meshObj)
+            renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
+            if center['x']**2 + center['y']**2 > 30430**2:
+                renderer.m_CastShadows = 0
+                # TODO: don't contribute GI
+                
         waveDistantView = TMapStaticObj()
         waveDistantView.name = "MapStaticObj"
         waveDistantView.description = "波（遠景）"
@@ -999,4 +1007,31 @@ print("Writing scene")
 scene.dump_yaml(outpath / "map" / "scene.unity")
 
 # game far plane is 3000, but 1530 *should* be good enough in dolpic10
+
+# to do:
+# albedo meta pass
+# use actual object size for lods
+# particles
+# write prefabs for bone hierarchies
+# animations
+# more objects
+# objects should check if in shadow
+# circle shadow caster, for players and objects
+# fix sky materials
+# use the game's boxes for detecting interiors
+# disable GI for distant models
+# disable shadow casting for OOB, interior covers, & distant models
+# integrate dxt5 conversion
+# integrate etc2 creation
+# walking sfx, particles
+# collision effects
+# make interior covers work with occlusion
+# fix effect matrix, hook up to grabpass
+# scale main map in lightmap
+# place light probes
+# place reflection probes (use box projection for rooms)
+# add background tag to sky
+# disable GI for the meshes that cover up OOB but not interior covers
+# dedupe
+# optimize all
 
