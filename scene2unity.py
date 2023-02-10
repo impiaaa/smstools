@@ -400,7 +400,6 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         for subBmd in splitByVertexFormat(bmd):
             for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd) if bmd.name == "map" else [subBmd]):
                 meshes.append((subSubBmd, buildMesh(subSubBmd)))
-        print("Setting up atlas")
         atlas = xatlas.Atlas()
         for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
             if uChannels[5]["dimension"] > 0:
@@ -418,8 +417,10 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             # parameter order does not match documentation!!!
             atlas.add_mesh(positions, indices, normals, uvs)
         print("Generating atlas")
-        atlas.generate()
-        print("Exporting assets")
+        packOpt = xatlas.PackOptions()
+        packOpt.padding = 1
+        packOpt.texels_per_unit = 0.64/16 # resolution of the "wanted" posters
+        atlas.generate(pack_options=packOpt, verbose=True)
         atlasIdx = 0
         bmds[bmdkey] = []
         for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
@@ -427,6 +428,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 vmapping, newIndices, uvs = atlas[atlasIdx]
                 assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
                 assert len(uvs) == len(vmapping)
+                scaleInLightmap = float(max(uvs[:,0].max()-uvs[:,0].min(), uvs[:,1].max()-uvs[:,1].min()))
                 
                 groupedTriangles = [set(zip(indices[0::3], indices[1::3], indices[2::3])) for indices in subMeshTriangles]
                 # set is not equivalent to list
@@ -458,13 +460,15 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
                 vertexStruct[stream] = struct.Struct(vertexStruct[stream].format+'2f')
                 
                 atlasIdx += 1
+            else:
+                scaleInLightmap = 1
             materialIdInSlot = [materialIds[matIndex] for matIndex in subSubBmd.mat3.remapTable]
-            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct), materialIdInSlot))
+            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct), materialIdInSlot, scaleInLightmap))
         del meshes
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable]
+            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable], 1
         else:
             #print("Exporting textures")
             textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
@@ -473,7 +477,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             useColor1 = all(map(bool, bmd.vtx1.colors))
             materialIds = list(exportMaterials(bmd.mat3.materials[:max(bmd.mat3.remapTable)+1], bmd.mat3.indirectArray, bmd.tex1.textures, bmddatadir, textureIds, useColor1, 1/SCALE, False))
             materialIdInSlot = [materialIds[matIndex] for matIndex in bmd.mat3.remapTable]
-            bmds[bmdkey] = bmd.name, exportBmd(bmd, outbmddir), materialIdInSlot
+            bmds[bmdkey] = bmd.name, exportBmd(bmd, outbmddir), materialIdInSlot, 1
 
 materials = {}
 for bmtpath in scenedirpath.rglob("*.bmt"):
@@ -749,9 +753,9 @@ def getSound(soundKey):
 
 def addMeshFilter(bmdFilename, objObj):
     if isinstance(bmdFilename, tuple):
-        name, (asset, aabb), materialIds = bmdFilename
+        name, (asset, aabb), materialIds, scaleInLightmap = bmdFilename
     else:
-        name, (asset, aabb), materialIds = bmds[bmdFilename]
+        name, (asset, aabb), materialIds, scaleInLightmap = bmds[bmdFilename]
     renderer = objObj.getOrCreateComponent(MeshRenderer)
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
@@ -759,6 +763,7 @@ def addMeshFilter(bmdFilename, objObj):
     renderer.m_CastShadows = 1
     renderer.m_ReceiveShadows = 0
     renderer.m_ReceiveGI = 2
+    renderer.m_ScaleInLightmap = scaleInLightmap
 
     meshFilter = objObj.getOrCreateComponent(MeshFilter)
     if asset is not None:
