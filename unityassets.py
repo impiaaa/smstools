@@ -1,13 +1,17 @@
 import uuid, yaml, os.path, unityparser
 
 def writeMeta(name, importer, outputFolderLocation):
-    guid = str(uuid.uuid4()).replace('-', '')
+    metaPath = os.path.join(outputFolderLocation, name+".meta")
+    if os.path.exists(metaPath):
+        guid = unityparser.UnityDocument.load_yaml(metaPath).entry['guid']
+    else:
+        guid = str(uuid.uuid4()).replace('-', '')
     meta = {
         "fileFormatVersion": 2,
         "guid": guid
     }
     meta.update(importer)
-    yaml.dump(meta, open(os.path.join(outputFolderLocation, name+".meta"), 'w'))
+    yaml.dump(meta, open(metaPath, 'w'))
     return guid
 
 def writeNativeMeta(name, mainObjectFileID, outputFolderLocation):
