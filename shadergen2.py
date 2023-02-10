@@ -297,7 +297,7 @@ class DXShaderGen:
                         # Envmap
                         fout.writeLine("src = float4(mul((float3x3)UNITY_MATRIX_V, mul((float3x3)unity_ObjectToWorld, src.xyz)), src.w);")
                     if matrixMode in (1, 2, 3, 6, 7, 8, 9, 10, 11) and texInfo.source in (TexGenSrc.NRM, TexGenSrc.BINRM, TexGenSrc.TANGENT):
-                        fout.writeLine("src.xyz *= {};".format(self.objectScale))
+                        fout.writeLine("src.xyz = normalize(src.xyz);")
                     
                     if matrixMode == 1:
                         # EnvmapBasic
