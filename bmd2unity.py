@@ -447,7 +447,7 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     return asset
 
 def buildMesh(bmd):
-    doBones = len(bmd.jnt1.frames) > 1
+    doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
     
     if doBones:
         #print("Transforming verts")
@@ -477,7 +477,7 @@ def buildMesh(bmd):
     return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct
 
 def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct):
-    doBones = len(bmd.jnt1.frames) > 1
+    doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
     asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
     #print("Writing asset")
     assetName = bmd.name+".asset"
