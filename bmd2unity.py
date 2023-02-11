@@ -654,11 +654,8 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
         uMat = Material(str(2100000), '')
         uMat.serializedVersion = 6
         uMat.m_Name = mat.name
-        if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans):
-            # enable emissive baking
-            uMat.m_LightmapFlags = 2
-        else:
-            uMat.m_LightmapFlags = 0
+        # enable emissive baking
+        uMat.m_LightmapFlags = 2
         colors = {}
         # Declared as Vectors (not Colors) in shader properties, but still go
         # in the m_Colors block

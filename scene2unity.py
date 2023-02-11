@@ -613,6 +613,11 @@ rs = RenderSettings(getId(), '')
 lms = LightmapSettings(getId(), '')
 nms = NavMeshSettings(getId(), '')
 
+# color of dynamic shadows on static objects
+# probably never used
+rs.m_SubtractiveShadowColor = {'r': 16/255, 'g': 40/255, 'b': 109/255, 'a': 255/255}
+rs.serializedVersion = 9
+
 # Subtractive light mode. Only works if the main light is set to realtime-only.
 lms.m_UseShadowmask = 0
 lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1, "m_AtlasSize": 4096}
@@ -631,18 +636,14 @@ for o in marScene.objects:
     if o.name == 'AmbAry' and len(o.objects) > 0:
         ambColor = o.search("太陽アンビエント（オブジェクト）")
         assert ambColor.name == 'AmbColor'
-        rs.m_AmbientSkyColor = doColor(ambColor.color)
-        #rs.m_AmbientSkyColor = {'r': 0.0, 'g': 0.44313725490196076, 'b': 0.7372549019607844, 'a': 1.0}
-        rs.m_AmbientEquatorColor = {'r': 0.803921568627451, 'g': 0.8431372549019608, 'b': 1.0, 'a': 1.0}
+        # it seems that sky color and equator color are picked up by light
+        # probes, ground color is not
+        rs.m_AmbientSkyColor = {'r': 0/255, 'g': 113/255, 'b': 188/255, 'a': 255/255}
+        rs.m_AmbientEquatorColor = {'r': 205/255, 'g': 215/255, 'b': 255/255, 'a': 255/255}
         rs.m_AmbientGroundColor = doColor(ambColor.color)
-        rs.m_AmbientMode = 3
+        rs.m_AmbientMode = 1 # gradient mode. no skybox, and single color would affect light probes
         rs.m_AmbientIntensity = 1
         rs.m_SkyboxMaterial = {'fileID': 0}
-        
-        ambColor = o.search("影アンビエント（オブジェクト）")
-        assert ambColor.name == 'AmbColor'
-        rs.m_SubtractiveShadowColor = doColor(ambColor.color)
-        # or {'r': 0.06274509803921569, 'g': 0.1568627450980392, 'b': 0.42745098039215684, 'a': 1.0}
 
 scene = unityparser.UnityDocument([ocs, rs, lms, nms])
 
@@ -859,7 +860,7 @@ def doActor(o, grpXfm):
             if 'particle' in modelEntry:
                 objObj.getOrCreateComponent(ParticleSystemRenderer)
                 objObj.getOrCreateComponent(ParticleSystem)
-    if isinstance(o, TMapObjSoundGroup):
+    if 0 and isinstance(o, TMapObjSoundGroup):
         audioSource = objObj.getOrCreateComponent(AudioSource)
         soundKey = {"ms_sea": 0x5000, "ms_harbor": 0x5003}.get(o.graphName, 0)
         if soundKey != 0:
@@ -895,7 +896,7 @@ def doActor(o, grpXfm):
             renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
             if center['x']**2 + center['y']**2 > 30430**2:
                 renderer.m_CastShadows = 0
-                # TODO: don't contribute GI
+                meshObj.m_StaticEditorFlags &= ~0x01
                 
         waveDistantView = TMapStaticObj()
         waveDistantView.name = "MapStaticObj"
@@ -934,8 +935,13 @@ def doActor(o, grpXfm):
             renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
             renderer.m_CastShadows = 0
             name, materialIds = materials["map/map/sky.bmt"]
-            if materialIds is not None:
-                renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+            #if materialIds is not None:
+            #    renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
+    if isinstance(o, TSunModel):
+        objObj.m_StaticEditorFlags = 0xFFFFFFFF
+        objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+        renderer, meshFilter = addMeshFilter("sun/model.bmd", objObj)
+        renderer.m_CastShadows = 0
     return objObj, objXfm
 
 print("Adding actors")
@@ -1009,7 +1015,6 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # game far plane is 3000, but 1530 *should* be good enough in dolpic10
 
 # to do:
-# albedo meta pass
 # use actual object size for lods
 # particles
 # write prefabs for bone hierarchies
@@ -1019,18 +1024,20 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # circle shadow caster, for players and objects
 # fix sky materials
 # use the game's boxes for detecting interiors
-# disable GI for distant models
-# disable shadow casting for OOB, interior covers, & distant models
+# disable shadow casting for OOB, interior covers
 # integrate dxt5 conversion
 # integrate etc2 creation
 # walking sfx, particles
 # collision effects
+# handle samplers in shader
 # make interior covers work with occlusion
 # fix effect matrix, hook up to grabpass
-# scale main map in lightmap
+# scale main map in lightmap - unity seems to fix this itself
 # place light probes
 # place reflection probes (use box projection for rooms)
 # add background tag to sky
+# make sky and sun vertices immovable and/or at max depth
+# enable instancing on coin material
 # disable GI for the meshes that cover up OOB but not interior covers
 # dedupe
 # optimize all

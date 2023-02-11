@@ -125,7 +125,13 @@ class DXShaderGen:
         else:
             raise ValueError(bin(litMask))
     
-    def genLightShader(self, fout, colorChannel, suffix):
+    def genLightShader(self, fout, colorChannel, suffix, meta):
+        if meta:
+            if colorChannel.attenuationFunction == 0:
+                fout.writeLine("lightAccum{0} += 0.25;".format(suffix))
+            else:
+                fout.writeLine("lightAccum{0} += 1;".format(suffix))
+            return
         if colorChannel.attenuationFunction == 0:
             fout.writeLine("// Spec")
             fout.writeLine("float3 lightDir = normalize(unity_LightPosition[0].xyz - viewpos * unity_LightPosition[0].w);")
@@ -179,7 +185,7 @@ class DXShaderGen:
         else:
             fout.writeLine("lightAccum{0} += lightAttn * {1}dot(lightDir, viewN)) * unity_LightColor[0]{0};".format(suffix, "max(0.0," if diffFn == DiffuseFunction.CLAMP else "("))
     
-    def genVertLighting(self, mat, fout, useColor1, alphaOnly=False, ambientEnabled=True, lightShaderEnabled=True):
+    def genVertLighting(self, mat, fout, useColor1, alphaOnly=False, meta=False):
         # numColorChans controls the number of color channels available to TEV, but
         # we still need to generate all channels here, as it can be used in texgen.
         fout.writeLine("float4 vertexColor0, vertexColor1;")
@@ -208,16 +214,23 @@ class DXShaderGen:
                 else:
                     fout.writeLine("fixed4 baseColor = _MatColor{};".format(i))
                 
-                if colorChannel.lightingEnabled and ambientEnabled:
-                    if colorChannel.ambColorSource == ColorSrc.VTX:
-                        fout.writeLine("half4 lightAccum = vertexColor{};".format(i))
-                    else:
-                        if i == 0:
-                            fout.writeLine("half4 lightAccum = fixed4(LinearToGammaSpace(UNITY_LIGHTMODEL_AMBIENT.rgb), UNITY_LIGHTMODEL_AMBIENT.a);")
+                fout.writeLine("half4 lightAccum;")
+                if meta:
+                    fout.writeLine("if (unity_MetaFragmentControl.y)")
+                with fout:
+                    if colorChannel.lightingEnabled:
+                        if colorChannel.ambColorSource == ColorSrc.VTX:
+                            fout.writeLine("lightAccum = vertexColor{};".format(i))
                         else:
-                            fout.writeLine("half4 lightAccum = _AmbColor{};".format(i))
-                else:
-                    fout.writeLine("half4 lightAccum = 1;")
+                            if i == 0:
+                                fout.writeLine("lightAccum = fixed4(LinearToGammaSpace(unity_AmbientGround.rgb), unity_AmbientGround.a);")
+                            else:
+                                fout.writeLine("lightAccum = _AmbColor{};".format(i))
+                    else:
+                        fout.writeLine("lightAccum = 1;")
+                if meta:
+                    fout.writeLine("else")
+                    with fout: fout.writeLine("lightAccum = 0;")
                 
                 alphaChannel = mat.colorChans[i*2+1]
                 if alphaChannel.matColorSource != colorChannel.matColorSource:
@@ -227,31 +240,36 @@ class DXShaderGen:
                         fout.writeLine("baseColor.a = _MatColor{}.a;".format(i))
                 
                 if alphaChannel.lightingEnabled != colorChannel.lightingEnabled or alphaChannel.ambColorSource != colorChannel.ambColorSource:
-                    if alphaChannel.lightingEnabled and ambientEnabled:
-                        if alphaChannel.ambColorSource == ColorSrc.VTX:
-                            fout.writeLine("lightAccum.a = vertexColor{}.a;".format(i))
-                        else:
-                            if i == 0:
-                                fout.writeLine("lightAccum.a = UNITY_LIGHTMODEL_AMBIENT.a;")
+                    if meta:
+                        fout.writeLine("if (unity_MetaFragmentControl.y)")
+                    with fout:
+                        if alphaChannel.lightingEnabled:
+                            if alphaChannel.ambColorSource == ColorSrc.VTX:
+                                fout.writeLine("lightAccum.a = vertexColor{}.a;".format(i))
                             else:
-                                fout.writeLine("lightAccum.a = _AmbColor{}.a;".format(i))
-                    else:
-                        fout.writeLine("lightAccum.a = 1;")
+                                if i == 0:
+                                    fout.writeLine("lightAccum.a = unity_AmbientGround.a;")
+                                else:
+                                    fout.writeLine("lightAccum.a = _AmbColor{}.a;".format(i))
+                        else:
+                            fout.writeLine("lightAccum.a = 1;")
+                    if meta:
+                        fout.writeLine("else")
+                        with fout: fout.writeLine("lightAccum.a = 0;")
                 
-                if lightShaderEnabled:
+                if meta:
+                    fout.writeLine("if (unity_MetaFragmentControl.x)")
+                with fout:
                     # on GX, need to have different light for diffuse/specular, so
                     # just assume 1 light and use it for all calcs
                     if not alphaOnly and colorChannel.lightingEnabled == alphaChannel.lightingEnabled and colorChannel.litMask == alphaChannel.litMask and colorChannel.diffuseFunction == alphaChannel.diffuseFunction and colorChannel.attenuationFunction == alphaChannel.attenuationFunction:
                         if colorChannel.lightingEnabled and colorChannel.litMask != 0:
-                            with fout:
-                                self.genLightShader(fout, colorChannel, "")
+                            self.genLightShader(fout, colorChannel, "", meta)
                     else:
                         if colorChannel.lightingEnabled and colorChannel.litMask != 0 and not alphaOnly:
-                            with fout:
-                                self.genLightShader(fout, colorChannel, ".rgb")
+                            with fout: self.genLightShader(fout, colorChannel, ".rgb", meta)
                         if alphaChannel.lightingEnabled and alphaChannel.litMask != 0:
-                            with fout:
-                                self.genLightShader(fout, alphaChannel, ".a")
+                            with fout: self.genLightShader(fout, alphaChannel, ".a", meta)
                 
                 fout.writeLine("lightAccum = saturate(lightAccum);")
                 fout.writeLine("colorChannel{} = baseColor * lightAccum;".format(i))
@@ -385,7 +403,7 @@ class DXShaderGen:
         elif op == TevOp.COMP_RGB8_EQ:
             return "((tevA.rgb == tevB.rgb) * tevC.{suffix}) + tevD.{suffix}".format(suffix=suffix) 
        
-    def genFrag(self, mat, indirect, textures, fout):
+    def genFrag(self, mat, indirect, textures, fout, alphaComp=True):
         if any(i is not None and textures[i].mipmapCount > 1 for i in mat.texNos):
             fout.writeLine("float sceneTextureLODBias = log2(min(_ScreenParams.x / 640, _ScreenParams.y / 528));")
         fout.writeLine("half4 colorPrev = 1;")
@@ -480,7 +498,7 @@ class DXShaderGen:
                 if i == mat.tevStageNum-1 and tevStage.alphaRegId != Register.PREV:
                     fout.writeLine("colorPrev.a = {}.a;".format(tev_output_table[tevStage.alphaRegId]))
         
-        if mat.alphaComp is not None:
+        if mat.alphaComp is not None and alphaComp:
             # reduce the number of cases to handle by eliminating impossibilities
             if mat.alphaComp.comp0 == CompareType.LEQUAL and mat.alphaComp.ref0 == 255: mat.alphaComp.comp0 = CompareType.ALWAYS
             if mat.alphaComp.comp1 == CompareType.LEQUAL and mat.alphaComp.ref1 == 255: mat.alphaComp.comp1 = CompareType.ALWAYS
@@ -649,7 +667,7 @@ class UnityShaderGen(DXShaderGen):
                 # hard-coded lightmap parameter
                 if mat.alphaComp is not None: fout.writeLine("_Cutoff (\"Alpha compare for lightmap\", Range(0,1)) = 1")
             
-            if all(colorChan is None or not colorChan.lightingEnabled or colorChan.litMask == 0 for colorChan in mat.colorChans): fout.writeLine("CustomEditor \"EmissiveShaderGUI\"")
+            fout.writeLine("CustomEditor \"EmissiveShaderGUI\"")
             
             fout.writeLine("CGINCLUDE")
             fout.indent += 1
@@ -856,7 +874,7 @@ class UnityShaderGen(DXShaderGen):
                         with fout:
                             fout.writeLine("v2f_meta o;")
                             fout.writeLine("o.position = UnityMetaVertexPosition(v.vertex, v.lightMapUV, v.dynLightMapUV, unity_LightmapST, unity_DynamicLightmapST);")
-                            self.genVertLighting(mat, fout, useColor1, lightShaderEnabled=False)
+                            self.genVertLighting(mat, fout, useColor1, meta=True)
                             for i, texGen in enumerate(mat.texCoords[:mat.texGenNum]):
                                 fout.writeLine("{} outTexCoord{} = 0;".format("float2" if texGen.type in (TexGenType.MTX2x4, TexGenType.SRTG) else "float3", i))
                             self.genTexGen(mat, fout)
@@ -878,21 +896,18 @@ class UnityShaderGen(DXShaderGen):
                         
                         fout.writeLine("float4 frag_meta (v2f_meta i) : SV_Target")
                         with fout:
-                            self.genFrag(mat, indirect, textures, fout)
-                            # only support unlit materials as emissive
                             fout.writeLine("#ifdef EDITOR_VISUALIZATION")
                             with fout:
                                 fout.writeLine("UnityMetaInput o;")
                                 fout.writeLine("UNITY_INITIALIZE_OUTPUT(UnityMetaInput, o);")
                                 fout.writeLine("o.VizUV = i.vizUV;")
                                 fout.writeLine("o.LightCoord = i.lightCoord;")
-                                fout.writeLine("o.Emission = GammaToLinearSpace(colorPrev.rgb);")
                                 fout.writeLine("return UnityMetaFragment(o);")
                             fout.writeLine("#else")
                             with fout:
+                                self.genFrag(mat, indirect, textures, fout, alphaComp=False)
                                 fout.writeLine("half4 res = {0, 0, 0, 1};")
-                                fout.writeLine("if (unity_MetaFragmentControl.y)")
-                                with fout: fout.writeLine("res.rgb = GammaToLinearSpace(colorPrev.rgb);")
+                                fout.writeLine("res.rgb = GammaToLinearSpace(colorPrev.rgb);")
                                 fout.writeLine("return res;")
                             fout.writeLine("#endif")
                         
