@@ -517,7 +517,7 @@ class DXShaderGen:
                 fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp1, mat.alphaComp.ref1))
             elif (mat.alphaComp.comp1 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND) or (mat.alphaComp.comp1 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR):
                 fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp0, mat.alphaComp.ref0))
-            elif mat.alphaComp.op == AlphaOp.OR:
+            elif mat.alphaComp.op == AlphaOp.AND:
                 fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp0, mat.alphaComp.ref0))
                 fout.writeLine(self.makeSimpleComp(mat.alphaComp.comp1, mat.alphaComp.ref1))
             else:
