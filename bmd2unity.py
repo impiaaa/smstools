@@ -530,9 +530,11 @@ def makeUnityPrefab(name, scenegraph, joints):
     rootTransform = Transform(getId(), '')
     rootTransform.m_Children = []
     rootTransform.m_GameObject = getObjRef(rootObj)
+    rootTransform.m_Father = {'fileID': 0}
     rootObj.m_Component = [{'component': getObjRef(rootTransform)}]
     
     prefab = unityparser.UnityDocument([rootObj, rootTransform])
+    bones = [None]*len(joints)
     
     parent = rootTransform
     stack = []
@@ -564,13 +566,13 @@ def makeUnityPrefab(name, scenegraph, joints):
             transform.m_LocalScale = dict(zip('xyz', joint.scale))
             transform.m_Father = getObjRef(parent)
             parent.m_Children.append(getObjRef(transform))
+            bones[node.index] = int(transform.anchor)
             gameObj.m_Component = [{'component': getObjRef(transform)}]
         elif node.type == 0x11:
             materialIndex = node.index
         elif node.type == 0x12:
             batchIndex = node.index
-    return prefab
-    # set m_Bones in SkinnedMeshRenderer
+    return prefab, bones
 
 def buildMesh(bmd):
     doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
@@ -614,8 +616,15 @@ def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, un
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
     meshId = writeNativeMeta(assetName, 4300000, outputFolderLocation)
-        
-    return meshId, asset.entry.m_LocalAABB
+    if len(bmd.jnt1.frames) > 1:
+        prefab, bones = makeUnityPrefab(bmd.name, bmd.inf1.scenegraph, bmd.jnt1.frames)
+        assetName = bmd.name+"_arm.prefab"
+        prefab.dump_yaml(os.path.join(outputFolderLocation, assetName))
+        prefabId = writeMeta(assetName, {"PrefabImporter": {}}, outputFolderLocation)
+        armInfo = (prefabId, prefab, bones)
+    else:
+        armInfo = None
+    return meshId, armInfo, asset.entry.m_LocalAABB
 
 def exportBmd(bmd, outputFolderLocation):
     subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes = buildMesh(bmd)
@@ -1066,6 +1075,6 @@ if __name__ == "__main__":
     bmd.read(fin)
     fin.close()
     exportBmd(bmd, outputFolderLocation)
-    prefab = makeUnityPrefab(bmd.name, bmd.inf1.scenegraph, bmd.jnt1.frames)
+    prefab, bones = makeUnityPrefab(bmd.name, bmd.inf1.scenegraph, bmd.jnt1.frames)
     prefab.dump_yaml(os.path.join(outputFolderLocation, bmd.name+"_arm.prefab"))
 

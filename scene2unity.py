@@ -121,8 +121,13 @@ class ComponentProxy:
                 self._strippedComponent.m_PrefabAsset: {'fileID': 0}
                 scene.entries.append(self._strippedComponent)
             return self._strippedComponent.anchor
+        elif attr in self._modifications:
+            if self._modifications[attr]['objectReference']['fileID'] != 0:
+                return self._modifications[attr]['objectReference']
+            else:
+                return self._modifications[attr]['value']
         else:
-            raise
+            return super().__getattr__(attr)
     
     def _addModification(self, attr, value='', objectReference=None):
         if objectReference is None: objectReference = {'fileID': 0}
@@ -249,6 +254,7 @@ def setupObject(o):
     scene.entries.append(objObj)
     objObj.m_Name = o.description
     objXfm = objObj.getOrCreateComponent(Transform)
+    objXfm.m_Children = []
     return objObj, objXfm
 
 UndergroundShift = 528
@@ -587,8 +593,22 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         del meshes
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
+        armmetapath = outbmddir / (bmdpath_rel.stem+"_arm.prefab.meta")
         if metapath.exists() and metapath.stat().st_mtime >= bmdtime:
-            bmds[bmdkey] = bmd.name, (unityparser.UnityDocument.load_yaml(metapath).entry['guid'], unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable], 1
+            if armmetapath.exists():
+                armYaml = unityparser.UnityDocument.load_yaml(armmetapath.with_suffix(""))
+                armInfo = (
+                    unityparser.UnityDocument.load_yaml(armmetapath).entry['guid'],
+                    armYaml,
+                    [go.m_Component[0]['component']['fileID'] for joint in bmd.jnt1.frames for go in armYaml.entries if isinstance(go, _GameObject) and go.m_Name == joint.name]
+                )
+            else:
+                armInfo = None
+            bmds[bmdkey] = bmd.name, (
+                unityparser.UnityDocument.load_yaml(metapath).entry['guid'],
+                armInfo,
+                unityparser.UnityDocument.load_yaml(metapath.with_suffix("")).entry.m_LocalAABB
+            ), [unityparser.UnityDocument.load_yaml(bmddatadir / (bmd.mat3.materials[matIdx].name+".mat.meta")).entry['guid'] for matIdx in bmd.mat3.remapTable], 1
         else:
             #print("Exporting textures")
             textureIds = list(exportTextures(bmd.tex1.textures, bmddatadir))
@@ -635,6 +655,8 @@ for name, objData in sObjDataTable.items():
         physMat.dynamicFriction = physicalData[4]**30 # floorFriction
         physMat.staticFriction = max(physicalData[3]/5, physMat.dynamicFriction) # sleepVelocityThreshold
         physMat.bounciness = physicalData[1] # floorBounceSpeed
+        physMat.frictionCombine = 3 # maximum
+        physMat.bounceCombine = 3 # maximum
         asset = unityparser.UnityDocument([physMat])
         assetName = name+".physicMaterial"
         asset.dump_yaml(physDir / assetName)
@@ -724,7 +746,6 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
 for o in marScene.objects:
     if o.name == 'LightAry':
         lightgrpObj, lightgrpXfm = setupObject(o)
-        lightgrpXfm.m_Children = []
         o2 = o.search("太陽（オブジェクト）")
         assert o2.name == 'Light'
         objObj, objXfm = setupObject(o2)
@@ -780,12 +801,45 @@ actorDataTable = {
     "TargetArrow": {"modelName": "TargetArrow", "unk9": 0x10210000, "unk15": 0, "flags16": 0x04},
 }
 
-def addMeshFilter(bmdFilename, objObj):
+def addMeshRenderer(bmdFilename, objObj, objXfm):
     if isinstance(bmdFilename, tuple):
-        name, (asset, aabb), materialIds, scaleInLightmap = bmdFilename
+        name, (asset, armInfo, aabb), materialIds, scaleInLightmap = bmdFilename
     else:
-        name, (asset, aabb), materialIds, scaleInLightmap = bmds[bmdFilename]
-    renderer = objObj.getOrCreateComponent(MeshRenderer)
+        name, (asset, armInfo, aabb), materialIds, scaleInLightmap = bmds[bmdFilename]
+    if armInfo is None:
+        renderer = objObj.getOrCreateComponent(MeshRenderer)
+
+        meshFilter = objObj.getOrCreateComponent(MeshFilter)
+        if asset is not None:
+            meshFilter.m_Mesh = getFileRef(asset, id=4300000)
+    else:
+        prefabGuid, prefabYaml, bones = armInfo
+        meshObj = GameObject(getId(), '')
+        meshObj.serializedVersion = 6
+        meshObj.m_Component = []
+        meshObj.m_IsActive = 1
+        scene.entries.append(meshObj)
+        meshObj.m_Name = name+"_mesh"
+        meshXfm = meshObj.getOrCreateComponent(Transform)
+        meshXfm.m_RootOrder = len(objXfm.m_Children)
+        objXfm.m_Children.append(getObjRef(meshXfm))
+        meshXfm.m_Father = getObjRef(objXfm)
+        renderer = meshObj.getOrCreateComponent(SkinnedMeshRenderer)
+        if asset is not None:
+            renderer.m_Mesh = getFileRef(asset, id=4300000)
+        renderer.m_AABB = {'m_Center': aabb['m_Center'], 'm_Extent': aabb['m_Extent']}
+        
+        armObj = PrefabInstance(prefabGuid, prefabYaml)
+        armObj.serializedVersion = 2
+        scene.entries.append(armObj)
+        armXfm = armObj.getOrCreateComponent(Transform)
+        armXfm.m_RootOrder = len(objXfm.m_Children)
+        objXfm.m_Children.append(getObjRef(armXfm))
+        armXfm.m_Father = getObjRef(objXfm)
+    
+        renderer.m_Bones = [getObjRef(ComponentProxy(prefabGuid, armObj, origFileID, Transform)) for origFileID in bones]
+        renderer.m_RootBone = dict(renderer.m_Bones[0]) # XXX assumption
+
     if materialIds is not None:
         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
     renderer.m_Enabled = 1
@@ -794,11 +848,7 @@ def addMeshFilter(bmdFilename, objObj):
     renderer.m_ReceiveGI = 2
     renderer.m_ScaleInLightmap = scaleInLightmap
 
-    meshFilter = objObj.getOrCreateComponent(MeshFilter)
-    if asset is not None:
-        meshFilter.m_Mesh = getFileRef(asset, id=4300000)
-    
-    return renderer, meshFilter
+    return renderer
 
 def doActor(o, grpXfm):
     objObj, objXfm = setupObject(o)
@@ -828,14 +878,14 @@ def doActor(o, grpXfm):
                     audioSource.m_PlayOnAwake = 1
                     audioSource.rolloffMode = 0
         if modelName is not None:
-            renderer, meshFilter = addMeshFilter("mapobj/"+modelName.lower(), objObj)
+            renderer = addMeshRenderer("mapobj/"+modelName.lower(), objObj, objXfm)
             
             manager = managers.search(objData['managerName'])
             lod = objObj.getOrCreateComponent(LODGroup)
             lod.m_FadeMode = 0
             lod.serializedVersion = 2
             lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
-            aabb = bmds["mapobj/"+modelName.lower()][1][1]
+            aabb = bmds["mapobj/"+modelName.lower()][1][2]
             lod.m_Size = max(aabb["m_Extent"].values())*2
             lod.m_LocalReferencePoint = aabb["m_Center"]
             # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
@@ -867,11 +917,22 @@ def doActor(o, grpXfm):
                 if hitHeight <= hitRadius*2:
                     collider = objObj.getOrCreateComponent(SphereCollider)
                     collider.m_Radius = hitRadius
+                    collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
                 else:
                     collider = objObj.getOrCreateComponent(CapsuleCollider)
                     collider.m_Radius = hitRadius
                     collider.m_Height = hitHeight-2*hitRadius
+                    collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
                 colliders.append(collider)
+        
+        if isinstance(o, TResetFruit):
+            for collider in colliders:
+                collider.m_Center = {'x': 0, 'y': 0, 'z': 0}
+            yPos = o.pos[1]
+            yPos += hitRadius
+            if objData['objectID'] == 0x40000394:
+                yPos -= 50
+            objXfm.m_LocalPosition = {'x': SCALE*o.pos[0], 'y': SCALE*yPos, 'z': -1*SCALE*o.pos[2]}
         
         physicalInfo = objData.get('physicalInfo')
         if physicalInfo is not None:
@@ -916,7 +977,7 @@ def doActor(o, grpXfm):
                     prefix = "map"
                     # todo: common arc
                 bmdFilename = prefix+"/"+modelEntry['modelName'].lower()+".bmd"
-                addMeshFilter(bmdFilename, objObj)
+                addMeshRenderer(bmdFilename, objObj, objXfm)
             if 'collisionManagerName' in modelEntry:
                 for prefix in ("map/map/", "mapobj/"):
                     for physName, uuid, center in cols[prefix+modelEntry['collisionManagerName'].lower()]:
@@ -954,7 +1015,6 @@ def doActor(o, grpXfm):
     if isinstance(o, TMap):
         objObj.m_StaticEditorFlags = 0xFFFFFFFF
         objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
-        objXfm.m_Children = []
         for assetAndMaterials in bmds["map/map/map.bmd"]:
             meshObj = GameObject(getId(), '')
             meshObj.serializedVersion = 6
@@ -968,12 +1028,12 @@ def doActor(o, grpXfm):
             meshXfm.m_RootOrder = len(objXfm.m_Children)
             objXfm.m_Children.append(getObjRef(meshXfm))
             
-            center = assetAndMaterials[1][1]["m_Center"]
+            center = assetAndMaterials[1][2]["m_Center"]
             if center['y'] >= 9250 and center['y'] < 12002 and abs(center['x']) < 12031 and abs(center['z']) < 7696:
                 # put the rooms in the sky underground
                 meshXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': -float(UndergroundShift)/SCALE}
             
-            renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
+            renderer = addMeshRenderer(assetAndMaterials, meshObj, meshXfm)
             if center['x']**2 + center['y']**2 > 30430**2:
                 renderer.m_CastShadows = 0
                 meshObj.m_StaticEditorFlags &= ~0x01
@@ -998,7 +1058,6 @@ def doActor(o, grpXfm):
     if isinstance(o, TSky):
         objObj.m_StaticEditorFlags = 0xFFFFFFFF
         objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
-        objXfm.m_Children = []
         for assetAndMaterials in bmds["map/map/sky.bmd"]:
             meshObj = GameObject(getId(), '')
             meshObj.serializedVersion = 6
@@ -1012,7 +1071,7 @@ def doActor(o, grpXfm):
             meshXfm.m_RootOrder = len(objXfm.m_Children)
             objXfm.m_Children.append(getObjRef(meshXfm))
             
-            renderer, meshFilter = addMeshFilter(assetAndMaterials, meshObj)
+            renderer = addMeshRenderer(assetAndMaterials, meshObj, meshXfm)
             renderer.m_CastShadows = 0
             name, materialIds = materials["map/map/sky.bmt"]
             #if materialIds is not None:
@@ -1021,10 +1080,13 @@ def doActor(o, grpXfm):
         objObj.m_StaticEditorFlags = 0xFFFFFFFF
         objXfm.m_LocalScale = {'x': SCALE*2, 'y': SCALE*2, 'z': -2*SCALE}
         objXfm.m_LocalPosition = {k: v/4 for k, v in objXfm.m_LocalPosition.items()}
+        
+        # remove when adding billboard shader
         euler, quat = lookAt(numpy.array([o.pos[0], o.pos[1], -o.pos[2]]))
         objXfm.m_LocalEulerAnglesHint = dict(zip('xyz', euler))
         objXfm.m_LocalRotation = dict(zip('wxyz', quat.tolist()))
-        renderer, meshFilter = addMeshFilter("sun/model.bmd", objObj)
+        
+        renderer = addMeshRenderer("sun/model.bmd", objObj, objXfm)
         renderer.m_CastShadows = 0
     return objObj, objXfm
 
@@ -1032,7 +1094,6 @@ print("Adding actors")
 for group in strategy.objects:
     assert group.name == 'IdxGroup'
     grpObj, grpXfm = setupObject(group)
-    grpXfm.m_Children = []
     for o in group.objects:
         doActor(o, grpXfm)
 
@@ -1041,7 +1102,6 @@ tables = readsection(open(scenedirpath / "map" / "tables.bin", 'rb'))
 assert tables.name == "NameRefGrp"
 for group in tables.objects:
     grpObj, grpXfm = setupObject(group)
-    grpXfm.m_Children = []
     if group.name == "PositionHolder":
         for o in group.objects:
             assert o.name == "StagePositionInfo"
@@ -1115,7 +1175,9 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # collision effects
 # handle samplers in shader
 # add VRC_SpatialAudioSource to all audio sources
+# make audio sources 3d
 # make interior covers work with occlusion
+# warp collision
 # fix effect matrix, hook up to grabpass
 # scale main map in lightmap - unity seems to fix this itself
 # place light probes
@@ -1123,10 +1185,11 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # add background tag to sky
 # make sky and sun vertices immovable and/or at max depth
 # float3 viewpos = mul((float3x3)UNITY_MATRIX_MV, v.vertex);
+# make mesh collision bouncy, slippery
 # make sun billboard
 # enable instancing on coin material
 # disable GI for the meshes that cover up OOB but not interior covers
+# fix vrc_world spawns
 # dedupe
 # optimize all
-# make audio sources 3d
 
