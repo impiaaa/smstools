@@ -37,3 +37,6 @@ def fixUnityParserFloats():
 def getFileRef(guid, id, type=2):
     return {'fileID': id, 'guid': guid, 'type': type}
 
+def getObjRef(obj):
+    return {'fileID': int(obj.anchor)}
+

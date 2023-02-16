@@ -8,6 +8,7 @@ import unityparser
 from unityassets import *
 from binascii import crc32
 from PIL import Image
+import random
 
 class kVertexFormat:
     Float = 0
@@ -116,8 +117,10 @@ def getBatchTriangles(batch, indexMap):
                     warn("Unknown primitive type %s"%primitive.type)
                     break
 
-Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
+GameObject = unityparser.constants.UnityClassIdMap.get_or_create_class_id(1, 'GameObject')
+Transform = unityparser.constants.UnityClassIdMap.get_or_create_class_id(4, 'Transform')
 Material = unityparser.constants.UnityClassIdMap.get_or_create_class_id(21, 'Material')
+Mesh = unityparser.constants.UnityClassIdMap.get_or_create_class_id(43, 'Mesh')
 
 def transformVerts(bmd, batches, positions, normals=None):
     transformedPositions = [Vector() for p in positions]
@@ -158,17 +161,19 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
         elif fmt.arrayType == VtxAttr.NRM:
             count = {CompType.NRM_XYZ: 3}[fmt.componentCount]
             channel = 1
-            stream = 0 # unity shadow casting uses normals to offset
+            stream = 0
+            # unity shadow casting uses normals to offset
+            # unity mesh skinning modifies pos/nrm, and is a separate pass
         elif fmt.arrayType == VtxAttr.CLR0:
             count = {CompType.CLR_RGB: 3, CompType.CLR_RGBA: 4}[fmt.componentCount]
             channel = 3
-            stream = 1 if isOpaque else 0
+            stream = 1 if isOpaque or doBones else 0
         elif fmt.arrayType == VtxAttr.CLR1:
             raise NotImplementedError()
         elif fmt.arrayType.value >= VtxAttr.TEX0.value and fmt.arrayType.value <= VtxAttr.TEX7.value:
             count = {CompType.TEX_S: 1, CompType.TEX_ST: 2}[fmt.componentCount]
             channel = 4+(fmt.arrayType.value-VtxAttr.TEX0.value)
-            stream = 1 if isOpaque else 0
+            stream = 1 if isOpaque or doBones else 0
         else:
             raise ValueError(fmt.arrayType)
         
@@ -236,7 +241,7 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
     
         count = maxWeightCount
         channel = 12
-        stream = 2 if isOpaque else 1
+        stream = 2
         
         uChannels[channel]["dimension"] = count
         uChannels[channel]["offset"] = offset[stream]
@@ -249,16 +254,16 @@ def setupChannels(formats, originalData, asFloat, weightedIndices, weightedWeigh
         
         count = maxWeightCount
         channel = 13
-        stream = 2 if isOpaque else 1
+        stream = 2
         
         uChannels[channel]["dimension"] = count
         uChannels[channel]["offset"] = offset[stream]
         uChannels[channel]["stream"] = stream
         
         arr = boneIndices
-        vertexStruct[stream].append(str(count)+'B')
-        uChannels[channel]["format"] = kVertexFormat.UInt8
-        offset[stream] += count*calcsize('B')
+        vertexStruct[stream].append(str(count)+'I')
+        uChannels[channel]["format"] = kVertexFormat.UInt32
+        offset[stream] += count*calcsize('I')
         #dataForArrayType[0] = splitVertexArray(arr, count)
     elif maxWeightCount == 0:
         maxWeightCount = 1
@@ -280,8 +285,10 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
                         continue
                     uniqueVertex = [[], [], []]
                     for arrayType in range(1, 21):
-                        stream = [2, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1][arrayType]
-                        if not isOpaque: stream = max(0, stream-1)
+                        if isOpaque or doBones:
+                            stream = [None, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1][arrayType]
+                        else:
+                            stream = 0
                         data = dataForArrayType[arrayType]
                         if point.indices[arrayType] == INVALID_INDEX and data is None:
                             pass
@@ -299,7 +306,7 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
                                 if isint and data in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
                             uniqueVertex[stream].extend(data[point.indices[arrayType]])
                     if doBones:
-                        stream = 2 if isOpaque else 1
+                        stream = 2
                         if batch.hasMatrixIndices:
                             index = shapeMatrix.matrixTable[point.matrixIndex//3]
                         else:
@@ -349,7 +356,7 @@ def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
             raise ValueError(node.type)
     return subMeshTriangles, subMeshVertices
 
-def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, jointMatrices, joints, scenegraph):
+def makeUnityMesh(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, jointMatrices, joints, scenegraph, jointBboxes):
     mesh = Mesh(str(4300000), '')
     asset = unityparser.UnityDocument([mesh])
 
@@ -424,27 +431,146 @@ def makeUnityAsset(name, doBones, subMeshTriangles, subMeshVertices, uniqueVerti
     
     if doBones:
         #print("Generating armature")
-        mesh.m_BindPose = [{'e%d%d'%(i,j): mat[i][j] for i in range(4) for j in range(4)} for mat in jointMatrices]
+        cumInvMatrices = [None]*len(joints)
         boneNames = [None]*len(joints)
         rootIndex = None
-        name = None
-        nameStack = []
+        stack = []
         armName = mesh.m_Name+'_arm'
+        materialIndex = jointIndex = batchIndex = None
         for node in scenegraph:
-            if node.type == 0x10:
+            if node.type == 1:
+                stack.append((materialIndex, jointIndex, batchIndex))
+            elif node.type == 2:
+                materialIndex, jointIndex, batchIndex = stack.pop()
+            elif node.type == 0x10:
+                jointIndex = node.index
                 if rootIndex == None:
                     rootIndex = node.index
-                name = joints[node.index].name
-                boneNames[node.index] = '/'.join([armName]+nameStack+[name])
-            elif node.type == 1:
-                nameStack.append(name)
-            elif node.type == 2:
-                name = nameStack.pop()
+                name = armName
+                lastJointIndex = None
+                for subMat, subJoint, subBatch in stack:
+                    if subJoint != lastJointIndex:
+                        name += '/'+joints[subJoint].name
+                    lastJointIndex = subJoint
+                name += '/'+joints[node.index].name
+                boneNames[node.index] = name
+                if len(stack) > 0 and stack[-1][1] is not None:
+                    cumInvMatrices[jointIndex] = jointMatrices[jointIndex].inverted()@cumInvMatrices[stack[-1][1]]
+                else:
+                    cumInvMatrices[jointIndex] = jointMatrices[jointIndex].inverted()
+            elif node.type == 0x11:
+                materialIndex = node.index
+            elif node.type == 0x12:
+                batchIndex = node.index
         mesh.m_BoneNameHashes = array('I', [crc32(name.encode()) for name in boneNames]).tobytes().hex()
         mesh.m_RootBoneNameHash = crc32(boneNames[rootIndex].encode())
-        mesh.m_BonesAABB = [{"m_Min": dict(zip('xyz', frame.bbMin)), "m_Max": dict(zip('xyz', frame.bbMax))} for frame in joints]
+        mesh.m_BonesAABB = [{"m_Min": dict(zip('xyz', joint.bbMin)), "m_Max": dict(zip('xyz', joint.bbMax))} for joint in jointBboxes]
+        mesh.m_BindPose = [{'e%d%d'%(i,j): mat[i][j] for i in range(4) for j in range(4)} for mat in cumInvMatrices]
     
     return asset
+
+class BBox:
+    def __init__(self):
+        self.bbMin = None
+        self.bbMax = None
+
+def makeUnityBboxes(bmd, scenegraph, shapes, positions):
+    joints = []
+    stack = []
+    materialIndex = jointIndex = shapeIndex = None
+    for node in scenegraph:
+        if node.type == 1:
+            stack.append((materialIndex, jointIndex, shapeIndex))
+        elif node.type == 2:
+            materialIndex, jointIndex, shapeIndex = stack.pop()
+        elif node.type == 0x10:
+            jointIndex = node.index
+        elif node.type == 0x11:
+            materialIndex = node.index
+        elif node.type == 0x12:
+            shapeIndex = node.index
+            shape = shapes[node.index]
+            matrixTable = [(Matrix(), [], []) for i in range(10)]
+            for i, (shapeDraw, shapeMatrix) in enumerate(shapes[shapeIndex].matrixGroups):
+                updateMatrixTable(bmd, shapeMatrix, matrixTable)
+                mat, mmi, mmw = matrixTable[0]
+                for curr in shapeDraw.primitives:
+                    for p in curr.points:
+                        if shape.hasMatrixIndices:
+                            mat, mmi, mmw = matrixTable[p.matrixIndex//3]
+                        for i in mmi:
+                            while i >= len(joints):
+                                joints.append(BBox())
+                            if joints[i].bbMin is None:
+                                joints[i].bbMin = positions[p.posIndex].copy()
+                            else:
+                                joints[i].bbMin.x = min(joints[i].bbMin.x, positions[p.posIndex].x)
+                                joints[i].bbMin.y = min(joints[i].bbMin.y, positions[p.posIndex].y)
+                                joints[i].bbMin.z = min(joints[i].bbMin.z, positions[p.posIndex].z)
+                            if joints[i].bbMax is None:
+                                joints[i].bbMax = positions[p.posIndex].copy()
+                            else:
+                                joints[i].bbMax.x = max(joints[i].bbMax.x, positions[p.posIndex].x)
+                                joints[i].bbMax.y = max(joints[i].bbMax.y, positions[p.posIndex].y)
+                                joints[i].bbMax.z = max(joints[i].bbMax.z, positions[p.posIndex].z)
+    for j in joints:
+        if j.bbMin is None: j.bbMin = Vector()
+        if j.bbMax is None: j.bbMax = Vector()
+    return joints
+
+def getId():
+    return str(random.randint(0, 0x7FFFFFFFFFFFFFFF))
+
+def makeUnityPrefab(name, scenegraph, joints):
+    rootObj = GameObject(getId(), '')
+    rootObj.m_Name = name+"_arm"
+    rootObj.m_IsActive = 1
+    rootObj.serializedVersion = 6
+    
+    rootTransform = Transform(getId(), '')
+    rootTransform.m_Children = []
+    rootTransform.m_GameObject = getObjRef(rootObj)
+    rootObj.m_Component = [{'component': getObjRef(rootTransform)}]
+    
+    prefab = unityparser.UnityDocument([rootObj, rootTransform])
+    
+    parent = rootTransform
+    stack = []
+    materialIndex = jointIndex = batchIndex = None
+    for node in scenegraph:
+        if node.type == 1:
+            stack.append((materialIndex, jointIndex, batchIndex, parent))
+            parent = transform
+        elif node.type == 2:
+            materialIndex, jointIndex, batchIndex, parent = stack.pop()
+        elif node.type == 0x10:
+            jointIndex = node.index
+
+            joint = joints[node.index]
+            
+            gameObj = GameObject(getId(), '')
+            prefab.entries.append(gameObj)
+            gameObj.m_Name = joint.name
+            gameObj.m_IsActive = 1
+            gameObj.serializedVersion = 6
+
+            transform = Transform(getId(), '')
+            prefab.entries.append(transform)
+            transform.m_Children = []
+            transform.m_GameObject = getObjRef(gameObj)
+            transform.m_LocalRotation = dict(zip('wxyz', joint.rotation.to_quaternion()))
+            transform.m_LocalEulerAnglesHint = dict(zip('xyz', joint.rotation))
+            transform.m_LocalPosition = dict(zip('xyz', joint.translation))
+            transform.m_LocalScale = dict(zip('xyz', joint.scale))
+            transform.m_Father = getObjRef(parent)
+            parent.m_Children.append(getObjRef(transform))
+            gameObj.m_Component = [{'component': getObjRef(transform)}]
+        elif node.type == 0x11:
+            materialIndex = node.index
+        elif node.type == 0x12:
+            batchIndex = node.index
+    return prefab
+    # set m_Bones in SkinnedMeshRenderer
 
 def buildMesh(bmd):
     doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
@@ -474,11 +600,16 @@ def buildMesh(bmd):
     #print("Making sub-meshes")
     subMeshTriangles, subMeshVertices = makeSubMeshes(len(bmd.mat3.remapTable), bmd.inf1.scenegraph, bmd.shp1.batches, indexMap, transformedPositions)
     
-    return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct
+    if doBones:
+        bboxes = makeUnityBboxes(bmd, bmd.inf1.scenegraph, bmd.shp1.batches, transformedPositions)
+    else:
+        bboxes = None
+    
+    return subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes
 
-def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct):
+def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes):
     doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
-    asset = makeUnityAsset(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph)
+    asset = makeUnityMesh(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph, bboxes)
     #print("Writing asset")
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
@@ -487,8 +618,8 @@ def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, un
     return meshId, asset.entry.m_LocalAABB
 
 def exportBmd(bmd, outputFolderLocation):
-    subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct = buildMesh(bmd)
-    return exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct)
+    subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes = buildMesh(bmd)
+    return exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes)
 
 filterModes = [0, 1, 0, 1, 0, 2]
 def exportTexture(img, bmddir):
@@ -918,9 +1049,13 @@ if __name__ == "__main__":
     fixUnityParserFloats()
     fin = open(sys.argv[1], 'rb')
     bmd = BModel()
-    outputFolderLocation, bmd.name = os.path.split(sys.argv[1])
-    bmd.name = os.path.splitext(bmd.name)[0]
+    #outputFolderLocation, bmd.name = os.path.split(sys.argv[1])
+    #bmd.name = os.path.splitext(bmd.name)[0]
+    outputFolderLocation = os.getcwd()
+    bmd.name = os.path.splitext(os.path.basename(sys.argv[1]))[0]
     bmd.read(fin)
     fin.close()
     exportBmd(bmd, outputFolderLocation)
+    prefab = makeUnityPrefab(bmd.name, bmd.inf1.scenegraph, bmd.jnt1.frames)
+    prefab.dump_yaml(os.path.join(outputFolderLocation, bmd.name+"_arm.prefab"))
 

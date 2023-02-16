@@ -3,7 +3,7 @@ from classes import *
 import unityparser, transforms3d, numpy
 from math import radians, degrees, tan
 import pathlib, sys, inspect
-from unityassets import writeMeta, fixUnityParserFloats, getFileRef
+from unityassets import writeMeta, fixUnityParserFloats, getFileRef, getObjRef
 
 fixUnityParserFloats()
 
@@ -104,6 +104,7 @@ class GameObject(_GameObject):
 class ComponentProxy:
     def __init__(self, prefabGuid, prefabInstance, targetComponentId, type):
         self._modification = prefabInstance.m_Modification
+        self._modifications = dict()
         self._prefabId = int(prefabInstance.anchor)
         self._targetComponentId = targetComponentId
         self._prefabGuid = prefabGuid
@@ -122,37 +123,38 @@ class ComponentProxy:
         else:
             raise
     
+    def _addModification(self, attr, value='', objectReference=None):
+        if objectReference is None: objectReference = {'fileID': 0}
+        if attr in self._modifications:
+            self._modifications[attr]['value'] = value
+            self._modifications[attr]['objectReference'] = objectReference
+        else:
+            m = {
+                'target': {'fileID': self._targetComponentId, 'guid': self._prefabGuid, 'type': 3},
+                'propertyPath': attr,
+                'value': value,
+                'objectReference': objectReference
+            }
+            self._modifications[attr] = m
+            self._modification['m_Modifications'].append(m)
+    
     def _addOverride(self, attr, value):
         if isinstance(value, dict):
             if 'fileID' in value:
                 if attr == 'm_Father':
                     self._modification['m_TransformParent'] = value
                 else:
-                    self._modification['m_Modifications'].append({
-                        'target': {'fileID': self._targetComponentId, 'guid': self._prefabGuid, 'type': 3},
-                        'propertyPath': attr,
-                        'value': '',
-                        'objectReference': value
-                    })
+                    # FIXME: objectReference.fileID changes, not sure how
+                    self._addModification(attr, objectReference=value)
             else:
                 for k, sub in value.items():
                     self._addOverride(attr+'.'+k, sub)
         elif isinstance(value, list):
-            self._modification['m_Modifications'].append({
-                'target': {'fileID': self._targetComponentId, 'guid': self._prefabGuid, 'type': 3},
-                'propertyPath': attr+'.Array.size',
-                'value': len(value),
-                'objectReference': {'fileID': 0}
-            })
+            self._addModification(attr+'.Array.size', len(value))
             for i, sub in enumerate(value):
                 self._addOverride('%s.Array.data[%d]'%(attr,i), sub)
         else:
-            self._modification['m_Modifications'].append({
-                'target': {'fileID': self._targetComponentId, 'guid': self._prefabGuid, 'type': 3},
-                'propertyPath': attr,
-                'value': value,
-                'objectReference': {'fileID': 0}
-            })
+            self._addModification(attr, value)
     
     def __setattr__(self, attr, value):
         if attr.startswith('_'):
@@ -160,82 +162,70 @@ class ComponentProxy:
         else:
             self._addOverride(attr, value)
 
-    def get_attrs(self):
-        # get attribute set except those belonging to the Python class
-        return super().get_attrs() - {'_modification', '_prefabId', '_targetComponentId', '_prefabGuid', '_strippedComponent'}
-
-    def get_serialized_properties_dict(self):
-        # return a copy of the objects attributes but the ones we don't want
-        d = super().get_serialized_properties_dict()
-        del d['_modification']
-        del d['_prefabId']
-        del d['_targetComponentId']
-        del d['_prefabGuid']
-        del d['_strippedComponent']
-        return d
-
-class PrefabInstance(gocci(1001, 'PrefabInstance')):
+_PrefabInstance = gocci(1001, 'PrefabInstance')
+class PrefabInstance(_PrefabInstance):
     def __init__(self, prefabGuid, prefabYaml):
         super().__init__(getId(), '')
         self._prefabGuid = prefabGuid
-        self._componentPrefabs = prefabYaml.entries
-        self._gameObjectId = None
-        while self._gameObjectId is None:
-            for componentPrefab in reversed(self._componentPrefabs):
-                if isinstance(componentPrefab, _GameObject):
-                    if componentPrefab.extra_anchor_data == '':
-                        self._gameObjectId = int(componentPrefab.anchor)
-                        break
-                    elif componentPrefab.extra_anchor_data == ' stripped':
-                        raise NotImplemented("prefab variants not working at the moment")
-                        self._componentPrefabs.extend(prefabsByGuid[componentPrefab.m_CorrespondingSourceObject['guid']].entries)
-                        break
-        self._strippedGameObject = None
         self.m_SourcePrefab = {'fileID': 100100000, 'guid': self._prefabGuid, 'type': 3}
-        self.m_Modification = {'m_Modifications': []}
+        self.m_Modification = {'m_TransformParent': {'fileID': 0}, 'm_Modifications': [], 'm_RemovedComponents': []}
+        anchorKey = 0
+        self._componentPrefabs = []
+        while True:
+            isVariant = None
+            for componentPrefab in prefabYaml.entries:
+                if isinstance(componentPrefab, Transform) and componentPrefab.m_Father == {'fileID': 0}:
+                    gameObjectId = componentPrefab.m_GameObject['fileID']
+                    isVariant = False
+                    break
+                elif isinstance(componentPrefab, _PrefabInstance) and componentPrefab.m_Modification['m_TransformParent'] == {'fileID': 0}:
+                    rootPrefabInstance = componentPrefab
+                    gameObjectProxies = [subComp for subComp in prefabYaml.entries if isinstance(subComp, _GameObject) and subComp.extra_anchor_data == ' stripped' and subComp.m_PrefabInstance == {'fileID': int(componentPrefab.anchor)}]
+                    if len(gameObjectProxies) == 0:
+                        gameObjectId = None
+                    elif len(gameObjectProxies) == 1:
+                        gameObjectId = int(gameObjectProxies[0].anchor)
+                    else:
+                        assert False, gameObjectProxies
+                    isVariant = True
+                    break
+            assert isVariant is not None
+            # NOTE does not support children
+            self._componentPrefabs.extend((subComp, anchorKey) for subComp in prefabYaml.entries if hasattr(subComp, "m_GameObject") and subComp.m_GameObject['fileID'] == gameObjectId)
+            if isVariant:
+                anchorKey ^= int(rootPrefabInstance.anchor)
+                prefabYaml = prefabsByGuid[rootPrefabInstance.m_SourcePrefab['guid']]
+            else:
+                break
+        self._strippedGameObject = ComponentProxy(self._prefabGuid, self, gameObjectId^anchorKey, GameObject)
     
     def __setattr__(self, attr, value):
         if attr.startswith('_') or attr in {'m_ObjectHideFlags', 'serializedVersion', 'm_Modification', 'm_SourcePrefab', 'anchor', 'extra_anchor_data'}:
             return super().__setattr__(attr, value)
         else:
-            self.m_Modification['m_Modifications'].append({
-                'target': {'fileID': self._gameObjectId, 'guid': self._prefabGuid, 'type': 3},
-                'propertyPath': attr,
-                'value': value,
-                'objectReference': {'fileID': 0}
-            })
+            setattr(self._strippedGameObject, attr, value)
     
     def getOrCreateComponent(self, type):
-        for componentPrefab in reversed(self._componentPrefabs):
+        for componentPrefab, anchorKey in self._componentPrefabs:
             if isinstance(componentPrefab, type):
-                newComponent = ComponentProxy(self._prefabGuid, self, int(componentPrefab.anchor), type)
+                newComponent = ComponentProxy(self._prefabGuid, self, int(componentPrefab.anchor)^anchorKey, type)
                 return newComponent
-        if self._strippedGameObject is None:
-            self._strippedGameObject = GameObject(getId(), ' stripped')
-            self._strippedGameObject.m_CorrespondingSourceObject = {'fileID': self._gameObjectId, 'guid': self._prefabGuid, 'type': 3}
-            self._strippedGameObject.m_PrefabInstance = getObjRef(self)
-            self._strippedGameObject.m_PrefabAsset: {'fileID': 0}
-            scene.entries.append(self._strippedGameObject)
         newComponent = type(getId(), '')
-        scene.entries.append(newComponent)
         newComponent.m_GameObject = getObjRef(self._strippedGameObject)
+        scene.entries.append(newComponent)
         return newComponent
 
     def get_attrs(self):
         # get attribute set except those belonging to the Python class
-        return super().get_attrs() - {'_prefabGuid', '_componentPrefabs', '_gameObjectId', '_strippedGameObject'}
+        return super().get_attrs() - {'_prefabGuid', '_componentPrefabs', '_strippedGameObject'}
 
     def get_serialized_properties_dict(self):
-        # return a copy of the objects attributes but the ones we don't want
+        # return a copy of the objects attributes but not the ones we don't want
         d = super().get_serialized_properties_dict()
         del d['_prefabGuid']
         del d['_componentPrefabs']
-        del d['_gameObjectId']
         del d['_strippedGameObject']
         return d
-
-def getObjRef(obj):
-    return {'fileID': int(obj.anchor)}
 
 def setupObject(o):
     if o.name in prefabs:
@@ -263,7 +253,7 @@ def setupObject(o):
 UndergroundShift = 528
 def setupPosition(objXfm, o):
     x, y, z = SCALE*o.pos[0], SCALE*o.pos[1], -1*SCALE*o.pos[2]
-    if y > 92 and y < 120 and abs(x) < 120 and abs(z) < 77:
+    if y > 84 and y < 120 and abs(x) < 120 and abs(z) < 77:
         # put the rooms in the sky underground
         z += UndergroundShift
     objXfm.m_LocalPosition = {'x': x, 'y': y, 'z': z}
@@ -313,10 +303,121 @@ def doColor(c):
     # XXX are these stored as linear?
     return dict(zip('rgba', (x/255 for x in c)))
 
+import csv, os
+AudioRes = pathlib.Path(os.getcwd()) / "AudioRes"
+print("Loading sound table")
+soundInfos = {int(row["InternalID"], 16): row for row in csv.DictReader(open(AudioRes / "msound.csv"))}
+scenetime = pathlib.Path(__file__).stat().st_mtime
+sounds = {}
+from xml.dom import minidom
+import shutil
+def getSound(soundKey):
+    if soundKey in sounds:
+        return sounds[soundKey]
+    soundInfo = soundInfos[soundKey]
+    commands = open(AudioRes / "se" / soundInfo["Category"] / (soundInfo["Name"]+".txt"))
+    labels = {}
+    loop = False
+    bank = inst = 0
+    volume = 1.0
+    notes = []
+    transpose = 0
+    for i, command in enumerate(commands):
+        command = command.strip()
+        if len(command) == 0 or command[0] == '#': continue
+        if command[0] == ':':
+            labels[command[1:]] = i
+        else:
+            command = command.split()
+            command = [int(p[1:], 16) if p[0] == 'h' else int(p) if p.isdigit() else p for p in command]
+            if command[0] == 'NOTEON2':
+                key, flags, velocity = command[1:4]
+                volume *= velocity/0x7F
+                notes.append(key)
+            elif command[0] == 'SET_BANK_INST':
+                bank, inst = command[1:]
+            elif command[0] == 'JMP':
+                label = command[2]
+                if label in labels and labels[label] < i:
+                    loop = True
+            elif command[0] == 'TRANSPOSE':
+                assert command[1] == 0x3C, command
+                transpose = command[1]
+            elif command[0] == 'SIMPLEADSR':
+                attackTime, decayTime, decayTime2, sustainLevel, releaseTime = command[1:]
+                volume *= sustainLevel/0xFFFF
+    for i in range(len(notes)): notes[i] += transpose
+    note = notes[0]
+    
+    ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
+    for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
+        if int(instrument.getAttribute("program")) == inst:
+            pitch = 2**((note-0x3C)/12.0)
+            keyRegions = instrument.getElementsByTagName("key-region")
+            assert len(keyRegions) == 1, keyRegions
+            assert "key" not in keyRegions[0].attributes, keyRegions[0]
+            velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
+            assert len(velocityRegions) == 1, velocityRegions
+            waveId = int(velocityRegions[0].getAttribute("wave-id"))
+            break
+    else:
+        for drumset in ibnk.firstChild.getElementsByTagName("drum-set"):
+            if int(drumset.getAttribute("program")) == inst:
+                pitch = 1.0
+                key = (["C-", "C#", "D-", "Eb", "E-", "F-", "F#", "G-", "G#", "A-", "Bb", "B-"][note%12])+str(note//12)
+                for percussion in drumset.getElementsByTagName("percussion"):
+                    if percussion.getAttribute("key") == key:
+                        velocityRegions = percussion.getElementsByTagName("velocity-region")
+                        assert len(velocityRegions) == 1, velocityRegions
+                        waveId = int(velocityRegions[0].getAttribute("wave-id"))
+                        break
+
+    (outpath / "audio").mkdir(parents=True, exist_ok=True)
+    metapath = outpath / "audio" / (soundInfo["Name"]+".wav.meta")
+    destpath = outpath / "audio" / (soundInfo["Name"]+".wav")
+    if metapath.exists() and metapath.stat().st_mtime >= scenetime:
+        parsedInfo = (volume, pitch, loop, unityparser.UnityDocument.load_yaml(metapath).entry['guid'])
+        sounds[soundKey] = parsedInfo
+        return parsedInfo
+    
+    origPath = list((AudioRes / "waves").glob("w2ndLoad_0_%05d.*.wav"%waveId))[0]
+    shutil.copy(origPath, destpath)
+    guid = writeMeta(soundInfo["Name"]+".wav", {
+        "AudioImporter": {
+            "serializedVersion": 6,
+            "defaultSettings": {
+                "loadType": 1,
+                "sampleRateSetting": 0,
+                "compressionFormat": 2,
+                "quality": 1,
+                "conversionMode": 0
+            },
+            "forceToMono": 0,
+            "normalize": 0,
+            "preloadAudioData": 1,
+            "loadInBackground": 0,
+            "ambisonic": 0,
+            "3D": 1
+        }
+    }, outpath / "audio")
+    parsedInfo = (volume, pitch, loop, guid)
+    sounds[soundKey] = parsedInfo
+    return parsedInfo
+
 scenedirpath = pathlib.Path(sys.argv[1])
 assert scenedirpath.is_dir()
 outpath = pathlib.Path(sys.argv[2])
 assert outpath.is_dir()
+
+prefabsByGuid = {}
+prefabs = {}
+for assetPath in (outpath / "prefabs").glob("*.prefab"):
+    print(assetPath.stem)
+    metapath = assetPath.with_suffix(".prefab.meta")
+    guid = unityparser.UnityDocument.load_yaml(metapath).entry['guid']
+    prefabData = unityparser.UnityDocument.load_yaml(assetPath)
+    prefabsByGuid[guid] = prefabData
+    prefabs[assetPath.stem] = guid, prefabData
 
 import texture, bti
 btitime = max(pathlib.Path(texture.__file__).stat().st_mtime, pathlib.Path(bti.__file__).stat().st_mtime)
@@ -326,6 +427,7 @@ from bmd2unity import exportTexture
 btis = {}
 for btipath in scenedirpath.rglob("*.bti"):
     btipath_rel = btipath.relative_to(scenedirpath)
+    print(btipath_rel)
     outbtidir = outpath / btipath_rel.parent
     metapathDds = outbtidir / (btipath_rel.stem+".ktx.meta")
     metapathPng = outbtidir / (btipath_rel.stem+".png.meta")
@@ -398,10 +500,10 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         
         meshes = []
         for subBmd in splitByVertexFormat(bmd):
-            for i, subSubBmd in enumerate(splitByConnectedPieces(subBmd) if bmd.name == "map" else [subBmd]):
+            for i, subSubBmd in enumerate([subBmd]):#splitByConnectedPieces(subBmd) if bmd.name == "map" else [subBmd]):
                 meshes.append((subSubBmd, buildMesh(subSubBmd)))
         atlas = xatlas.Atlas()
-        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes) in meshes:
             if uChannels[5]["dimension"] > 0:
                 continue
             positions = getChannelData(uChannels, uniqueVertices, 0)
@@ -425,8 +527,8 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
         atlas.generate(pack_options=packOpt, verbose=True)
         atlasIdx = 0
         bmds[bmdkey] = []
-        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct) in meshes:
-            if uChannels[5]["dimension"] == 0:
+        for subSubBmd, (subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes) in meshes:
+            if 0:#uChannels[5]["dimension"] == 0:
                 vmapping, newIndices, uvs = atlas[atlasIdx]
                 assert len(newIndices)*3 == sum(map(len, subMeshTriangles))
                 assert len(uvs) == len(vmapping)
@@ -467,7 +569,7 @@ for bmdpath in scenedirpath.rglob("*.bmd"):
             else:
                 scaleInLightmap = 1
             materialIdInSlot = [materialIds[matIndex] for matIndex in subSubBmd.mat3.remapTable]
-            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct), materialIdInSlot, scaleInLightmap))
+            bmds[bmdkey].append((subSubBmd.name, exportAsset(subSubBmd, outbmddir, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes), materialIdInSlot, scaleInLightmap))
         del meshes
     else:
         metapath = outbmddir / (bmdpath_rel.stem+".asset.meta")
@@ -503,107 +605,6 @@ for bmtpath in scenedirpath.rglob("*.bmt"):
         materialIds = list(exportMaterials(bmt.mat3.materials[:max(bmt.mat3.remapTable)+1], bmt.mat3.indirectArray, bmt.tex1.textures, bmtdatadir, textureIds, True, 1/SCALE, bmt.name in ("map", "sky")))
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmt.mat3.remapTable]
         materials[bmtkey] = bmt.name, materialIdInSlot
-
-import csv, os
-AudioRes = pathlib.Path(os.getcwd()) / "AudioRes"
-print("Loading sound table")
-soundInfos = {int(row["InternalID"], 16): row for row in csv.DictReader(open(AudioRes / "msound.csv"))}
-scenetime = pathlib.Path(__file__).stat().st_mtime
-sounds = {}
-from xml.dom import minidom
-import shutil
-def getSound(soundKey):
-    if soundKey in sounds:
-        return sounds[soundKey]
-    soundInfo = soundInfos[soundKey]
-    commands = open(AudioRes / "se" / soundInfo["Category"] / (soundInfo["Name"]+".txt"))
-    labels = {}
-    loop = False
-    bank = inst = 0
-    volume = 1.0
-    notes = []
-    transpose = 0
-    for i, command in enumerate(commands):
-        command = command.strip()
-        if len(command) == 0 or command[0] == '#': continue
-        if command[0] == ':':
-            labels[command[1:]] = i
-        else:
-            command = command.split()
-            command = [int(p[1:], 16) if p[0] == 'h' else int(p) if p.isdigit() else p for p in command]
-            if command[0] == 'NOTEON2':
-                key, flags, velocity = command[1:4]
-                volume *= velocity/0x7F
-                notes.append(key)
-            elif command[0] == 'SET_BANK_INST':
-                bank, inst = command[1:]
-            elif command[0] == 'JMP':
-                label = command[2]
-                if label in labels and labels[label] < i:
-                    loop = True
-            elif command[0] == 'TRANSPOSE':
-                assert command[1] == 0x3C
-                transpose = command[1]
-            elif command[0] == 'SIMPLEADSR':
-                attackTime, decayTime, decayTime2, sustainLevel, releaseTime = command[1:]
-                volume *= sustainLevel/0xFFFF
-    for i in range(len(notes)): notes[i] += transpose
-    note = notes[0]
-    
-    ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
-    for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
-        if int(instrument.getAttribute("program")) == inst:
-            pitch = 2**((note-0x3C)/12.0)
-            keyRegions = instrument.getElementsByTagName("key-region")
-            assert len(keyRegions) == 1, keyRegions
-            assert "key" not in keyRegions[0].attributes, keyRegions[0]
-            velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
-            assert len(velocityRegions) == 1, velocityRegions
-            waveId = int(velocityRegions[0].getAttribute("wave-id"))
-            break
-    else:
-        for drumset in ibnk.firstChild.getElementsByTagName("drum-set"):
-            if int(drumset.getAttribute("program")) == inst:
-                pitch = 1.0
-                key = (["C-", "C#", "D-", "Eb", "E-", "F-", "F#", "G-", "G#", "A-", "Bb", "B-"][note%12])+str(note//12)
-                for percussion in drumset.getElementsByTagName("percussion"):
-                    if percussion.getAttribute("key") == key:
-                        velocityRegions = percussion.getElementsByTagName("velocity-region")
-                        assert len(velocityRegions) == 1, velocityRegions
-                        waveId = int(velocityRegions[0].getAttribute("wave-id"))
-                        break
-
-    (outpath / "audio").mkdir(parents=True, exist_ok=True)
-    metapath = outpath / "audio" / (soundInfo["Name"]+".wav.meta")
-    destpath = outpath / "audio" / (soundInfo["Name"]+".wav")
-    if metapath.exists() and metapath.stat().st_mtime >= scenetime:
-        parsedInfo = (volume, pitch, loop, unityparser.UnityDocument.load_yaml(metapath).entry['guid'])
-        sounds[soundKey] = parsedInfo
-        return parsedInfo
-    
-    origPath = list((AudioRes / "waves").glob("w2ndLoad_0_%05d.*.wav"%waveId))[0]
-    shutil.copy(origPath, destpath)
-    guid = writeMeta(soundInfo["Name"]+".wav", {
-        "AudioImporter": {
-            "serializedVersion": 6,
-            "defaultSettings": {
-                "loadType": 1,
-                "sampleRateSetting": 0,
-                "compressionFormat": 2,
-                "quality": 1,
-                "conversionMode": 0
-            },
-            "forceToMono": 0,
-            "normalize": 0,
-            "preloadAudioData": 1,
-            "loadInBackground": 0,
-            "ambisonic": 0,
-            "3D": 1
-        }
-    }, outpath / "audio")
-    parsedInfo = (volume, pitch, loop, guid)
-    sounds[soundKey] = parsedInfo
-    return parsedInfo
 
 print("Opening scene")
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
@@ -664,7 +665,7 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
         assert baseName.startswith(baseColliderName.split('/')[-1])
         baseName = baseName[len(baseColliderName.split('/')[-1])+1:]
         if baseColliderName == "map/map":
-            if center['y'] >= 9250 and center['y'] < 12002 and abs(center['x']) < 12031 and abs(center['z']) < 7696:
+            if center['y'] >= 8400 and center['y'] < 12002 and abs(center['x']) < 12031 and abs(center['z']) < 7696:
                 # put the rooms in the sky underground
                 baseName += "-interior"
         if baseName in colliderGroups:
@@ -685,16 +686,6 @@ for baseColliderName in ["map/map", "map/map/building01", "map/map/building02"]:
                 objXfm.m_LocalPosition = {'x': 0.0, 'y': 0.0, 'z': float(UndergroundShift)}
             colliderGroups[baseName] = objObj
         addCol(uuid, objObj)
-
-print("Loading prefabs")
-prefabsByGuid = {}
-prefabs = {}
-for assetPath in (outpath / "prefabs").glob("*.prefab"):
-    metapath = assetPath.with_suffix(".prefab.meta")
-    guid = unityparser.UnityDocument.load_yaml(metapath).entry['guid']
-    prefabData = unityparser.UnityDocument.load_yaml(assetPath)
-    prefabsByGuid[guid] = prefabData
-    prefabs[assetPath.stem] = guid, prefabData
 
 for o in marScene.objects:
     if o.name == 'LightAry':
@@ -857,6 +848,8 @@ def doActor(o, grpXfm):
                 audioSource.m_Volume = volume
                 audioSource.m_Pitch = pitch
                 audioSource.Loop = int(loop)
+                audioSource.rolloffMode = 0
+                audioSource.serializedVersion = 4
             if 'particle' in modelEntry:
                 objObj.getOrCreateComponent(ParticleSystemRenderer)
                 objObj.getOrCreateComponent(ParticleSystem)
@@ -1041,4 +1034,5 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # disable GI for the meshes that cover up OOB but not interior covers
 # dedupe
 # optimize all
+# make audio sources 3d
 
