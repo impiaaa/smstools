@@ -1,9 +1,9 @@
 from scenebin import *
 from classes import *
 import unityparser, transforms3d, numpy
-from math import radians, degrees, tan
+from math import radians, degrees, tan, log
 import pathlib, sys, inspect
-from unityassets import writeMeta, fixUnityParserFloats, getFileRef, getObjRef
+from unityassets import writeMeta, writeNativeMeta, fixUnityParserFloats, getFileRef, getObjRef
 
 fixUnityParserFloats()
 
@@ -37,6 +37,7 @@ LineRenderer = gocci(120, 'LineRenderer')
 Halo = gocci(122, 'Halo')
 LensFlare = gocci(123, 'LensFlare')
 FlareLayer = gocci(124, 'FlareLayer')
+PhysicMaterial = gocci(134, 'PhysicMaterial')
 SphereCollider = gocci(135, 'SphereCollider')
 CapsuleCollider = gocci(136, 'CapsuleCollider')
 SkinnedMeshRenderer = gocci(137, 'SkinnedMeshRenderer')
@@ -275,6 +276,7 @@ def addCol(uuid, objObj):
     coll.serializedVersion = 3
     coll.m_Enabled = 1
     coll.m_Mesh = getFileRef(uuid, id=4300000)
+    return coll
 
 def lookAt(direction):
     up = numpy.array([0, 1, 0])
@@ -311,11 +313,7 @@ scenetime = pathlib.Path(__file__).stat().st_mtime
 sounds = {}
 from xml.dom import minidom
 import shutil
-def getSound(soundKey):
-    if soundKey in sounds:
-        return sounds[soundKey]
-    soundInfo = soundInfos[soundKey]
-    commands = open(AudioRes / "se" / soundInfo["Category"] / (soundInfo["Name"]+".txt"))
+def parseCommands(commands, category):
     labels = {}
     loop = False
     bank = inst = 0
@@ -341,36 +339,52 @@ def getSound(soundKey):
                 if label in labels and labels[label] < i:
                     loop = True
             elif command[0] == 'TRANSPOSE':
-                assert command[1] == 0x3C, command
+                #assert command[1] == 0x3C, command
                 transpose = command[1]
             elif command[0] == 'SIMPLEADSR':
                 attackTime, decayTime, decayTime2, sustainLevel, releaseTime = command[1:]
                 volume *= sustainLevel/0xFFFF
+            elif command[0] == '$REFERENCE':
+                return parseCommands(open(AudioRes / "se" / category / (command[1]+".txt")), category)
     for i in range(len(notes)): notes[i] += transpose
-    note = notes[0]
+    return loop, bank, inst, volume, notes[0]
+
+def getSound(soundKey):
+    if soundKey in sounds:
+        return sounds[soundKey]
+    soundInfo = soundInfos[soundKey]
+    print(soundInfo["Name"])
+    loop, bank, inst, volume, note = parseCommands(open(AudioRes / "se" / soundInfo["Category"] / (soundInfo["Name"]+".txt")), soundInfo["Category"])
     
+    keys = ["C-", "C#", "D-", "Eb", "E-", "F-", "F#", "G-", "G#", "A-", "Bb", "B-"]
     ibnk = minidom.parse(open(AudioRes / "IBNK" / ("%d.xml"%bank)))
     for instrument in ibnk.firstChild.getElementsByTagName("instrument"):
         if int(instrument.getAttribute("program")) == inst:
-            pitch = 2**((note-0x3C)/12.0)
-            keyRegions = instrument.getElementsByTagName("key-region")
-            assert len(keyRegions) == 1, keyRegions
-            assert "key" not in keyRegions[0].attributes, keyRegions[0]
-            velocityRegions = keyRegions[0].getElementsByTagName("velocity-region")
-            assert len(velocityRegions) == 1, velocityRegions
-            waveId = int(velocityRegions[0].getAttribute("wave-id"))
-            break
-    else:
-        for drumset in ibnk.firstChild.getElementsByTagName("drum-set"):
-            if int(drumset.getAttribute("program")) == inst:
-                pitch = 1.0
-                key = (["C-", "C#", "D-", "Eb", "E-", "F-", "F#", "G-", "G#", "A-", "Bb", "B-"][note%12])+str(note//12)
-                for percussion in drumset.getElementsByTagName("percussion"):
-                    if percussion.getAttribute("key") == key:
-                        velocityRegions = percussion.getElementsByTagName("velocity-region")
-                        assert len(velocityRegions) == 1, velocityRegions
-                        waveId = int(velocityRegions[0].getAttribute("wave-id"))
-                        break
+            lastRegion = -1
+            for keyRegion in instrument.getElementsByTagName("key-region"):
+                if "key" in keyRegion.attributes:
+                    regionKey = keyRegion.getAttribute("key")
+                    regionKey = keys.index(regionKey[:2])+12*int(regionKey[2:])
+                else:
+                    regionKey = None
+                if regionKey is None or (note > lastRegion and note <= regionKey):
+                    if regionKey is None: regionKey = 0x3C
+                    pitch = 2**((note-regionKey)/12.0)
+                    velocityRegions = keyRegion.getElementsByTagName("velocity-region")
+                    assert len(velocityRegions) == 1, velocityRegions
+                    waveId = int(velocityRegions[0].getAttribute("wave-id"))
+                    break
+                lastRegion = regionKey
+    for drumset in ibnk.firstChild.getElementsByTagName("drum-set"):
+        if int(drumset.getAttribute("program")) == inst:
+            pitch = 1.0
+            key = (keys[note%12])+str(note//12)
+            for percussion in drumset.getElementsByTagName("percussion"):
+                if percussion.getAttribute("key") == key:
+                    velocityRegions = percussion.getElementsByTagName("velocity-region")
+                    assert len(velocityRegions) == 1, velocityRegions
+                    waveId = int(velocityRegions[0].getAttribute("wave-id"))
+                    break
 
     (outpath / "audio").mkdir(parents=True, exist_ok=True)
     metapath = outpath / "audio" / (soundInfo["Name"]+".wav.meta")
@@ -606,6 +620,26 @@ for bmtpath in scenedirpath.rglob("*.bmt"):
         materialIdInSlot = [materialIds[matIndex] for matIndex in bmt.mat3.remapTable]
         materials[bmtkey] = bmt.name, materialIdInSlot
 
+from sObjDataTable import sObjDataTable, end_data
+
+physMaterials = {}
+physDir = (outpath / "physics")
+physDir.mkdir(parents=True, exist_ok=True)
+for name, objData in sObjDataTable.items():
+    physicalInfo = objData.get('physicalInfo')
+    if physicalInfo is not None:
+        print(name)
+        physicalData = physicalInfo['physicalData']
+        physMat = PhysicMaterial(str(13400000), '')
+        physMat.m_Name = name
+        physMat.dynamicFriction = physicalData[4]**30 # floorFriction
+        physMat.staticFriction = max(physicalData[3]/5, physMat.dynamicFriction) # sleepVelocityThreshold
+        physMat.bounciness = physicalData[1] # floorBounceSpeed
+        asset = unityparser.UnityDocument([physMat])
+        assetName = name+".physicMaterial"
+        asset.dump_yaml(physDir / assetName)
+        physMaterials[name] = writeNativeMeta(assetName, 13400000, physDir)
+
 print("Opening scene")
 scene = readsection(open(scenedirpath / "map" / "scene.bin", 'rb'))
 
@@ -715,7 +749,6 @@ for o in marScene.objects:
     if o.name == 'Strategy':
         strategy = o
 
-from sObjDataTable import sObjDataTable, end_data
 actorDataTable = {
     "SeaIndirect": {"modelName": "SeaIndirect", "unk9": 0x11210000, "unk15": 0, "flags16": 0x41},
     "ReflectParts": {"modelName": "ReflectParts", "unk9": 0x10210000, "unk15": 0, "flags16": 0x10},
@@ -789,7 +822,11 @@ def doActor(o, grpXfm):
             else:
                 modelName = animData[0]['modelName']
                 if animData[0].get('basName'):
-                    objObj.getOrCreateComponent(AudioSource)
+                    audioSource = objObj.getOrCreateComponent(AudioSource)
+                    audioSource.serializedVersion = 4
+                    audioSource.m_Enabled = 1
+                    audioSource.m_PlayOnAwake = 1
+                    audioSource.rolloffMode = 0
         if modelName is not None:
             renderer, meshFilter = addMeshFilter("mapobj/"+modelName.lower(), objObj)
             
@@ -811,12 +848,58 @@ def doActor(o, grpXfm):
                         renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
         
         mapCollisionInfo = objData.get('mapCollisionInfo')
+        hitInfo = objData.get('objHitInfo')
+        colliders = []
         if mapCollisionInfo is not None:
             colName = mapCollisionInfo['collisionData'][0]['name']
-            if colName is not None:
-                for physName, uuid, center in cols["mapobj/"+colName.lower()]:
-                    # different terrain types ok?
-                    addCol(uuid, objObj)
+            for physName, uuid, center in cols["mapobj/"+colName.lower()]:
+                # different terrain types ok?
+                colliders.append(addCol(uuid, objObj))
+        elif hitInfo is not None:
+            hitData = hitInfo['hitDataTable'][0]
+            if hitData['receiveRadius'] <= 0:
+                hitRadius = hitData['attackRadius']
+                hitHeight = hitData['attackHeight']
+            else:
+                hitRadius = hitData['receiveRadius']
+                hitHeight = hitData['receiveHeight']
+            if hitRadius > 0 or hitHeight > 0:
+                if hitHeight <= hitRadius*2:
+                    collider = objObj.getOrCreateComponent(SphereCollider)
+                    collider.m_Radius = hitRadius
+                else:
+                    collider = objObj.getOrCreateComponent(CapsuleCollider)
+                    collider.m_Radius = hitRadius
+                    collider.m_Height = hitHeight-2*hitRadius
+                colliders.append(collider)
+        
+        physicalInfo = objData.get('physicalInfo')
+        if physicalInfo is not None:
+            rigidbody = objObj.getOrCreateComponent(Rigidbody)
+            rigidbody.serializedVersion = 2
+            physicalData = physicalInfo['physicalData']
+            if physicalData[11] > 0.1: # throw distance
+                rigidbody.m_Mass = 5/physicalData[11]
+            elif objData['objectID'] == 0x400000D0:
+                rigidbody.m_Mass = 0.4/0.5 # kick power
+            else:
+                rigidbody.m_Mass = 0.4/0.9
+            rigidbody.m_Drag = -1*log(physicalData[6]**30) if physicalData[6] > 0 else float('inf') # horizDrag
+            rigidbody.m_AngularDrag = -1*log(physicalData[5]**30) if physicalData[5] > 0 else float('inf') # rollBrakeFactor
+            rigidbody.m_UseGravity = int(physicalData[0] > 0.1) # gravity
+            #rigidbody.m_IsKinematic
+            for collider in colliders:
+                collider.m_Material = getFileRef(physMaterials[o.model], id=13400000)
+        
+        soundInfo = objData.get('soundInfo')
+        if soundInfo is not None:
+            audioSource = objObj.getOrCreateComponent(AudioSource)
+            audioSource.serializedVersion = 4
+            audioSource.m_Enabled = 1
+            audioSource.m_PlayOnAwake = 1
+            audioSource.rolloffMode = 0
+            for soundKey in soundInfo['soundKeys']:
+                if soundKey != -1: getSound(soundKey)
     if isinstance(o, TMapStaticObj):
         # not "static" in the unity sense
         modelEntry = actorDataTable.get(o.baseName, None)
@@ -841,15 +924,15 @@ def doActor(o, grpXfm):
                         addCol(uuid, objObj)
             if 'soundKey' in modelEntry:
                 audioSource = objObj.getOrCreateComponent(AudioSource)
-                volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
+                audioSource.serializedVersion = 4
                 audioSource.m_Enabled = 1
-                audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
                 audioSource.m_PlayOnAwake = 1
+                audioSource.rolloffMode = 0
+                volume, pitch, loop, clipGuid = getSound(modelEntry['soundKey'])
+                audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
                 audioSource.m_Volume = volume
                 audioSource.m_Pitch = pitch
                 audioSource.Loop = int(loop)
-                audioSource.rolloffMode = 0
-                audioSource.serializedVersion = 4
             if 'particle' in modelEntry:
                 objObj.getOrCreateComponent(ParticleSystemRenderer)
                 objObj.getOrCreateComponent(ParticleSystem)
@@ -861,6 +944,10 @@ def doActor(o, grpXfm):
             # don't want to figure out the listen cone stuff
             volume, pitch, loop, clipGuid = getSound(soundKey+1)
             audioSource.m_audioClip = getFileRef(clipGuid, id=8300000, type=3)
+            audioSource.serializedVersion = 4
+            audioSource.m_Enabled = 1
+            audioSource.m_PlayOnAwake = 1
+            audioSource.rolloffMode = 0
             audioSource.m_Volume = volume
             audioSource.m_Pitch = pitch
             audioSource.Loop = int(loop)
@@ -932,7 +1019,11 @@ def doActor(o, grpXfm):
             #    renderer.m_Materials = [getFileRef(materialId, id=2100000) for materialId in materialIds]
     if isinstance(o, TSunModel):
         objObj.m_StaticEditorFlags = 0xFFFFFFFF
-        objXfm.m_LocalScale = {'x': SCALE, 'y': SCALE, 'z': -SCALE}
+        objXfm.m_LocalScale = {'x': SCALE*2, 'y': SCALE*2, 'z': -2*SCALE}
+        objXfm.m_LocalPosition = {k: v/4 for k, v in objXfm.m_LocalPosition.items()}
+        euler, quat = lookAt(numpy.array([o.pos[0], o.pos[1], -o.pos[2]]))
+        objXfm.m_LocalEulerAnglesHint = dict(zip('xyz', euler))
+        objXfm.m_LocalRotation = dict(zip('wxyz', quat.tolist()))
         renderer, meshFilter = addMeshFilter("sun/model.bmd", objObj)
         renderer.m_CastShadows = 0
     return objObj, objXfm
@@ -1023,6 +1114,7 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # walking sfx, particles
 # collision effects
 # handle samplers in shader
+# add VRC_SpatialAudioSource to all audio sources
 # make interior covers work with occlusion
 # fix effect matrix, hook up to grabpass
 # scale main map in lightmap - unity seems to fix this itself
@@ -1030,6 +1122,8 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # place reflection probes (use box projection for rooms)
 # add background tag to sky
 # make sky and sun vertices immovable and/or at max depth
+# float3 viewpos = mul((float3x3)UNITY_MATRIX_MV, v.vertex);
+# make sun billboard
 # enable instancing on coin material
 # disable GI for the meshes that cover up OOB but not interior covers
 # dedupe
