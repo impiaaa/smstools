@@ -835,7 +835,17 @@ def exportMaterials(materials, indirectArray, textures, bmddir, textureIds, useC
             if texMtx is not None: colors["_Tex%d_CR"%i] = {"r": texMtx.center[0], "g": texMtx.center[1], "b": texMtx.center[2], "a": texMtx.rotation*pi}
         floats = {}
         # hard-coded lightmap parameter
-        if mat.alphaComp is not None: floats["_Cutoff"] = (mat.alphaComp.ref1 if (mat.alphaComp.comp0 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND) or (mat.alphaComp.comp0 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR) else mat.alphaComp.ref0)/255
+        if mat.alphaComp is not None:
+            if CompareType.NEVER in (mat.alphaComp.comp0, mat.alphaComp.comp1) and mat.alphaComp.op == AlphaOp.AND:
+                floats["_Cutoff"] = 0
+            elif mat.alphaComp.comp0 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND:
+                floats["_Cutoff"] = mat.alphaComp.ref1/255
+            elif mat.alphaComp.comp0 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR:
+                floats["_Cutoff"] = mat.alphaComp.ref1/255
+            elif mat.alphaComp.comp1 == CompareType.ALWAYS and mat.alphaComp.op == AlphaOp.AND:
+                floats["_Cutoff"] = mat.alphaComp.ref0/255
+            elif mat.alphaComp.comp1 == CompareType.NEVER and mat.alphaComp.op == AlphaOp.OR:
+                floats["_Cutoff"] = mat.alphaComp.ref0/255
         uMat.m_SavedProperties = {
             "serializedVersion": 3,
             "m_TexEnvs": texEnvs,
