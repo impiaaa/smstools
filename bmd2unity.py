@@ -276,9 +276,18 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
     uniqueVertices = [[], [], []]
     indexMap = {}
     for batch in batches:
+        matrixTable = [([], []) for i in range(10)]
         for shapeDraw, shapeMatrix in batch.matrixGroups:
-            mmi = [0]*maxWeightCount
-            mmw = [1.0]+[0.0]*(maxWeightCount-1)
+            if doBones:
+                for n, index in enumerate(shapeMatrix.matrixTable):
+                    if index != 0xffff:
+                        if isWeighted[index]:
+                            mmi = boneIndices[weightData[index]]
+                            mmw = weights[weightData[index]]
+                        else:
+                            mmi = [weightData[index]]+[0]*(maxWeightCount-1)
+                            mmw = [1.0]+[0.0]*(maxWeightCount-1)
+                        matrixTable[n] = (mmi, mmw)
             for primitive in shapeDraw.primitives:
                 for point in primitive.points:
                     if point.indices in indexMap:
@@ -303,21 +312,14 @@ def collectVertices(batches, maxWeightCount, dataForArrayType, doBones, isWeight
                                     data = transformedPositions
                                 elif arrayType == VtxAttr.NRM.value:
                                     data = transformedNormals
-                                if isint and data in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
+                                if isint and arrayType in (VtxAttr.POS.value, VtxAttr.NRM.value): data = [tuple(map(int, v)) for v in data]
                             uniqueVertex[stream].extend(data[point.indices[arrayType]])
                     if doBones:
                         stream = 2
                         if batch.hasMatrixIndices:
-                            index = shapeMatrix.matrixTable[point.matrixIndex//3]
+                            mmi, mmw = matrixTable[point.matrixIndex//3]
                         else:
-                            index = shapeMatrix.matrixTable[0]
-                        if index != 0xffff:
-                            if isWeighted[index]:
-                                mmi = boneIndices[weightData[index]]
-                                mmw = weights[weightData[index]]
-                            else:
-                                mmi = [weightData[index]]+[0]*(maxWeightCount-1)
-                                mmw = [1.0]+[0.0]*(maxWeightCount-1)
+                            mmi, mmw = matrixTable[0]
                         uniqueVertex[stream].extend(mmw)
                         uniqueVertex[stream].extend(mmi)
                     uniqueIndex = len(uniqueVertices[0])
