@@ -19,7 +19,6 @@ import bpy
 from mathutils import *
 import mathutils.geometry
 import os
-from bisect import bisect
 from bck import *
 
 def doCurve(action, data_path, loopMode, animationLength, data):
@@ -74,26 +73,6 @@ def doCurve(action, data_path, loopMode, animationLength, data):
         
         #lastKeyPoint.handle_right = lastKeyPoint.co
         #lastKeyPoint.handle_right_type = 'ALIGNED'
-
-def animateSingle(time, keyList):
-    timeList = [key.time for key in keyList]
-    i = bisect(timeList, time)
-    if i <= 0:
-        # the time is before any keys
-        # TODO: does the tangent affect out-of-bounds values?
-        return keyList[0].value
-    elif i >= len(keyList):
-        # the time is after all keys
-        return keyList[-1].value
-    else:
-        keyBefore = keyList[i-1]
-        keyAfter = keyList[i]
-        # TODO: Use hermite animation to figure out the current state.
-        # Might be overkill just to fix the transformation, so linear is good enough for now.
-        return keyBefore.value+(keyAfter.value-keyBefore.value)*(time-keyBefore.time)/(keyAfter.time-keyBefore.time)
-
-def animate(time, keyListSet):
-    return (animateSingle(time, keyList) for keyList in keyListSet)
 
 def importFile(filepath, context):
     fin = open(filepath, 'rb')

@@ -682,7 +682,7 @@ lms.m_LightmapEditorSettings = {"serializedVersion": 12, "m_MixedBakeMode": 1, "
 managers = scene.search("コンダクター初期化用")
 for o in managers.objects:
     if isinstance(o, TMapObjBaseManager):
-        o.lodClipSize = (o.clipRadius/tan(radians(25)))/o.farClip
+        o.lodClipSize = 1/(tan(radians(25))*o.farClip)
 
 for o in scene.objects:
     if o.name == 'MarScene':
@@ -884,9 +884,10 @@ def doActor(o, grpXfm):
             lod = objObj.getOrCreateComponent(LODGroup)
             lod.m_FadeMode = 0
             lod.serializedVersion = 2
-            lod.m_LODs = [{"screenRelativeHeight": manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
             aabb = bmds["mapobj/"+modelName.lower()][1][2]
-            lod.m_Size = max(aabb["m_Extent"].values())*2
+            size = max(aabb["m_Extent"].values())
+            lod.m_LODs = [{"screenRelativeHeight": size*manager.lodClipSize, "renderers": [{"renderer": getObjRef(renderer)}]}]
+            lod.m_Size = size*2
             lod.m_LocalReferencePoint = aabb["m_Center"]
             # TODO: also do LOD for TLiveActor/TLiveManager. sometimes (TBoardNPCManager, TEnemyManager) clip params are from prm file
             
@@ -914,24 +915,30 @@ def doActor(o, grpXfm):
                 hitRadius = hitData['receiveRadius']
                 hitHeight = hitData['receiveHeight']
             if hitRadius > 0 or hitHeight > 0:
-                if hitHeight <= hitRadius*2:
-                    collider = objObj.getOrCreateComponent(SphereCollider)
-                    collider.m_Radius = hitRadius
-                    collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
-                else:
+                if hitHeight > hitRadius*2:
                     collider = objObj.getOrCreateComponent(CapsuleCollider)
                     collider.m_Radius = hitRadius
                     collider.m_Height = hitHeight-2*hitRadius
                     collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
+                elif hitHeight > hitRadius*0.5:
+                    collider = objObj.getOrCreateComponent(SphereCollider)
+                    collider.m_Radius = hitRadius
+                    collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
+                else:
+                    collider = objObj.getOrCreateComponent(BoxCollider)
+                    collider.m_Center = {'x': 0, 'y': hitHeight/2, 'z': 0}
+                    collider.m_Size = {'x': hitRadius*2, 'y': hitHeight, 'z': hitRadius*2}
                 colliders.append(collider)
         
         if isinstance(o, TResetFruit):
-            for collider in colliders:
-                collider.m_Center = {'x': 0, 'y': 0, 'z': 0}
-            yPos = o.pos[1]
-            yPos += hitRadius
             if objData['objectID'] == 0x40000394:
-                yPos -= 50
+                for collider in colliders:
+                    collider.m_Center = {'x': 0, 'y': 50, 'z': 0}
+            elif objData['objectID'] != 0x40000395:
+                for collider in colliders:
+                    collider.m_Center = {'x': 0, 'y': 0, 'z': 0}
+            yPos = o.pos[1]
+            yPos += hitHeight/2
             objXfm.m_LocalPosition = {'x': SCALE*o.pos[0], 'y': SCALE*yPos, 'z': -1*SCALE*o.pos[2]}
         
         physicalInfo = objData.get('physicalInfo')
@@ -1161,7 +1168,6 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # to do:
 # use actual object size for lods
 # particles
-# write prefabs for bone hierarchies
 # animations
 # more objects
 # objects should check if in shadow
@@ -1173,11 +1179,13 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # integrate etc2 creation
 # walking sfx, particles
 # collision effects
+# warp collision
+# make mesh collision bouncy, slippery
+# http://smswiki.shoutwiki.com/wiki/Docs/Collision
 # handle samplers in shader
 # add VRC_SpatialAudioSource to all audio sources
 # make audio sources 3d
 # make interior covers work with occlusion
-# warp collision
 # fix effect matrix, hook up to grabpass
 # scale main map in lightmap - unity seems to fix this itself
 # place light probes
@@ -1185,11 +1193,11 @@ scene.dump_yaml(outpath / "map" / "scene.unity")
 # add background tag to sky
 # make sky and sun vertices immovable and/or at max depth
 # float3 viewpos = mul((float3x3)UNITY_MATRIX_MV, v.vertex);
-# make mesh collision bouncy, slippery
 # make sun billboard
-# enable instancing on coin material
+# enable instancing on coin, fruit materials?
 # disable GI for the meshes that cover up OOB but not interior covers
 # fix vrc_world spawns
 # dedupe
 # optimize all
+# add world/movement params
 

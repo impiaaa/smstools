@@ -6,7 +6,7 @@ from warnings import warn
 from array import array
 from enum import Enum
 import math
-assert sys.version_info[0] >= 3
+from bisect import bisect
 
 def convRotation(rots, scale):
     for r in rots:
@@ -231,4 +231,61 @@ def addComp(idx: AnimIndex, keys: list[Key], out, scale=1.0, cnv=float):
     if idx.index is None:
         idx.index = len(out)
         out.extend(values)
+
+def getPointCubic(cf, t):
+    return ((cf[0] * t + cf[1]) * t + cf[2]) * t + cf[3]
+
+def getDerivativeCubic(cf, t):
+    return (3 * cf[0] * t + 2 * cf[1]) * t + cf[2]
+
+def getCoeffHermite(p0, p1, s0, s1):
+    return (
+        (p0 *  2) + (p1 * -2) + (s0 *  1) +  (s1 *  1),
+        (p0 * -3) + (p1 *  3) + (s0 * -2) +  (s1 * -1),
+        (p0 *  0) + (p1 *  0) + (s0 *  1) +  (s1 *  0),
+        (p0 *  1) + (p1 *  0) + (s0 *  0) +  (s1 *  0)
+    )
+
+def getPointHermite(p0, p1, s0, s1, t):
+    coeff = getCoeffHermite(p0, p1, s0, s1)
+    return getPointCubic(coeff, t)
+
+def getDerivativeHermite(p0, p1, s0, s1, t):
+    coeff = getCoeffHermite(p0, p1, s0, s1)
+    return getDerivativeCubic(coeff, t)
+
+def hermiteInterpolate(k0, k1, frame, tangents=False):
+    length = k1.time - k0.time
+    t = (frame - k0.time) / length
+    p0 = k0.value
+    p1 = k1.value
+    s0 = k0.tangentOut * length
+    s1 = k1.tangentIn * length
+    if tangents:
+        return getPointHermite(p0, p1, s0, s1, t), getDerivativeHermite(p0, p1, s0, s1, t)
+    else:
+        return getPointHermite(p0, p1, s0, s1, t)
+
+def animateSingle(time, keyList, tangents=False):
+    timeList = [key.time for key in keyList]
+    i = bisect(timeList, time)
+    if i <= 0:
+        # the time is before any keys
+        if tangents:
+            return keyList[0].value, keyList[0].tangentIn
+        else:
+            return keyList[0].value
+    elif i >= len(keyList):
+        # the time is after all keys
+        if tangents:
+            return keyList[-1].value, keyList[0].tangentOut
+        else:
+            return keyList[-1].value
+    else:
+        keyBefore = keyList[i-1]
+        keyAfter = keyList[i]
+        return hermiteInterpolate(keyBefore, keyAfter, time, tangents)
+
+def animate(time, keyListSet, tangents=False):
+    return (animateSingle(time, keyList, tangents) for keyList in keyListSet)
 
