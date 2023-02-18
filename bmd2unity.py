@@ -356,7 +356,7 @@ def makeSubMeshes(count, scenegraph, batches, indexMap, transformedPositions):
             raise ValueError(node.type)
     return subMeshTriangles, subMeshVertices
 
-def makeUnityMesh(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, jointMatrices, joints, scenegraph, jointBboxes):
+def makeUnityMesh(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, joints, scenegraph, jointBboxes):
     mesh = Mesh(str(4300000), '')
     asset = unityparser.UnityDocument([mesh])
 
@@ -455,9 +455,9 @@ def makeUnityMesh(name, doBones, subMeshTriangles, subMeshVertices, uniqueVertic
                 name += '/'+joints[node.index].name
                 boneNames[node.index] = name
                 if len(stack) > 0 and stack[-1][1] is not None:
-                    cumInvMatrices[jointIndex] = jointMatrices[jointIndex].inverted()@cumInvMatrices[stack[-1][1]]
+                    cumInvMatrices[jointIndex] = frameMatrix(joints[jointIndex]).inverted()@cumInvMatrices[stack[-1][1]]
                 else:
-                    cumInvMatrices[jointIndex] = jointMatrices[jointIndex].inverted()
+                    cumInvMatrices[jointIndex] = frameMatrix(joints[jointIndex]).inverted()
             elif node.type == 0x11:
                 materialIndex = node.index
             elif node.type == 0x12:
@@ -611,7 +611,7 @@ def buildMesh(bmd):
 
 def exportAsset(bmd, outputFolderLocation, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bboxes):
     doBones = len(bmd.jnt1.frames) > 1 or (len(bmd.jnt1.frames) == 1 and (bmd.jnt1.frames[0].scale != Vector((1,1,1)) or bmd.jnt1.frames[0].rotation != Euler((0,0,0)) or bmd.jnt1.frames[0].translation != Vector((0,0,0))))
-    asset = makeUnityMesh(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.matrices, bmd.jnt1.frames, bmd.inf1.scenegraph, bboxes)
+    asset = makeUnityMesh(bmd.name, doBones, subMeshTriangles, subMeshVertices, uniqueVertices, uChannels, vertexStruct, bmd.jnt1.frames, bmd.inf1.scenegraph, bboxes)
     #print("Writing asset")
     assetName = bmd.name+".asset"
     asset.dump_yaml(os.path.join(outputFolderLocation, assetName))
