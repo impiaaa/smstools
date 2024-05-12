@@ -19,18 +19,22 @@ def HMSMStoFrame(hours, minutes, seconds, ms):
 
 class Inf1(Section):
     header = Struct('>HHH2x')
-    entryStructs = {24: Struct('>LHHLLLL'), 12: Struct('>LHHB3x'), 4: Struct('>L'), 8: Struct('>LL')}
+    fields = ["count_", "size", "someMessageIndex"]
+    entryStructs = [Struct('>LHHLLLL'), Struct('>LHHB3x'), Struct('>L'), Struct('>LL')]
+    sizeToStruct = {s.size: s for s in entryStructs}
+    countToSize = {7: 24, 4: 12, 1: 4, 2: 8}
     def read(self, fin, start, chunksize):
-        count, self.size, self.someMessageIndex = self.header.unpack(fin.read(8))
-        assert chunksize-16 >= self.size*count, (chunksize, self.size, count)
-        if self.size not in self.entryStructs:
+        super().read(fin, start, chunksize)
+        assert chunksize-16 >= self.size*self.count_, (chunksize, self.size, self.count_)
+        if self.size not in self.sizeToStruct:
             raise Exception("Unknown size %d" % self.size)
-        entryStruct = self.entryStructs[self.size]
-        self.inf = [entryStruct.unpack(fin.read(self.size)) for j in range(count)]
+        entryStruct = self.sizeToStruct[self.size]
+        self.inf = [entryStruct.unpack(fin.read(self.size)) for j in range(self.count_)]
                 
     def write(self, fout):
-        fout.write(self.header.pack(len(self.inf), self.size, self.someMessageIndex))
-        entryStruct = self.entryStructs[self.size]
+        self.count_ = len(self.inf)
+        super().write(fout)
+        entryStruct = self.sizeToStruct[self.size]
         for entry in self.inf:
             fout.write(entryStruct.pack(*entry))
 
@@ -54,14 +58,15 @@ class BMessages(BFile):
         self.strings = [None]*len(self.inf1.inf)
         for i in range(len(self.inf1.inf)):
             offset = self.inf1.inf[i][0]
-            end = self.dat1.data.find(b'\0', offset)
+            end = self.inf1.inf[i+1][0]-1 if i < len(self.inf1.inf)-1 else len(self.dat1.data)-1
             data = self.dat1.data[offset:end]
             self.strings[i] = (data,)+tuple(self.inf1.inf[i][1:])
     def write(self, fout):
         self.inf1.inf = []
-        bmg.dat1 = Dat1()
+        self.dat1 = Dat1()
+        self.dat1.chunkId = b'DAT1'
         self.dat1.data = b'\0'
-        bmg.chunks = [bmg.inf1, bmg.dat1]
+        self.chunks = [self.inf1, self.dat1]
         for entry in self.strings:
             data = entry[0]
             offset = len(self.dat1.data)
@@ -76,13 +81,16 @@ if __name__ == "__main__":
         sys.stderr.write("Usage: %s <bmg/srt>\n"%sys.argv[0])
         exit(1)
     
-    if sys.argv[1].casefold().endswith('.srt'):
+    basename, ext = os.path.splitext(sys.argv[1])
+    
+    if ext.casefold() == '.srt':
         import re
         timecodeFormat = re.compile("(\d{2}):(\d{2}):(\d{2}),(\d{3})")
         fin = open(sys.argv[1])
         bmg = BMessages()
         bmg.strings = []
         bmg.inf1 = Inf1()
+        bmg.inf1.chunkId = b'INF1'
         bmg.inf1.size = 12
         bmg.inf1.someMessageIndex = 0
         counter = fin.readline()
@@ -102,8 +110,9 @@ if __name__ == "__main__":
                 data += line
             data = data[:-2]
             bmg.strings.append((data.encode('shift-jis'), startFrame, endFrame, 69))
-        bmg.write(open(os.path.splitext(sys.argv[1])[0]+".bmg", 'wb'))
-    else:
+        fin.close()
+        bmg.write(open(basename+".bmg", 'wb'))
+    elif ext.casefold() == '.bmg':
         fin = open(sys.argv[1], 'rb')
         bmg = BMessages()
         bmg.read(fin)
@@ -111,7 +120,7 @@ if __name__ == "__main__":
 
         if bmg.inf1.size == 12 and (len(bmg.strings) == 0 or bmg.strings[0][2] > bmg.strings[0][1]):
             # subtitle format
-            srtout = open(os.path.splitext(sys.argv[1])[0]+".srt", 'w', encoding='utf_8_sig')
+            srtout = open(basename+".srt", 'w', encoding='utf_8_sig')
             for j, (data, start, end, soundIndex) in enumerate(bmg.strings):
                 assert soundIndex == 69, soundIndex
                 srtout.write(u"%d\n"%(j+1))
@@ -121,12 +130,30 @@ if __name__ == "__main__":
                 srtout.write(u"\n\n")
             srtout.close()
         else:
-            # TODO: find a more appropriate format
-            txtout = open(os.path.splitext(sys.argv[1])[0]+".txt", 'wb')
+            import csv
+            csvout = open(basename+".csv", 'w', encoding='utf_8_sig')
+            writer = csv.writer(csvout)
             for data in bmg.strings:
-                if isinstance(data, tuple):
-                    data = data[0]
-                txtout.write(data)#.decode('shift-jis'))
-                txtout.write(b"\n\n")
-            txtout.close()
+                writer.writerow([data[0].decode('shift-jis', 'backslashreplace').replace('\0', r'\x00')]+list(map(str, data[1:])))
+            csvout.close()
+    elif ext.casefold() == '.csv':
+        import re, csv
+        hexescapes = re.compile(rb"\\x([0-9a-fA-F][0-9a-fA-F])")
+        fin = open(sys.argv[1], encoding='utf_8_sig')
+        bmg = BMessages()
+        bmg.strings = []
+        bmg.inf1 = Inf1()
+        bmg.inf1.chunkId = b'INF1'
+        bmg.inf1.size = 0
+        bmg.inf1.someMessageIndex = 0
+        for line in csv.reader(fin):
+            bmg.inf1.size = max(bmg.inf1.size, Inf1.countToSize[len(line)])
+            enc = line[0].encode('shift-jis')
+            matchh = hexescapes.search(enc)
+            while matchh is not None:
+                enc = enc[:matchh.start()] + bytes([int(matchh[1], 16)]) + enc[matchh.end():]
+                matchh = hexescapes.search(enc)
+            bmg.strings.append((enc,)+tuple(map(int, line[1:])))
+        fin.close()
+        bmg.write(open(basename+".bmg", 'wb'))
 
